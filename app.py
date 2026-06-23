@@ -93,12 +93,11 @@ TEST_PLAYER_USER = {
 TEST_PLAYER_HOLDS = ["bag", "card_vault", "poketab"]
 TEST_QUERY_RESERVED = frozenset({"tgWebAppStartParam", "v", "_"})
 def resolve_game_server_internal() -> str:
-    """Game server URL for Flask → game proxy (Railway private network)."""
-    explicit = (
-        os.getenv("GAME_SERVER_INTERNAL") or os.getenv("GAME_SERVER_URL") or ""
-    ).strip().rstrip("/")
-    if explicit and "127.0.0.1" not in explicit and "localhost" not in explicit:
-        return explicit
+    """Game server URL for Flask → game proxy (Railway private or public)."""
+    for key in ("GAME_SERVER_INTERNAL", "GAME_SERVER_URL", "GAME_PUBLIC_URL"):
+        val = (os.getenv(key) or "").strip().rstrip("/")
+        if val and "127.0.0.1" not in val and "localhost" not in val:
+            return val
     host = (
         os.getenv("GAME_PRIVATE_DOMAIN")
         or os.getenv("GAME_RAILWAY_PRIVATE_DOMAIN")
@@ -107,10 +106,11 @@ def resolve_game_server_internal() -> str:
     port = (os.getenv("GAME_PORT") or os.getenv("GAME_SERVICE_PORT") or "").strip()
     if host and port:
         return f"http://{host}:{port}"
-    return explicit or "http://127.0.0.1:3001"
+    return "http://127.0.0.1:3001"
 
 
 GAME_SERVER_INTERNAL = resolve_game_server_internal()
+GAME_PUBLIC_URL = (os.getenv("GAME_PUBLIC_URL") or "").strip().rstrip("/")
 if os.getenv("RAILWAY_ENVIRONMENT") and (
     "127.0.0.1" in GAME_SERVER_INTERNAL or "localhost" in GAME_SERVER_INTERNAL
 ):
@@ -563,7 +563,7 @@ def home():
     test_mode = test_slug is not None
     return render_template(
         "index.html",
-        game_server_url="",
+        game_server_url=GAME_PUBLIC_URL,
         test_mode=test_mode,
         test_player_slug=test_slug if test_slug is not None else "",
         skins=SKINS,
@@ -1677,8 +1677,7 @@ def api_status():
         {
             "web": "ok",
             "gameServerInternal": GAME_SERVER_INTERNAL,
-            "gamePrivateDomain": os.getenv("GAME_PRIVATE_DOMAIN"),
-            "gamePort": os.getenv("GAME_PORT"),
+            "gamePublicUrl": GAME_PUBLIC_URL or None,
             "gameServerReachable": game_ok,
             "gameServerError": game_detail,
             "gameServerHealth": game_body,
