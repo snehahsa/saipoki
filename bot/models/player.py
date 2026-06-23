@@ -1,11 +1,7 @@
 import random
 import time
 from dataclasses import dataclass
-from typing import Optional, Union
-
-from aiogram.types import Chat, User
-from aiogram.utils import markdown
-from aiogram.utils.link import create_tg_link
+from typing import Any, Optional
 
 from bot.data import const
 from bot.data.catalog import migrate_pool_keys, resolve_card_id
@@ -70,13 +66,14 @@ class Player:
 
     @property
     def mention(self):
-        return markdown.hlink(self.name, create_tg_link("user", id=self.id))
+        return f'<a href="tg://user?id={self.id}">{self.name}</a>'
 
     @classmethod
-    def new(cls, user: Union[Chat, User], vault_card_ids: list[str]):
+    def new(cls, user: Any, vault_card_ids: list[str]):
+        name = getattr(user, "first_name", None) or getattr(user, "title", None) or f"Player_{user.id}"
         return cls(
             id=user.id,
-            name=user.first_name,
+            name=name,
             pokemons_pool=get_pokemons_pool_from_vault(vault_card_ids),
             last_move_time=time.time(),
             special_card=get_special_card(),
