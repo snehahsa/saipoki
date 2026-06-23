@@ -92,16 +92,33 @@ TEST_PLAYER_USER = {
 }
 TEST_PLAYER_HOLDS = ["bag", "card_vault", "poketab"]
 TEST_QUERY_RESERVED = frozenset({"tgWebAppStartParam", "v", "_"})
-GAME_SERVER_INTERNAL = os.getenv(
-    "GAME_SERVER_INTERNAL",
-    os.getenv("GAME_SERVER_URL", "http://127.0.0.1:3001"),
-).rstrip("/")
+def resolve_game_server_internal() -> str:
+    """Game server URL for Flask → game proxy (Railway private network)."""
+    explicit = (
+        os.getenv("GAME_SERVER_INTERNAL") or os.getenv("GAME_SERVER_URL") or ""
+    ).strip().rstrip("/")
+    if explicit and "127.0.0.1" not in explicit and "localhost" not in explicit:
+        return explicit
+    host = (
+        os.getenv("GAME_PRIVATE_DOMAIN")
+        or os.getenv("GAME_RAILWAY_PRIVATE_DOMAIN")
+        or ""
+    ).strip()
+    port = (os.getenv("GAME_PORT") or os.getenv("GAME_SERVICE_PORT") or "").strip()
+    if host and port:
+        return f"http://{host}:{port}"
+    return explicit or "http://127.0.0.1:3001"
+
+
+GAME_SERVER_INTERNAL = resolve_game_server_internal()
 if os.getenv("RAILWAY_ENVIRONMENT") and (
     "127.0.0.1" in GAME_SERVER_INTERNAL or "localhost" in GAME_SERVER_INTERNAL
 ):
     print(
-        "WARNING: GAME_SERVER_INTERNAL is localhost on Railway. "
-        "Set GAME_SERVER_INTERNAL=http://${{game.RAILWAY_PRIVATE_DOMAIN}}:${{game.PORT}}",
+        "WARNING: Game server URL is localhost on Railway. "
+        "On web service set either:\n"
+        "  GAME_SERVER_INTERNAL=http://${{game.RAILWAY_PRIVATE_DOMAIN}}:${{game.PORT}}\n"
+        "  or GAME_PRIVATE_DOMAIN=${{game.RAILWAY_PRIVATE_DOMAIN}} and GAME_PORT=${{game.PORT}}",
         flush=True,
     )
 PUBLIC_WEBAPP_URL = (os.getenv("WEBAPP_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").strip()
@@ -1660,6 +1677,8 @@ def api_status():
         {
             "web": "ok",
             "gameServerInternal": GAME_SERVER_INTERNAL,
+            "gamePrivateDomain": os.getenv("GAME_PRIVATE_DOMAIN"),
+            "gamePort": os.getenv("GAME_PORT"),
             "gameServerReachable": game_ok,
             "gameServerError": game_detail,
             "gameServerHealth": game_body,
