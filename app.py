@@ -1549,16 +1549,26 @@ def leaderboard_api():
 
 @app.route("/sprites/<path:filename>")
 def sprites(filename):
-    return send_from_directory(
-        os.path.join(app.root_path, "gather-clone/frontend/public/sprites"), filename
+    bases = (
+        Path(app.root_path) / "static/sprites",
+        Path(app.root_path) / "gather-clone/frontend/public/sprites",
     )
+    for base in bases:
+        if (base / filename).is_file():
+            return send_from_directory(base, filename)
+    return jsonify({"error": "sprite not found", "path": filename}), 404
 
 
 @app.route("/fonts/<path:filename>")
 def fonts(filename):
-    return send_from_directory(
-        os.path.join(app.root_path, "gather-clone/frontend/public/fonts"), filename
+    bases = (
+        Path(app.root_path) / "static/fonts",
+        Path(app.root_path) / "gather-clone/frontend/public/fonts",
     )
+    for base in bases:
+        if (base / filename).is_file():
+            return send_from_directory(base, filename)
+    return jsonify({"error": "font not found", "path": filename}), 404
 
 
 SKIP_REQUEST_HEADERS = {"host", "content-length", "transfer-encoding", "connection"}
