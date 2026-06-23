@@ -101,7 +101,20 @@ if PUBLIC_WEBAPP_URL and not PUBLIC_WEBAPP_URL.startswith("http"):
     PUBLIC_WEBAPP_URL = f"https://{PUBLIC_WEBAPP_URL}"
 if PUBLIC_WEBAPP_URL and not PUBLIC_WEBAPP_URL.endswith("/"):
     PUBLIC_WEBAPP_URL = f"{PUBLIC_WEBAPP_URL}/"
-WORLD_MAP_PATH = Path(__file__).resolve().parent / "gather-clone/frontend/utils/defaultmap.json"
+
+
+def resolve_world_map_path() -> Path:
+    root = Path(__file__).resolve().parent
+    for candidate in (
+        root / "data/defaultmap.json",
+        root / "gather-clone/frontend/utils/defaultmap.json",
+    ):
+        if candidate.is_file():
+            return candidate
+    return root / "data/defaultmap.json"
+
+
+WORLD_MAP_PATH = resolve_world_map_path()
 
 SKINS = [f"{i:03d}" for i in range(1, 84)]
 DEFAULT_SKIN = "009"
@@ -1623,7 +1636,26 @@ def healthz():
 
 @app.route("/health")
 def proxy_health():
-    return proxy_to_game_server("/health")
+    url = f"{GAME_SERVER_INTERNAL.rstrip('/')}/health"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as upstream:
+            response_headers = [
+                (key, value)
+                for key, value in upstream.headers.items()
+                if key.lower() not in SKIP_RESPONSE_HEADERS
+            ]
+            return Response(upstream.read(), upstream.status, response_headers)
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError):
+        return jsonify(
+            {
+                "ok": False,
+                "players": 0,
+                "maxPlayers": 50,
+                "world": "SaiPoke Realm",
+                "rooms": 0,
+                "gameServer": "unavailable",
+            }
+        )
 
 
 @app.route("/getPlayersInRoom")

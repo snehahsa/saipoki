@@ -10,8 +10,20 @@ const DEFAULT_ROOM_NAME = 'SaiPoke Realm';
 function defaultRoomName(index) {
     return index === 0 ? DEFAULT_ROOM_NAME : `Map ${index + 1}`;
 }
+function resolveMapPath() {
+    const candidates = [
+        path_1.default.join(__dirname, '../../data/defaultmap.json'),
+        path_1.default.join(__dirname, '../../gather-clone/frontend/utils/defaultmap.json'),
+    ];
+    for (const mapPath of candidates) {
+        if (fs_1.default.existsSync(mapPath)) {
+            return mapPath;
+        }
+    }
+    throw new Error(`World map not found. Tried: ${candidates.join(', ')}`);
+}
 function loadWorldMapFromDisk() {
-    const mapPath = path_1.default.join(__dirname, '../../gather-clone/frontend/utils/defaultmap.json');
+    const mapPath = resolveMapPath();
     const raw = fs_1.default.readFileSync(mapPath, 'utf8');
     const data = JSON.parse(raw);
     data.rooms = data.rooms.map((room, index) => ({
