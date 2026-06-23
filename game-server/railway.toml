@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm run build"
+buildCommand = "rm -rf node_modules/.cache 2>/dev/null || true; NPM_CONFIG_CACHE=/tmp/npm-cache npm ci && npm run build"
 
 [deploy]
 startCommand = "node dist/index.js"
