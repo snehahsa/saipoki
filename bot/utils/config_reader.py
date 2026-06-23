@@ -1,8 +1,12 @@
+"""Env-based settings — no pydantic (works with system Python 3.9+ and Railway)."""
+
+from __future__ import annotations
+
+import os
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseSettings, RedisDsn, SecretStr, validator
 
 _BOT_ROOT = Path(__file__).resolve().parent.parent
 _REPO_ROOT = _BOT_ROOT.parent
@@ -12,54 +16,66 @@ _WEBP_ROOT = (
     else _REPO_ROOT / "webp"
 )
 
-load_dotenv(_REPO_ROOT / ".env")
+# Monorepo root .env (saipoke/.env) then webp/.env then bot/.env
+load_dotenv(_REPO_ROOT.parent / ".env")
+load_dotenv(_REPO_ROOT / ".env", override=False)
 load_dotenv(_WEBP_ROOT / ".env", override=False)
 load_dotenv(_BOT_ROOT / ".env", override=False)
 
 
-class Settings(BaseSettings):
-    bot_token: SecretStr
-    fsm_mode: str
-    redis: Optional[RedisDsn]
-    available_chat_ids: str
-    # Loser is kicked + exclusive leaderboard only in these chats (not the main group).
-    exclusive_chat_ids: str = ""
-    # Play-money credited on first /start (new or web-only account with 0 balance)
-    start_balance: int = 5000
-    # When true, skip on-chain wallet instructions in /start copy
-    test_mode: bool = True
-    # Shared SQLite (webp users.db) + card catalog
-    sqlite_db_path: str = str(_WEBP_ROOT / "users.db")
-    poke_json_path: str = str(_WEBP_ROOT / "poke.json")
-    min_vault_cards: int = 1
-    # Telegram WebApp (opened from /start button)
-    webapp_url: str = "http://localhost:5000/"
-    # Flask / game-server (webp reads same keys from bot/.env)
-    game_server_url: str = "http://127.0.0.1:3001"
-    allowed_origins: str = "http://localhost:5000"
-    # Comma-separated Telegram @usernames for hidden admin commands
-    admin_usernames: str = "zaiing,xrosxy"
-    # Optional SOCKS/HTTP proxy when api.telegram.org is blocked (requires aiohttp-socks)
-    telegram_proxy: str = ""
-    # Optional local Bot API server base URL (e.g. http://127.0.0.1:8081)
-    telegram_api_base: str = ""
+class SecretStr:
+    def __init__(self, value: str):
+        self._value = value
 
-    @validator("fsm_mode")
-    def fsm_type_check(cls, v):
-        if v not in ("memory", "redis"):
-            raise ValueError("Incorrect fsm_mode. Must be one of: memory, redis")
-        return v
+    def get_secret_value(self) -> str:
+        return self._value
 
-    @validator("redis")
-    def skip_validating_redis(cls, v, values):
-        if values["fsm_mode"] == "redis" and v is None:
-            raise ValueError("Redis config is missing, though fsm_type is 'redis'")
-        return v
 
-    class Config:
-        env_file = Path(__file__).parent.parent / ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return default
+    return int(raw)
+
+
+class Settings:
+    def __init__(self) -> None:
+        token = os.getenv("BOT_TOKEN", "").strip()
+        if not token:
+            raise RuntimeError("BOT_TOKEN is not set (check .env or environment)")
+        self.bot_token = SecretStr(token)
+        self.fsm_mode = os.getenv("FSM_MODE", "memory").strip()
+        if self.fsm_mode not in ("memory", "redis"):
+            raise ValueError("FSM_MODE must be 'memory' or 'redis'")
+        self.redis = os.getenv("REDIS") or None
+        if self.fsm_mode == "redis" and not self.redis:
+            raise ValueError("REDIS is required when FSM_MODE=redis")
+        self.available_chat_ids = os.getenv("AVAILABLE_CHAT_IDS", "").strip()
+        self.exclusive_chat_ids = os.getenv("EXCLUSIVE_CHAT_IDS", "").strip()
+        self.start_balance = _env_int("START_BALANCE", 5000)
+        self.test_mode = _env_bool("TEST_MODE", True)
+        self.sqlite_db_path = os.getenv(
+            "SQLITE_DB_PATH", str(_WEBP_ROOT / "users.db")
+        )
+        self.poke_json_path = os.getenv(
+            "POKE_JSON_PATH", str(_WEBP_ROOT / "poke.json")
+        )
+        self.min_vault_cards = _env_int("MIN_VAULT_CARDS", 1)
+        self.webapp_url = os.getenv("WEBAPP_URL", "http://localhost:5000/")
+        self.game_server_url = os.getenv("GAME_SERVER_URL", "http://127.0.0.1:3001")
+        self.allowed_origins = os.getenv(
+            "ALLOWED_ORIGINS", "http://localhost:5000"
+        )
+        self.admin_usernames = os.getenv("ADMIN_USERNAMES", "zaiing,xrosxy")
+        self.telegram_proxy = os.getenv("TELEGRAM_PROXY", "").strip()
+        self.telegram_api_base = os.getenv("TELEGRAM_API_BASE", "").strip()
 
 
 config = Settings()
@@ -70,13 +86,13 @@ def _chat_ids(raw: str) -> set[str]:
 
 
 def is_battle_chat_allowed(chat_id: int) -> bool:
-    """Main group(s) + optional exclusive arena group(s)."""
-    allowed = _chat_ids(config.available_chat_ids) | _chat_ids(config.exclusive_chat_ids)
+    allowed = _chat_ids(config.available_chat_ids) | _chat_ids(
+        config.exclusive_chat_ids
+    )
     return str(chat_id) in allowed
 
 
 def is_exclusive_battle_chat(chat_id: int) -> bool:
-    """Exclusive arena: kick loser and track exclusive wins."""
     return str(chat_id) in _chat_ids(config.exclusive_chat_ids)
 
 
