@@ -12,6 +12,7 @@ function defaultRoomName(index) {
 }
 function resolveMapPath() {
     const candidates = [
+        path_1.default.join(__dirname, '../data/defaultmap.json'),
         path_1.default.join(__dirname, '../../data/defaultmap.json'),
         path_1.default.join(__dirname, '../../gather-clone/frontend/utils/defaultmap.json'),
     ];

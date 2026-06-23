@@ -96,6 +96,14 @@ GAME_SERVER_INTERNAL = os.getenv(
     "GAME_SERVER_INTERNAL",
     os.getenv("GAME_SERVER_URL", "http://127.0.0.1:3001"),
 ).rstrip("/")
+if os.getenv("RAILWAY_ENVIRONMENT") and (
+    "127.0.0.1" in GAME_SERVER_INTERNAL or "localhost" in GAME_SERVER_INTERNAL
+):
+    print(
+        "WARNING: GAME_SERVER_INTERNAL is localhost on Railway. "
+        "Set GAME_SERVER_INTERNAL=http://${{game.RAILWAY_PRIVATE_DOMAIN}}:${{game.PORT}}",
+        flush=True,
+    )
 PUBLIC_WEBAPP_URL = (os.getenv("WEBAPP_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").strip()
 if PUBLIC_WEBAPP_URL and not PUBLIC_WEBAPP_URL.startswith("http"):
     PUBLIC_WEBAPP_URL = f"https://{PUBLIC_WEBAPP_URL}"
@@ -1632,6 +1640,32 @@ def proxy_to_game_server(path: str) -> Response:
 @app.route("/healthz")
 def healthz():
     return jsonify({"ok": True, "service": "web"})
+
+
+@app.route("/api/status")
+def api_status():
+    """Debug: web + game-server connectivity (safe to hit in browser)."""
+    game_ok = False
+    game_detail = None
+    game_body = None
+    try:
+        with urllib.request.urlopen(
+            f"{GAME_SERVER_INTERNAL.rstrip('/')}/health", timeout=5
+        ) as upstream:
+            game_ok = upstream.status == 200
+            game_body = json.loads(upstream.read().decode())
+    except Exception as err:
+        game_detail = str(err)
+    return jsonify(
+        {
+            "web": "ok",
+            "gameServerInternal": GAME_SERVER_INTERNAL,
+            "gameServerReachable": game_ok,
+            "gameServerError": game_detail,
+            "gameServerHealth": game_body,
+            "worldMapPresent": WORLD_MAP_PATH.is_file(),
+        }
+    )
 
 
 @app.route("/health")
