@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>SaiPoke Realm</title>
+    <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
+    <style>
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior: none;
+            background: #4eb8e8;
+        }
+        #tg-boot-splash {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            background: linear-gradient(180deg, #6ecff5 0%, #4eb8e8 55%, #2a8fc4 100%);
+            transition: opacity 280ms steps(4, end), visibility 280ms steps(4, end);
+        }
+        #tg-boot-splash.is-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .tg-boot-logo {
+            width: min(230px, 78vw);
+            height: auto;
+            image-rendering: pixelated;
+            filter: drop-shadow(4px 4px 0 rgba(26, 20, 14, 0.35));
+            animation: tg-boot-bob 1.1s steps(2, end) infinite;
+        }
+        .tg-boot-progress {
+            font-family: "Courier New", monospace;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            color: #fff8ea;
+            text-shadow: 2px 2px 0 #2a2218;
+            min-height: 1.2em;
+        }
+        @keyframes tg-boot-bob {
+            0%, 100% { transform: translateY(-3px); }
+            50% { transform: translateY(3px); }
+        }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        (function () {
+            var tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            try { tg.expand(); } catch (e) {}
+            try { tg.disableVerticalSwipes?.(); } catch (e) {}
+            try {
+                tg.setHeaderColor("#2a8fc4");
+                tg.setBackgroundColor("#4eb8e8");
+            } catch (e) {}
+            function sendReady() {
+                if (window.__tgReadySent) return;
+                window.__tgReadySent = true;
+                try { tg.ready(); } catch (e) {}
+            }
+            function onPaintedReady() {
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(sendReady);
+                });
+            }
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", onPaintedReady);
+            } else {
+                onPaintedReady();
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/css/app.css?v={{ asset_v.css }}">
+</head>
+<body>
+
+<div id="retro-pixel-bg" class="retro-pixel-bg" aria-hidden="true">
+    <div class="retro-pixel-stars"></div>
+    <div class="retro-pixel-clouds"></div>
+    <div class="retro-pixel-hills"></div>
+    <div class="retro-pixel-grass-strip"></div>
+</div>
+
+<div id="tg-boot-splash" class="tg-boot-splash" aria-live="polite">
+    <img
+        class="tg-boot-logo"
+        src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+        alt="Pokecards Quest"
+        width="230"
+        height="83"
+        decoding="async"
+    >
+    <p class="tg-boot-progress" id="boot-progress-text">Loading...</p>
+</div>
+
+<div id="loading-screen" class="screen hidden">
+    <div class="panel">
+        <div class="spinner"></div>
+        <p class="panel-pixel-title">LOADING...</p>
+        <p class="subtitle" id="loading-text">Connecting to Telegram...</p>
+    </div>
+</div>
+
+<div id="error-screen" class="screen hidden">
+    <div class="panel">
+        <p class="panel-pixel-title">OOPS!</p>
+        <p class="subtitle" id="error-text">Please open this app from Telegram.</p>
+    </div>
+</div>
+
+<div id="welcome-screen" class="screen hidden">
+    <div class="welcome-scene" aria-hidden="true">
+        <div class="welcome-cloud welcome-cloud-a"></div>
+        <div class="welcome-cloud welcome-cloud-b"></div>
+        <div class="welcome-cloud welcome-cloud-c"></div>
+        <div class="welcome-stars"></div>
+    </div>
+    <div class="panel panel-welcome">
+        <p class="welcome-badge">NEW TRAINER</p>
+        <img
+            class="welcome-logo"
+            src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+            alt="Pokecards Quest"
+            width="200"
+            height="72"
+            decoding="async"
+        >
+        <p class="welcome-headline">Welcome to the Realm!</p>
+        <p class="welcome-lead">Collect Rare PokéCards, Buy/Sell PokéCards, Battle and Complete Quests to win daily rewards automated.</p>
+
+        <div class="welcome-scroll" role="region" aria-label="How to play">
+            <p class="welcome-scroll-title">HOW TO PLAY</p>
+            <ul class="welcome-tips">
+                <li class="welcome-tip" style="--tip-i: 0">
+                    <span class="welcome-tip-icon welcome-tip-icon-move" aria-hidden="true"></span>
+                    <span class="welcome-tip-text"><strong>Walk</strong> — use the D-pad to explore the realm</span>
+                </li>
+                <li class="welcome-tip" style="--tip-i: 1">
+                    <span class="welcome-tip-icon welcome-tip-icon-talk" aria-hidden="true"></span>
+                    <span class="welcome-tip-text"><strong>Talk</strong> — chat with NPCs &amp; signs for clues</span>
+                </li>
+                <li class="welcome-tip" style="--tip-i: 2">
+                    <span class="welcome-tip-icon welcome-tip-icon-loot" aria-hidden="true"></span>
+                    <span class="welcome-tip-text"><strong>Collect</strong> — rare PokéCards, bags &amp; vaults</span>
+                </li>
+                <li class="welcome-tip" style="--tip-i: 3">
+                    <span class="welcome-tip-icon welcome-tip-icon-quest" aria-hidden="true"></span>
+                    <span class="welcome-tip-text"><strong>Quest</strong> — battle, trade &amp; win daily rewards</span>
+                </li>
+            </ul>
+        </div>
+
+        <button class="btn btn-play welcome-setup-btn" id="welcome-setup-btn" type="button">Setup Your Profile</button>
+        <p class="welcome-footnote">Set a PIN, choose your avatar with starter coins &amp; enter your trainer name</p>
+    </div>
+</div>
+
+<div id="pin-screen" class="screen hidden">
+    <div class="welcome-scene" aria-hidden="true">
+        <div class="welcome-cloud welcome-cloud-a"></div>
+        <div class="welcome-cloud welcome-cloud-b"></div>
+        <div class="welcome-cloud welcome-cloud-c"></div>
+    </div>
+    <div class="panel panel-pin">
+        <p class="panel-pixel-title" id="pin-title">SET YOUR PIN</p>
+        <p class="subtitle" id="pin-subtitle">Pick a 3-digit trainer code</p>
+        <div class="pin-display" id="pin-display" aria-live="polite">
+            <span class="pin-slot"></span>
+            <span class="pin-slot"></span>
+            <span class="pin-slot"></span>
+        </div>
+        <div class="pin-keypad" id="pin-keypad">
+            <button type="button" class="pin-key" data-digit="1">1</button>
+            <button type="button" class="pin-key" data-digit="2">2</button>
+            <button type="button" class="pin-key" data-digit="3">3</button>
+            <button type="button" class="pin-key" data-digit="4">4</button>
+            <button type="button" class="pin-key" data-digit="5">5</button>
+            <button type="button" class="pin-key" data-digit="6">6</button>
+            <button type="button" class="pin-key" data-digit="7">7</button>
+            <button type="button" class="pin-key" data-digit="8">8</button>
+            <button type="button" class="pin-key" data-digit="9">9</button>
+            <button type="button" class="pin-key pin-key-muted" disabled aria-hidden="true"></button>
+            <button type="button" class="pin-key" data-digit="0">0</button>
+            <button type="button" class="pin-key pin-key-back" data-action="back" aria-label="Backspace">⌫</button>
+        </div>
+        <p class="status" id="pin-status"></p>
+    </div>
+</div>
+
+<div id="skin-screen" class="screen hidden">
+    <div class="welcome-scene" aria-hidden="true">
+        <div class="welcome-cloud welcome-cloud-a"></div>
+        <div class="welcome-cloud welcome-cloud-b"></div>
+        <div class="welcome-cloud welcome-cloud-c"></div>
+    </div>
+    <div class="panel panel-skin">
+        <p class="panel-pixel-title">SETUP YOUR PROFILE</p>
+        <p class="subtitle">Choose your avatar</p>
+
+        <section class="skin-section skin-section-picker" aria-label="Avatar selection">
+            <p class="skin-section-label">Avatar</p>
+            <div class="skin-economy-row" aria-live="polite">
+                <span class="skin-economy-label">Balance:</span>
+                <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
+                <span id="skin-balance" class="skin-economy-value">0</span>
+            </div>
+            <div class="skin-picker-row">
+                <button class="icon-btn icon-btn-prev" id="skin-prev" type="button" aria-label="Previous avatar"></button>
+                <div class="skin-hero-stage">
+                    <div id="skin-preview" class="skin-sprite-preview skin-sprite-preview-hero" role="img" aria-label="Avatar preview"></div>
+                </div>
+                <button class="icon-btn icon-btn-next" id="skin-next" type="button" aria-label="Next avatar"></button>
+            </div>
+            <span class="skin-counter" id="skin-counter">9 / 83</span>
+            <div class="skin-economy-row skin-economy-row--cost" aria-live="polite">
+                <span class="skin-economy-label">Cost:</span>
+                <span id="skin-price-tag" class="skin-economy-value skin-price-value">FREE</span>
+            </div>
+        </section>
+
+        <section class="skin-section skin-section-name" aria-label="Trainer name">
+            <label class="skin-name-field">
+                <span class="skin-name-label">Enter your trainer name</span>
+                <input
+                    type="text"
+                    id="skin-player-name-input"
+                    class="skin-name-input"
+                    maxlength="24"
+                    autocomplete="nickname"
+                    placeholder="Trainer name"
+                >
+            </label>
+            <p class="skin-name-hint">Shown under your character in the world</p>
+        </section>
+
+        <div class="menu-grid" style="margin-top: 18px;">
+            <button class="btn btn-play" id="save-skin-btn" type="button">Buy</button>
+        </div>
+        <p class="skin-purchase-hint" id="skin-purchase-hint"></p>
+        <p class="status" id="skin-status"></p>
+    </div>
+</div>
+
+<div id="menu-screen" class="screen hidden">
+    <div class="welcome-scene" aria-hidden="true">
+        <div class="welcome-cloud welcome-cloud-a"></div>
+        <div class="welcome-cloud welcome-cloud-b"></div>
+        <div class="welcome-cloud welcome-cloud-c"></div>
+    </div>
+    <div class="panel">
+        <img
+            class="menu-title-logo"
+            src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+            alt="Pokecards Quest"
+            width="190"
+            height="69"
+        >
+        <p class="subtitle menu-tagline">Collect Rare PokéCards, Buy/Sell PokéCards, Battle and Complete Quests to win daily rewards automated.</p>
+
+        <div class="menu-live">
+            <span class="menu-live-dot"></span>
+            <span><span id="menu-live-count" class="menu-live-count">—</span> trainers online now</span>
+        </div>
+
+        <div class="player-badge menu-player-badge">
+            <div class="menu-player-stack">
+                <div class="player-name" id="menu-player-name">Trainer</div>
+                <div class="balance-line balance-line--menu" aria-live="polite">
+                    <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
+                    <span id="menu-balance">0</span>
+                </div>
+                <div class="menu-avatar-wrap">
+                    <div id="menu-avatar" class="menu-avatar-face" role="img" aria-label="Your character"></div>
+                </div>
+                <div class="player-meta" id="menu-player-meta">ready to play</div>
+            </div>
+            <div class="menu-player-badges-side" id="menu-player-badges-row">
+                <span class="player-badges-label">badges</span>
+                <div class="player-badges" id="menu-player-badges"></div>
+            </div>
+        </div>
+
+        <div class="menu-grid menu-grid-pixel">
+            <button class="btn btn-play" id="enter-btn" type="button">Enter the Realm</button>
+            <button class="btn btn-quests" id="quests-btn" type="button">Quests</button>
+            <button class="btn btn-leaderboard" id="leaderboard-btn" type="button">Leaderboard</button>
+            <button class="btn btn-revenue" id="revenue-share-btn" type="button">Revenue Share</button>
+            <button class="btn btn-settings btn-profile" id="profile-btn" type="button">Profile</button>
+            <button class="btn btn-exit" id="exit-btn" type="button">Exit</button>
+        </div>
+        <p class="status" id="menu-status"></p>
+    </div>
+</div>
+
+<div id="profile-screen" class="screen hidden">
+    <div class="panel panel-profile">
+        <p class="panel-pixel-title">PROFILE</p>
+        <p class="subtitle">your trainer &amp; avatars</p>
+
+        <div class="balance-line balance-line--profile" aria-live="polite">
+            <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
+            <span id="profile-balance">0</span>
+        </div>
+
+        <div class="profile-preview-block">
+            <div class="skin-hero-stage skin-hero-stage-sm">
+                <div id="profile-preview" class="skin-sprite-preview skin-sprite-preview-profile" role="img" aria-label="Selected avatar preview"></div>
+            </div>
+            <p class="profile-equipped-label" id="profile-equipped-label">Equipped avatar</p>
+        </div>
+
+        <section class="profile-section" aria-label="Owned avatars">
+            <div class="profile-section-head">
+                <p class="profile-section-title">Your Skins</p>
+                <span class="profile-owned-count" id="profile-owned-count">0 owned</span>
+            </div>
+            <p class="profile-section-note">Purchased skins stay in your collection. Tap one to equip.</p>
+            <div id="profile-owned-grid" class="profile-skin-grid" role="list"></div>
+        </section>
+
+        <section class="profile-section" aria-label="Avatar shop">
+            <p class="profile-section-title">Avatar Shop</p>
+            <p class="profile-section-note">Spend coins to unlock new looks.</p>
+            <div id="profile-shop-grid" class="profile-skin-grid profile-skin-grid--shop" role="list"></div>
+            <p class="profile-shop-empty hidden" id="profile-shop-empty">You own every avatar!</p>
+        </section>
+
+        <div class="skin-economy-row skin-economy-row--cost profile-selected-cost" aria-live="polite">
+            <span class="skin-economy-label">Selected:</span>
+            <span id="profile-price-tag" class="skin-economy-value skin-price-value">OWNED</span>
+        </div>
+
+        <div class="menu-grid profile-actions">
+            <button class="btn btn-play" id="profile-action-btn" type="button">Equip</button>
+            <button class="btn btn-secondary" id="profile-stats-btn" type="button">My Stats</button>
+            <button class="btn btn-secondary back-row" id="profile-back-btn" type="button">Back</button>
+        </div>
+        <p class="skin-purchase-hint" id="profile-purchase-hint"></p>
+        <p class="status" id="profile-status"></p>
+    </div>
+</div>
+
+<div id="quests-screen" class="screen hidden">
+    <div class="panel panel-quests-wood">
+        <span class="quests-wood-nail quests-wood-nail--tl" aria-hidden="true"></span>
+        <span class="quests-wood-nail quests-wood-nail--tr" aria-hidden="true"></span>
+        <span class="quests-wood-nail quests-wood-nail--bl" aria-hidden="true"></span>
+        <span class="quests-wood-nail quests-wood-nail--br" aria-hidden="true"></span>
+
+        <p class="quests-board-title">QUEST BOARD</p>
+        <p class="quests-weekly-banner">Weekly quests unlock each week — revenue share &amp; prizes await.</p>
+
+        <div class="quests-timeline" id="quests-timeline" role="list"></div>
+
+        <button class="btn btn-secondary back-row quests-back-btn" id="quests-back-btn" type="button">Back</button>
+    </div>
+</div>
+
+<div id="revenue-share-screen" class="screen hidden">
+    <div class="panel">
+        <p class="panel-pixel-title">REVENUE SHARE</p>
+        <p class="subtitle">earn from the realm</p>
+        <p class="subtitle" style="margin-top: 12px;">Revenue sharing details coming soon.</p>
+        <button class="btn btn-secondary back-row" id="revenue-share-back-btn" type="button" style="width: 100%;">Back</button>
+    </div>
+</div>
+
+<div id="leaderboard-screen" class="screen hidden">
+    <div class="panel panel-leaderboard">
+        <div class="lb-scanlines" aria-hidden="true"></div>
+
+        <header class="lb-header">
+            <h2 class="lb-title">LEADERBOARD</h2>
+            <p class="lb-subtitle">Live player rankings by wager volume, battles fought, vault size, balance, and win rate. Standings update after each match.</p>
+        </header>
+
+        <div class="lb-scroll-body">
+            <div class="lb-pulse-grid" id="lb-pulse-grid" aria-live="polite">
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-trainers">—</span><span class="lb-pulse-label">Trainers</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-battles">—</span><span class="lb-pulse-label">Battles fought</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-wagered">—</span><span class="lb-pulse-label">$POKE wagered</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-cards">—</span><span class="lb-pulse-label">Cards in vaults</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-wins">—</span><span class="lb-pulse-label">Arena wins</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-circulating">—</span><span class="lb-pulse-label">$POKE circulating</span></div>
+            </div>
+
+            <div class="lb-tabs" id="lb-tabs" role="tablist" aria-label="Leaderboard categories"></div>
+
+            <div class="lb-category-head" id="lb-category-head"></div>
+
+            <div class="lb-podium" id="lb-podium" aria-label="Top three"></div>
+
+            <ol class="lb-rank-list" id="lb-rank-list"></ol>
+
+            <div class="lb-you-card hidden" id="lb-you-card">
+                <p class="lb-you-label">YOUR STANDING</p>
+                <p class="lb-you-rank" id="lb-you-rank">—</p>
+                <p class="lb-you-stats" id="lb-you-stats"></p>
+            </div>
+        </div>
+
+        <div class="lb-footer">
+            <button class="btn btn-secondary" id="lb-my-stats-btn" type="button">My Stats</button>
+            <button class="btn btn-play lb-challenge-btn" id="lb-challenge-btn" type="button">Enter the Realm</button>
+            <button class="btn btn-secondary back-row lb-back-btn" id="leaderboard-back-btn" type="button">Back to Menu</button>
+        </div>
+    </div>
+</div>
+
+<div id="trainer-stats-screen" class="screen hidden">
+    <div class="panel panel-trainer-stats">
+        <p class="panel-pixel-title">TRAINER STATS</p>
+        <p class="subtitle" id="trainer-stats-subtitle">your battle record</p>
+        <div class="trainer-stats-level-block">
+            <p class="trainer-stats-level" id="trainer-stats-level">Lv.1</p>
+            <p class="trainer-stats-xp" id="trainer-stats-xp">0 / 3 XP to next level</p>
+            <div class="trainer-stats-xpbar" aria-hidden="true"><div id="trainer-stats-xpfill"></div></div>
+        </div>
+        <div class="trainer-stats-grid" id="trainer-stats-grid"></div>
+        <p class="trainer-stats-section-title">Recent battles</p>
+        <ul class="trainer-stats-history" id="trainer-stats-history"></ul>
+        <button class="btn btn-secondary back-row" id="trainer-stats-back-btn" type="button">Back</button>
+    </div>
+</div>
+
+<div id="bag-screen" class="screen hidden">
+    <div class="panel">
+        <p class="panel-pixel-title">BAG</p>
+        <p class="subtitle">your collectibles</p>
+
+        <div class="bag-grid" id="bag-grid"></div>
+
+        <button class="btn btn-secondary back-row" id="bag-back-btn" type="button" style="width: 100%;">Back</button>
+    </div>
+</div>
+
+<div id="game-screen" class="screen hidden">
+    <div id="game-hud" class="game-hud">
+        <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
+        <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
+        <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-coin poke-coin--sm hud-coin" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
+        <div class="hud-line">coord: <span id="stat-coord" class="hud-v">—, —</span></div>
+    </div>
+    <div class="game-top-actions">
+        <button class="btn btn-leave" id="leave-game-btn" type="button">EXIT</button>
+        <button class="btn btn-quests game-quests-btn" id="game-quests-btn" type="button">QUESTS</button>
+    </div>
+    <button
+        type="button"
+        class="game-poketab-btn"
+        id="game-poketab-btn"
+        aria-label="Open PokéTab"
+        aria-expanded="false"
+        aria-controls="poketab-modal"
+        hidden
+    >
+        <span class="game-poketab-btn-frame" aria-hidden="true"></span>
+        <img
+            class="game-poketab-btn-img"
+            src="/static/menuitems/phone.png?v={{ asset_v.phone_icon }}"
+            alt=""
+            width="44"
+            height="44"
+        >
+        <span id="poketab-badge" class="poketab-badge hidden" aria-hidden="true">0</span>
+    </button>
+    <button type="button" class="game-bag-btn" id="game-bag-btn" aria-label="Open bag" aria-expanded="false" aria-controls="game-drawer">
+        <span class="game-bag-btn-frame" aria-hidden="true"></span>
+        <img
+            class="game-bag-btn-img"
+            src="/static/menuitems/bag.png?v={{ asset_v.bag_icon }}"
+            alt=""
+            width="44"
+            height="44"
+        >
+    </button>
+    <div id="game-drawer" class="game-drawer hidden" aria-hidden="true">
+        <button type="button" class="game-drawer-scrim" id="game-drawer-scrim" aria-label="Close bag"></button>
+        <aside class="game-drawer-panel" role="dialog" aria-label="Trainer bag">
+            <nav class="game-drawer-tabs" aria-label="Bag sections">
+                <button
+                    type="button"
+                    class="game-drawer-tab active"
+                    data-tab="vault"
+                    data-hold-ui="drawer:vault"
+                    aria-selected="true"
+                >
+                    <span class="game-drawer-tab-icon-wrap">
+                        <img
+                            class="game-drawer-tab-icon"
+                            src="/static/menuitems/dex.png?v={{ asset_v.dex_icon }}"
+                            alt=""
+                            width="32"
+                            height="32"
+                        >
+                    </span>
+                    <span class="game-drawer-tab-label">VAULT</span>
+                </button>
+                <button
+                    type="button"
+                    class="game-drawer-tab"
+                    data-tab="poketab"
+                    data-hold-ui="drawer:poketab"
+                    aria-selected="false"
+                    hidden
+                >
+                    <span class="game-drawer-tab-icon-wrap">
+                        <img
+                            class="game-drawer-tab-icon"
+                            src="/static/menuitems/phone.png?v={{ asset_v.phone_icon }}"
+                            alt=""
+                            width="32"
+                            height="32"
+                        >
+                    </span>
+                    <span class="game-drawer-tab-label">POKÉTAB</span>
+                </button>
+            </nav>
+            <div class="game-drawer-main">
+                <header class="game-drawer-header">
+                    <p class="game-drawer-title">POKÉ VAULT</p>
+                    <button type="button" class="game-drawer-close" id="game-drawer-close" aria-label="Close">×</button>
+                </header>
+                <div class="game-drawer-panes">
+                    <section class="game-drawer-pane active" data-pane="bag-empty" id="game-drawer-empty" aria-label="Empty bag">
+                        <div class="game-drawer-hero game-drawer-hero-empty">
+                            <img
+                                class="game-drawer-hero-icon"
+                                src="/static/menuitems/bag.png?v={{ asset_v.bag_icon }}"
+                                alt=""
+                                width="48"
+                                height="48"
+                            >
+                            <p class="game-drawer-hero-text">Your bag is empty — explore the world to find gear and items.</p>
+                        </div>
+                    </section>
+                    <section class="game-drawer-pane" data-pane="poketab" data-hold-ui="drawer:poketab" aria-label="PokéTab">
+                        <div class="game-drawer-hero">
+                            <img
+                                class="game-drawer-hero-icon"
+                                src="/static/menuitems/phone.png?v={{ asset_v.phone_icon }}"
+                                alt=""
+                                width="48"
+                                height="48"
+                            >
+                            <p class="game-drawer-hero-text">Chat with trainers, find online players, and send battle invites.</p>
+                        </div>
+                        <p class="game-drawer-hint">PokéTab features coming soon</p>
+                    </section>
+                    <section class="game-drawer-pane" data-pane="vault" data-hold-ui="drawer:vault" aria-label="Vault">
+                        <div class="game-drawer-hero">
+                            <img
+                                class="game-drawer-hero-icon"
+                                src="/static/menuitems/dex.png?v={{ asset_v.dex_icon }}"
+                                alt=""
+                                width="48"
+                                height="48"
+                            >
+                            <p class="game-drawer-hero-text">Store &amp; track your PokéCards</p>
+                        </div>
+                        <div class="game-drawer-grid" id="game-vault-grid"></div>
+                        <p class="game-drawer-hint">More tabs &amp; items coming soon</p>
+                    </section>
+                </div>
+            </div>
+        </aside>
+    </div>
+    <div id="app-container"></div>
+    <div id="game-loading" class="game-loading hidden">
+        <div class="game-loading-box">
+            <div id="game-loading-avatar" class="game-loading-avatar" role="img" aria-hidden="true"></div>
+            <p class="game-loading-text" id="game-loading-text">LOADING</p>
+        </div>
+    </div>
+    <div id="join-toast-stack" class="join-toast-stack" aria-live="polite"></div>
+    <div id="sign-modal" class="sign-modal hidden" role="dialog" aria-labelledby="sign-modal-title">
+        <div class="sign-modal-box" id="sign-modal-box">
+            <button type="button" class="sign-modal-x" id="sign-modal-close" aria-label="Close">×</button>
+            <div class="sign-modal-title" id="sign-modal-title"></div>
+            <div class="sign-modal-body" id="sign-modal-body"></div>
+            <div class="sign-modal-options hidden" id="sign-modal-options"></div>
+            <button type="button" class="sign-modal-skip hidden" id="sign-modal-skip">skip</button>
+            <button type="button" class="sign-modal-next hidden" id="sign-modal-next">next</button>
+        </div>
+    </div>
+    <div id="game-pad" class="game-pad">
+        <div id="game-joystick" class="game-joystick" role="group" aria-label="Move character">
+            <div id="game-joystick-base" class="game-joystick-base">
+                <div class="game-joystick-ring" aria-hidden="true"></div>
+                <div id="game-joystick-stick" class="game-joystick-stick" aria-hidden="true"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="vending-screen" class="vending-screen hidden" role="dialog" aria-labelledby="vending-title" aria-modal="true">
+    <div class="vending-backdrop" aria-hidden="true"></div>
+    <div class="vending-room">
+        <div class="vending-wires vending-wires-left" aria-hidden="true">
+            <span class="vending-wire vending-wire-red"></span>
+            <span class="vending-wire vending-wire-yellow"></span>
+            <span class="vending-wire vending-wire-green"></span>
+        </div>
+        <div class="vending-wires vending-wires-right" aria-hidden="true">
+            <span class="vending-wire vending-wire-blue"></span>
+            <span class="vending-wire vending-wire-purple"></span>
+            <span class="vending-wire vending-wire-white"></span>
+        </div>
+
+        <div class="vending-machine" id="vending-machine">
+            <div class="vending-top-panel" aria-hidden="true">
+                <span class="vending-led vending-led-power" title="Power"></span>
+                <span class="vending-led vending-led-busy" title="Busy"></span>
+                <span class="vending-led vending-led-ok" title="Ready"></span>
+                <span class="vending-led vending-led-error" title="Error"></span>
+                <span class="vending-brand">POKÉCARD VTM-9000</span>
+            </div>
+
+            <div class="vending-monitor-wrap">
+                <div class="vending-monitor-bezel">
+                    <div class="vending-monitor-glass">
+                        <div class="vending-scanlines" aria-hidden="true"></div>
+                        <div class="vending-monitor-glow" aria-hidden="true"></div>
+                        <div class="vending-monitor-inner" id="vending-monitor-inner">
+                            <div class="vending-view vending-view-boot" id="vending-view-boot">
+                                <pre class="vending-boot-text" id="vending-boot-text"></pre>
+                            </div>
+                            <div class="vending-view vending-view-menu hidden" id="vending-view-menu">
+                                <p class="vending-menu-title">SELECT OPERATION</p>
+                                <p class="vending-menu-line" id="vending-menu-draw-line">&gt; DRAW  — SPIN 1,000 $POKE</p>
+                                <p class="vending-menu-line">&gt; SELL   — LIST IN VAULT</p>
+                                <p class="vending-menu-line">&gt; BUY    — MARKETPLACE</p>
+                                <p class="vending-menu-cursor" aria-hidden="true">█</p>
+                            </div>
+                            <div class="vending-view vending-view-error hidden" id="vending-view-error">
+                                <p class="vending-error-code" id="vending-error-code">ERR</p>
+                                <p class="vending-error-msg" id="vending-error-msg"></p>
+                            </div>
+                            <div class="vending-view vending-view-soon hidden" id="vending-view-soon">
+                                <p class="vending-soon-title" id="vending-soon-title">COMING SOON</p>
+                                <p class="vending-soon-msg" id="vending-soon-msg">Feature not wired yet.</p>
+                                <p class="vending-soon-cursor" aria-hidden="true">█</p>
+                            </div>
+                            <div class="vending-view vending-view-shuffle hidden" id="vending-view-shuffle">
+                                <p class="vending-shuffle-label">SHUFFLING DECK...</p>
+                                <div class="vending-shuffle-window">
+                                    <div class="vending-shuffle-pointer" aria-hidden="true"></div>
+                                    <div class="vending-shuffle-track-wrap">
+                                        <div class="vending-shuffle-track" id="vending-shuffle-track"></div>
+                                    </div>
+                                </div>
+                                <p class="vending-shuffle-status" id="vending-shuffle-status">▮▮▮▯▯▯</p>
+                            </div>
+                            <div class="vending-view vending-view-result hidden" id="vending-view-result">
+                                <p class="vending-result-headline">CARD DISPENSED!</p>
+                                <div class="vending-result-layout">
+                                    <img class="vending-result-card" id="vending-result-card" alt="">
+                                    <div class="vending-result-details">
+                                        <p class="vending-result-name" id="vending-result-name"></p>
+                                        <p class="vending-result-meta" id="vending-result-meta"></p>
+                                        <ul class="vending-result-spells" id="vending-result-spells"></ul>
+                                    </div>
+                                </div>
+                                <button type="button" class="vending-result-equip hidden" id="vending-btn-equip">
+                                    ▶ EQUIP TO VAULT
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="vending-monitor-label" id="vending-title">CRT OUTPUT</p>
+                </div>
+            </div>
+
+            <div class="vending-control-deck">
+                <div class="vending-btn-row">
+                    <button type="button" class="vending-btn vending-btn-draw" id="vending-btn-draw">
+                        <span class="vending-btn-led" aria-hidden="true"></span>
+                        DRAW POKÉCARD
+                    </button>
+                    <button type="button" class="vending-btn vending-btn-sell" id="vending-btn-sell">
+                        <span class="vending-btn-led" aria-hidden="true"></span>
+                        SELL A POKÉCARD
+                    </button>
+                    <button type="button" class="vending-btn vending-btn-buy" id="vending-btn-buy">
+                        <span class="vending-btn-led" aria-hidden="true"></span>
+                        BUY A POKÉCARD
+                    </button>
+                </div>
+                <div class="vending-keypad" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                    <span></span><span></span><span></span>
+                    <span></span><span></span><span></span>
+                </div>
+                <button type="button" class="vending-exit" id="vending-exit">EJECT / EXIT</button>
+            </div>
+
+            <div class="vending-coin-slot" aria-hidden="true"></div>
+            <div class="vending-card-slot" aria-hidden="true"></div>
+        </div>
+    </div>
+</div>
+
+<div id="item-get-popup" class="item-get-popup hidden" role="dialog" aria-labelledby="item-get-headline" aria-modal="true">
+    <button type="button" class="item-get-scrim" id="item-get-scrim" aria-label="Close"></button>
+    <div class="item-get-box">
+        <button type="button" class="item-get-close" id="item-get-close" aria-label="Close">×</button>
+        <p class="item-get-headline" id="item-get-headline">YOU GOT!</p>
+        <div class="item-get-stage">
+            <img class="item-get-icon" id="item-get-icon" alt="">
+        </div>
+        <p class="item-get-tag" id="item-get-tag">NEW ITEM</p>
+        <p class="item-get-name" id="item-get-name"></p>
+        <p class="item-get-msg" id="item-get-msg"></p>
+        <button type="button" class="btn item-get-ok" id="item-get-ok">OK</button>
+    </div>
+</div>
+
+<div id="poketab-modal" class="poketab-screen hidden" aria-hidden="true">
+    <div class="poketab-backdrop" id="poketab-scrim" role="button" tabindex="-1" aria-label="Close PokéTab"></div>
+    <div class="poketab-room">
+        <div class="poketab-console" id="poketab-machine" data-led-state="ready" role="dialog" aria-labelledby="poketab-title" aria-modal="true">
+            <aside class="poketab-rail poketab-rail-left" aria-hidden="true">
+                <div class="poketab-grip"></div>
+                <div class="poketab-rail-vents">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                <div class="poketab-rail-bolt"></div>
+                <div class="poketab-rail-bolt poketab-rail-bolt-b"></div>
+            </aside>
+
+            <div class="poketab-main">
+                <div class="poketab-top-panel">
+                    <span class="poketab-led poketab-led-power" title="Power"></span>
+                    <span class="poketab-led poketab-led-busy" title="Link"></span>
+                    <span class="poketab-led poketab-led-ok" title="Ready"></span>
+                    <span class="poketab-led poketab-led-error" title="Alert"></span>
+                    <span class="poketab-brand" id="poketab-title">POKÉTAB LINK-7</span>
+                </div>
+
+                <div class="poketab-monitor-wrap">
+                    <div class="poketab-monitor-bezel">
+                        <div class="poketab-monitor-glass">
+                            <div class="poketab-scanlines" aria-hidden="true"></div>
+                            <div class="poketab-monitor-glow" aria-hidden="true"></div>
+                            <div class="poketab-monitor-inner">
+                                <div class="poketab-view active" data-poketab-view="menu">
+                                    <p class="poketab-crt-title">TRAINER NETWORK</p>
+                                    <p class="poketab-crt-line" id="poketab-crt-status">&gt; NETWORK: SCANNING...</p>
+                                    <p class="poketab-crt-line" id="poketab-crt-requests">&gt; REQUESTS: 0</p>
+                                    <p class="poketab-crt-line" id="poketab-crt-friends">&gt; FRIENDS: 0</p>
+                                    <p class="poketab-crt-line" id="poketab-crt-new-friends">&gt; NEW FRIENDS: 0</p>
+                                    <p class="poketab-crt-line" id="poketab-crt-messages">&gt; UNREAD MSGS: 0</p>
+                                    <p class="poketab-crt-line" id="poketab-crt-battles">&gt; BATTLE ALERTS: 0</p>
+                                    <p class="poketab-crt-line poketab-crt-hint">&gt; USE BUTTONS BELOW</p>
+                                    <p class="poketab-crt-cursor" aria-hidden="true">█</p>
+                                </div>
+                                <div class="poketab-view" data-poketab-view="online">
+                                    <p class="poketab-crt-title">ONLINE TRAINERS</p>
+                                    <div class="poketab-list" id="poketab-online-list"></div>
+                                </div>
+                                <div class="poketab-view" data-poketab-view="requests">
+                                    <p class="poketab-crt-title">FRIEND REQUESTS</p>
+                                    <div class="poketab-list" id="poketab-requests-list"></div>
+                                </div>
+                                <div class="poketab-view" data-poketab-view="friends">
+                                    <p class="poketab-crt-title">FRIENDS LIST</p>
+                                    <div class="poketab-list" id="poketab-friends-list"></div>
+                                </div>
+                                <div class="poketab-view" data-poketab-view="messages">
+                                    <p class="poketab-crt-title">MESSAGES</p>
+                                    <div class="poketab-list" id="poketab-conversations-list"></div>
+                                </div>
+                                <div class="poketab-view" data-poketab-view="chat">
+                                    <div class="poketab-chat-peer" id="poketab-chat-peer"></div>
+                                    <div class="poketab-chat-thread" id="poketab-chat-thread"></div>
+                                    <form class="poketab-chat-compose" id="poketab-chat-form">
+                                        <input type="text" id="poketab-chat-input" maxlength="500" placeholder="TYPE MESSAGE..." autocomplete="off">
+                                        <button type="submit" class="poketab-action-btn poketab-action-send">SEND</button>
+                                    </form>
+                                </div>
+                                <div class="poketab-view" data-poketab-view="battle">
+                                    <div id="poketab-battle-lobby" class="poketab-battle-lobby">
+                                        <p class="poketab-crt-title">⚔ BATTLE ARENA</p>
+                                        <p class="poketab-battle-balance" id="poketab-battle-balance">&gt; BALANCE: 0 $POKE</p>
+                                        <div class="poketab-battle-wager-row">
+                                            <label class="poketab-battle-wager-label" for="poketab-battle-wager">WAGER</label>
+                                            <input type="number" id="poketab-battle-wager" class="poketab-battle-wager-input" min="1" value="50" inputmode="numeric">
+                                            <span class="poketab-battle-wager-hint">$POKECARD</span>
+                                        </div>
+                                        <p class="poketab-crt-line poketab-battle-sub">&gt; CHALLENGE ONLINE TRAINERS WITH CARDS</p>
+                                        <div class="poketab-list" id="poketab-battle-opponents"></div>
+                                    </div>
+                                    <div id="poketab-battle-team" class="poketab-battle-team hidden">
+                                        <p class="poketab-crt-title">PICK YOUR TEAM</p>
+                                        <p class="poketab-crt-line" id="poketab-battle-team-hint">&gt; SELECT 1 CARD</p>
+                                        <div class="poketab-battle-card-grid" id="poketab-battle-team-grid"></div>
+                                        <button type="button" class="poketab-battle-confirm-btn" id="poketab-battle-team-confirm">LOCK TEAM</button>
+                                    </div>
+                                </div>
+                                <div id="poketab-battle-overlay" class="poketab-battle-overlay hidden" aria-hidden="true">
+                                    <div class="poketab-gb-arena" id="poketab-gb-arena"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="poketab-monitor-label" id="poketab-screen-label">LINK DISPLAY</p>
+                    </div>
+                </div>
+
+                <div class="poketab-control-deck">
+                    <button type="button" class="poketab-battle-btn" id="poketab-battle-btn" aria-label="Open battle arena">
+                        <span class="poketab-battle-btn-shine" aria-hidden="true"></span>
+                        ⚔ BATTLE
+                    </button>
+                    <div class="poketab-tab-row" id="poketab-tab-row" aria-label="PokéTab sections">
+                        <button type="button" class="poketab-tab active" data-go="menu">
+                            <span class="poketab-tab-led" aria-hidden="true"></span>
+                            <span class="poketab-tab-label">HOME</span>
+                        </button>
+                        <button type="button" class="poketab-tab poketab-tab-online" data-go="online">
+                            <span class="poketab-tab-led" aria-hidden="true"></span>
+                            <span class="poketab-tab-label">ONLINE</span>
+                        </button>
+                        <button type="button" class="poketab-tab poketab-tab-requests" data-go="requests">
+                            <span class="poketab-tab-led" aria-hidden="true"></span>
+                            <span class="poketab-tab-label">REQ<span id="poketab-tab-requests-count" class="poketab-tab-badge hidden">0</span></span>
+                        </button>
+                        <button type="button" class="poketab-tab poketab-tab-friends" data-go="friends">
+                            <span class="poketab-tab-led" aria-hidden="true"></span>
+                            <span class="poketab-tab-label">FRND<span id="poketab-tab-friends-count" class="poketab-tab-badge hidden">0</span></span>
+                        </button>
+                        <button type="button" class="poketab-tab poketab-tab-messages" data-go="messages">
+                            <span class="poketab-tab-led" aria-hidden="true"></span>
+                            <span class="poketab-tab-label">MSG<span id="poketab-tab-messages-count" class="poketab-tab-badge hidden">0</span></span>
+                        </button>
+                    </div>
+                    <button type="button" class="poketab-exit" id="poketab-close">CLOSE POKÉTAB</button>
+                </div>
+            </div>
+
+            <aside class="poketab-rail poketab-rail-right" aria-label="Battle alerts">
+                <div class="poketab-duel-module" id="poketab-alert-panel">
+                    <div class="poketab-duel-plastic">
+                        <div class="poketab-duel-bezel">
+                            <div class="poketab-duel-glass">
+                                <div class="poketab-duel-scanlines" aria-hidden="true"></div>
+                                <div class="poketab-duel-pixelgrid" aria-hidden="true"></div>
+                                <div class="poketab-duel-glow" aria-hidden="true"></div>
+                                <div class="poketab-duel-inner">
+                                    <p class="poketab-duel-head">⚔ DUEL</p>
+                                    <div class="poketab-duel-feed" id="poketab-alert-list">
+                                        <p class="poketab-duel-empty">STANDBY</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="poketab-duel-label">BATTLE FEED</p>
+                    </div>
+                </div>
+                <div class="poketab-rail-bolt poketab-rail-bolt-b"></div>
+            </aside>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.APP_CONFIG = {
+        gameServerUrl: {{ game_server_url|tojson }},
+        skins: {{ skins|tojson }},
+        defaultSkin: {{ default_skin|tojson }},
+        bagItems: {{ bag_items|tojson }},
+        poolItems: {{ pool_items|tojson }},
+        cardCatalog: {{ card_catalog|tojson }},
+        bagSlotCount: {{ bag_slot_count|tojson }},
+        quests: {{ quests|tojson }},
+        holdCatalog: {{ hold_catalog|tojson }},
+        uiUnlocks: {{ ui_unlocks|tojson }},
+        avatarCosts: {{ avatar_costs|tojson }},
+        startingBalance: {{ starting_balance|tojson }},
+        vendingSpinFirstCost: {{ vending_spin_first_cost|tojson }},
+        vendingSpinRepeatCost: {{ vending_spin_repeat_cost|tojson }},
+        testMode: {{ test_mode|tojson }},
+        testPlayerSlug: {{ test_player_slug|tojson }},
+        assets: {
+            gameJs: "/static/game/game.js?v={{ asset_v.game_js }}"
+        }
+    };
+</script>
+<script src="/static/js/retro-audio.js?v={{ asset_v.retro_audio_js }}"></script>
+<script src="/static/js/poketab.js?v={{ asset_v.app_js }}"></script>
+<script src="/static/js/poketab_battle.js?v={{ asset_v.app_js }}"></script>
+<script src="/static/js/app.js?v={{ asset_v.app_js }}"></script>
+</body>
+</html>

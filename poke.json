@@ -1,0 +1,1633 @@
+{
+  "version": 1,
+  "updated_at": 1780918571,
+  "cards": [
+    {
+      "slug": "aerodactile",
+      "image": "aerodactile.jpg",
+      "name": "Aerodactile",
+      "hp": 190,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/57",
+      "type": "Rock",
+      "spells": [
+        {
+          "name": "Spin Hit",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Bind Attack",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Fossil fangs",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Wing Spin",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "eg",
+        "ocr_moves_raw": "7 re 7 cme cw Re tio Re” z\na == Spin Hit 16 %\nbene cee ee eee cece nee oa ee sees nee cee tee ee\n(  BindAttack = 11\nee ee ee PEO\n(c Fossil fangs 13 &%\nfaces eects nena cee eee neenee ee cess eumecesne eee TO,\nPP:03 \">",
+        "seed_match": "Aerodactile",
+        "seed_match_via": "name",
+        "mtime": 1780830666,
+        "source_file": "aerodactile.jpg"
+      },
+      "id": "poke-001"
+    },
+    {
+      "slug": "arkanine",
+      "image": "arkanine.jpg",
+      "name": "Arkanine",
+      "hp": 150,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/72",
+      "type": "Fire",
+      "spells": [
+        {
+          "name": "Fire maze",
+          "attack": 29,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Sun Burn",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Flame throw",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Scratch",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 40
+        }
+      ],
+      "meta": {
+        "name_source": "ocr",
+        "ocr_name_raw": "_Arkaning _ Teh armanine _w",
+        "ocr_moves_raw": "©) Fire Maze 29 x\n~ PP:O%3\n\nsun Burn id X\nPP: O03\n\nFlame throw 13 *\nPP OS\n\n€9 Scratch ll x.\n\npr te marerming ESRTTS GEE A PREETET cee PAO ae,",
+        "seed_match": "Arkanine",
+        "seed_match_via": "name",
+        "mtime": 1780830722,
+        "source_file": "arkanine.jpg"
+      },
+      "id": "poke-002"
+    },
+    {
+      "slug": "blastoicey",
+      "image": "blastoicey.jpg",
+      "name": "Blastoicey",
+      "hp": 150,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/71",
+      "type": "Water",
+      "spells": [
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 55
+        },
+        {
+          "name": "Water gun",
+          "attack": 23,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Bubble",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Shell hit",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "> mena = - a =",
+        "ocr_moves_raw": "Miia, 0.03 WATER Pokémon HT: 5°3\" WT: 6.2 Ibs. ida\n3 Tackle li &\nPP:55\n(+ Water Gun 23 ™.\nPP:03\n( Bubble 11\nPP:03\nrt Shell Hit 11\naetna a ee PPS _.",
+        "seed_match": "Blastoicey",
+        "seed_match_via": "name",
+        "mtime": 1780830722,
+        "source_file": "blastoicey.jpg"
+      },
+      "id": "poke-003"
+    },
+    {
+      "slug": "bulbasor",
+      "image": "bulbasor.jpg",
+      "name": "Bulbasor",
+      "hp": 90,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/38",
+      "type": "Grass",
+      "spells": [
+        {
+          "name": "Quick Hit",
+          "attack": 12,
+          "is_defence": false,
+          "max_count": 30
+        },
+        {
+          "name": "Leaf Cut",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 8
+        },
+        {
+          "name": "Green Razors",
+          "attack": 17,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Sleep seed",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "! : : era — 7 =",
+        "ocr_moves_raw": "ila oe acare mn ok “Sek |, On A, Os St oe a\nfans ae ee seen |\nGre Quick Hit 277 nn 1M\n\n| ‘a \"ze, GreenRazors °° « 12\n\nae SN | gt PPO3\n> re Sleep Seed av OU\na ce Pp-m2",
+        "seed_match": "Bulbasor",
+        "seed_match_via": "name",
+        "mtime": 1780849143,
+        "source_file": "bulbasor.jpg"
+      },
+      "id": "poke-029"
+    },
+    {
+      "slug": "charizard",
+      "image": "charizard.jpg",
+      "name": "Charizard",
+      "hp": 180,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/43",
+      "type": "Fire",
+      "spells": [
+        {
+          "name": "Ember",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 40
+        },
+        {
+          "name": "Fury Blaze",
+          "attack": 19,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "flames",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Fire spin",
+          "attack": 20,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "Ember 14\nPP:40\n: Fury Blaze 19 #\nPP:03\n: Flames 14\nPP:05\nFire Spin 20 CS\nweakness f) | resistance | retreat €Y F |",
+        "seed_match": "Charizard",
+        "seed_match_via": "name",
+        "mtime": 1780829845,
+        "source_file": "charizard.jpg"
+      },
+      "id": "poke-004"
+    },
+    {
+      "slug": "charmandar",
+      "image": "charmandar.jpg",
+      "name": "charmandar",
+      "hp": 80,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/42",
+      "type": "Fire",
+      "spells": [
+        {
+          "name": "Tackle",
+          "attack": 12,
+          "is_defence": false,
+          "max_count": 30
+        },
+        {
+          "name": "Fire balls",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Flare",
+          "attack": 20,
+          "is_defence": false,
+          "max_count": 2
+        },
+        {
+          "name": "Heat up",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 30
+        }
+      ],
+      "meta": {
+        "name_source": "ocr",
+        "ocr_name_raw": "Cc! charmandar we BO",
+        "ocr_moves_raw": "Dk} Tackle i2 * |\n: PP: 30\ni Fire balls 16\n: PP: 05\n: Flare oO\n: PP: 02 :\nHeat up 13",
+        "seed_match": "charmandar",
+        "seed_match_via": "name",
+        "mtime": 1780608639,
+        "source_file": "charmandar.jpg"
+      },
+      "id": "poke-005"
+    },
+    {
+      "slug": "crabby",
+      "image": "crabby.jpg",
+      "name": "Crabby",
+      "hp": 80,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/39",
+      "type": "Water",
+      "spells": [
+        {
+          "name": "Bite",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 25
+        },
+        {
+          "name": "Swim Deep",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Gel Grip",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Shower",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 4
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "” . te Oo Pres = _ _ = g 3",
+        "ocr_moves_raw": "are, rt,\nBite Hil Se\nrenee\n._Jowim[Deep e)\n144\n| GellGrip FEadom\nShower, 144\n[ weakness | resistance rs retreat re Qi",
+        "seed_match": "Crabby",
+        "seed_match_via": "name",
+        "mtime": 1780818082,
+        "source_file": "crabby.jpg"
+      },
+      "id": "poke-006"
+    },
+    {
+      "slug": "cyndaquil",
+      "image": "cyndaquil.jpg",
+      "name": "Cyndaquil",
+      "hp": 90,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/2",
+      "type": "Fire",
+      "spells": [
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 35
+        },
+        {
+          "name": "Heat Sleep",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Volvano clouds",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Fireworks",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "ene _ ve 30",
+        "ocr_moves_raw": "a £\n| a Pein ora\n3 Tackle 11 ¥\n3 PP: 35\n3 |\n3 Heat Sleep o@ |\n3 PP: 03 ?\nVolcano clouds 18\n: PP:030\n\nDK: Fireworks 16\nPP: 3 |",
+        "seed_match": "Cyndaquil",
+        "seed_match_via": "name",
+        "mtime": 1780818044,
+        "source_file": "cyndaquil.jpg"
+      },
+      "id": "poke-007"
+    },
+    {
+      "slug": "elektrode",
+      "image": "elektrode.jpg",
+      "name": "Elektrode",
+      "hp": 60,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/40",
+      "type": "Electric",
+      "spells": [
+        {
+          "name": "Electric dip",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 1
+        },
+        {
+          "name": "Shock stess",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Quick hit",
+          "attack": 10,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "electro roll",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "ocr",
+        "ocr_name_raw": "° Flektrode ; ue 60",
+        "ocr_moves_raw": "7 Gal Electric dip 16 x\n(4) Shock stess 13\n3 == Electro roll lo",
+        "seed_match": "Elektrode",
+        "seed_match_via": "name",
+        "mtime": 1780608639,
+        "source_file": "elektrode.jpg"
+      },
+      "id": "poke-008"
+    },
+    {
+      "slug": "exiggutor",
+      "image": "exiggutor.jpg",
+      "name": "exiggutor",
+      "hp": 150,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/52",
+      "type": "Grass",
+      "spells": [
+        {
+          "name": "Super Eggsplosion",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 4
+        },
+        {
+          "name": "Seed bullets",
+          "attack": 12,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Stomp",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Leaf throw",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 30
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "‘pam — : * | -",
+        "ocr_moves_raw": "El Sel Uw % oa\nTee oe - a\nNO. 32 GRASS Pokémon HT: 91\" WT: ?r2 tbs.",
+        "seed_match": "exiggutor",
+        "seed_match_via": "name",
+        "mtime": 1780910986,
+        "source_file": "exiggutor.jpg"
+      },
+      "id": "poke-031"
+    },
+    {
+      "slug": "genger",
+      "image": "genger.jpg",
+      "name": "Genger",
+      "hp": 60,
+      "lvl": 3,
+      "url": "https://t.me/pokecardssolitems/73",
+      "type": "Ghost",
+      "spells": [
+        {
+          "name": "Pain burst",
+          "attack": 25,
+          "is_defence": false,
+          "max_count": 1
+        },
+        {
+          "name": "Curse",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 20
+        },
+        {
+          "name": "Shadow Skip",
+          "attack": 22,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Soul crush",
+          "attack": 30,
+          "is_defence": false,
+          "max_count": 1
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "gee\ns -\nict 2 oF aot ROSS PESTAED fd we eB tn s- shed\nosncene\nTNO. 96 GHOST Pokémon HT: 4°6” WT: 0.4 Ibs\neNO. 96 G eee bata tebe\n. a ates mes fuse ee na ST Pok Psi BOOP seh URED se8 eensad\nptoesesezs ov tegyetenass se ce wwes se te emeee. _ emon HT: 4’6” Ww ij ehiwt ne BA bSTRL PIED ERITH ap ees 1\notto Shcleres; tts sft\" oad - Pb Fd bs tf . CB Bee we rere ee ns T: 0.4 ibs. wea a tS : aie,\noi ae iy tage fede Fe poeeeree sere aeons Toes see pzvent deers a coe lew te we —_ ede mt! worn a\nees}. vy tt pay lappa tet eSeESOCEREEEST* ft UA tT bs lec anseasis proses > serrttt ss ee, St tee : alae .\nqaee af atic tae gt the tooo! : pei Meet peeeeeaee biG Gana wants fore ane Hsetiter et es pei epee raae atte\n: ee - wo ~ , . weselt pete oo ehbo ° ee\nwet og Bag peer be” 8 | os a ge ie oo peaielastey ee siti tisks SpeeSceittteicts mage atis pepe cose 2:\n- teat jie ad. “ye wt i coe r ” oo oF poceag TAY J ede - a4 ze\nToltsr sy obi. peta aan flue ery os eo ete wate ne ‘4 soy : : o adcenaeure> ouve ea ae\nsoreEney? BEST Seee vec soght reel oa whet nef Tees thst tet uethgla sy ope RIG, bey sa See Rees ve we o E Toe es\nrenees ae pete eae Hee eas ute a Vode ad ha tt See fftaseret prone ress: ree bie casementoss se est Ae 3g pete ts\ntrey Maresae et. te thte | Soee ceases ate es -enee Oumar PROTLS SEES: eran oes fat\" Hitt\nthi eersed aves reer ge ristens eieereeer’ A Peas cps cote ybaras thar ly tigsy ue erantese:\nran ad Gnonkere Seaenen Stet bok peepee . votes : Serta eo ek paerseorrre Srare ee age sas Ses an} 4 Sth Lopes\nre WDD TEES tht tonigngituy ait poate se = mines =e y broae Ryo e oe 5 Ret Suabocmmes\nne fet {Rope BO Epo pep oo at. dyes ake ee oe ss eateigres:\naes Toabrtspiss De TY SY ' : : i : + : Coot tenet pare testa rei eet 4-04 44. ake ary. ri o4)\ntg ice BMP: welll a foo z , Tops tt soto, renee wit ita ® be i sage\nwe ristiait Par ee ey i... ; Prog ts PUL RTS ove iS: bell nn ity ois\nhe ‘ Te > 8 ue ete dete THT tt! : re et arn oon etetiedittides th ban eye a ; womdes eS\nist xc seeusieecs ge = Staaryy be that openet uta tlietacorensad poets Rereipes riser reset tates rafesectdraes pbszpestieest!\neae a’ 2 agty pesatate, : eA: eee ras res te dedelahert siete wan oral QRS TLE Coates SED bes | wae eee!\n, . y pees tees pee + one 2 phe err ae. Hoos. winded taal ad y i: of: . i ae ts08s i ras ihe\nPy Pett oth raehts tele a Be -[ ti: nl Bienes tae whe tse erate medak oo. ete eT tt ¢ onwev Bb ber As qe\n+ ie arith ehiinh 17 Ge rhea Pie IE homo LER is butte ae sa Tt eee be] aafeete>!\n? hea bea coe ho comms a B » en a bei ise oeea o6+eee S ° res sey eeer\n‘ ~e— ime o o* \\e “ va . eon. . , <\npiitrasgieesde cy oxe Hota: tes Ue ceavgepes Pe = uses Somet seas: beis ve gst tise oe so Macs:\ncaro t ee eo emanee Peers, pepper. ated prints ol a Migs str cobs ag $reg it 9 sat i ie Gator\nea atatat hae Wie ato 68 Tee tees tet Ta A a Neel ou LR Sitites Bsa re\n(er earerts 4. oeges i eta Areata tedeesatsc! °F SeaSe ies eee ieSretstines:. : i eons Ped ncaeh™ 65\nprot SBuSe et ater atseese rbytede sages efeduahed sccorscPesvarotgsl Aigebonkertats se -ssscccegestest aileiigiege c; eae woe dese\nee eritepecirectarecestesssee the fey - sere iirteereterst 1 pb RU Me caparaqeapep pT hat: f a Poe Soseeee.\nta etrieetr sb pe Rees See sbaetse ee Od epee oepesnas whsqndvtcersede eo 5 a geeue ais\na68 waieva RB tasea’ theense ts Hh ey a tee egesneoreaeunead man as enero te Pht Tt See e tr Tre teere ress Medeor: erizees ee tener\nfores eee ett cca tcee te Hy bss tSeetass esuneh SaSeuuciececete Mose eeccra tateacpeanee ere e eect ercscsseecernen\nGry ARitan thie es W geotsress: sa Re by $3: apaapte berries Tepe ior areceet~ pretrere feeeng Seaeneds see Ptrreterc tetas aan\ngoth. dttiile mapeineeriniettie sae Re se t td pra sete ea ee REST\nee eye tanae vie dateesa: Sessa tees eo beed u- « ess se? siteades abi hp nin ein wis bes aay aoe\nQe tig T Ty tgiseapeens ss 44 BES iUn aes! VenFesteared py gs : wiser sel esse gesee renee reeebigesighgss eae aie 0% :\nRINT SEE te : Poof. ip hott wool ater ig flo\n— Gees dpeaimraae leanne pa@pes: tes : vette eC :\n. Vo pe@pecraces case: ‘ at i ced, tte be eta : oo\n. aiicleeen peagata Cols . :\n. co : os de eaesccasezee al wee ke - -\n. . . ~ -- +B 4 sae .",
+        "seed_match": "Genger",
+        "seed_match_via": "name",
+        "mtime": 1780911081,
+        "source_file": "genger.jpg"
+      },
+      "id": "poke-032"
+    },
+    {
+      "slug": "giodude",
+      "image": "giodude.jpg",
+      "name": "Giodude",
+      "hp": 100,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/59",
+      "type": "Rock",
+      "spells": [
+        {
+          "name": "Rock throw",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 30
+        },
+        {
+          "name": "Punch",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Linear hit",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 4
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "- roduc —= “",
+        "ocr_moves_raw": "TT» NO. 36. ROCK Pokémon HT: 3°3” WT: 103 Ibs.\nM Rock throw a 18\n“somes sicea sucess susturectseestes ute wetieesitireessecernn( Pi\n& ene\nke Punch\nay: Linear hit : or04\n(weakness J resistance YY revreat_@)",
+        "seed_match": "Giodude",
+        "seed_match_via": "name",
+        "mtime": 1780830678,
+        "source_file": "giodude.jpg"
+      },
+      "id": "poke-009"
+    },
+    {
+      "slug": "golim",
+      "image": "golim.jpg",
+      "name": "Golim",
+      "hp": 180,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/44",
+      "type": "Rock",
+      "spells": [
+        {
+          "name": "Stone Edge",
+          "attack": 21,
+          "is_defence": false,
+          "max_count": 2
+        },
+        {
+          "name": "Lunge",
+          "attack": 6,
+          "is_defence": false,
+          "max_count": 4
+        },
+        {
+          "name": "Tumble",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 30
+        },
+        {
+          "name": "Mega hit",
+          "attack": 19,
+          "is_defence": false,
+          "max_count": 2
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "Nemaeammsaary ss",
+        "ocr_moves_raw": "aa Stone Edge 21\nPP:02\nae Lunge l6 *\n| PP:04 :\n| Tumble ll X\ni PP:30\n8 Mega hit 19 &\n: PP:02\nweakness | resistance | retreat DC",
+        "seed_match": "Golim",
+        "seed_match_via": "name",
+        "mtime": 1780830613,
+        "source_file": "golim.jpg"
+      },
+      "id": "poke-010"
+    },
+    {
+      "slug": "haunter",
+      "image": "haunter.jpg",
+      "name": "Haunter",
+      "hp": 50,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/46",
+      "type": "Ghost",
+      "spells": [
+        {
+          "name": "Sponky shot",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 30
+        },
+        {
+          "name": "Shadow ball",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Nightmare",
+          "attack": 23,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Dreameater",
+          "attack": 21,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "’ — ; a",
+        "ocr_moves_raw": "NO. 97 GHOST Pokémon HT: 4'1\" WT: 0.3 lbs.\nsponky shot 14™\nPP:30\n2 shadow ball 18 x\n) PP:03\nNightmare 23»\nPP:G3\nDreameater 21% |\nweakness “ x2 | resistance (5-390 | retreat €% :",
+        "seed_match": "Haunter",
+        "seed_match_via": "name",
+        "mtime": 1780830624,
+        "source_file": "haunter.jpg"
+      },
+      "id": "poke-011"
+    },
+    {
+      "slug": "jigglimuff",
+      "image": "jigglimuff.jpg",
+      "name": "Jigglimuff",
+      "hp": 50,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/53",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Rollout",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Pound",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Slap",
+          "attack": 9,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Sing",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 5
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "a a°uP ut al es",
+        "ocr_moves_raw": "5 Ok) Rollout oe eS ae\nPP:o3\ni) =) Pound 15 &\n(Gk) = Slap 9 Mi\nfo PP:50 +\nick «= Sing ee | a 3m\ni | PP:05",
+        "seed_match": "Jigglimuff",
+        "seed_match_via": "name",
+        "mtime": 1780829783,
+        "source_file": "jigglimuff.jpg"
+      },
+      "id": "poke-012"
+    },
+    {
+      "slug": "magmer",
+      "image": "magmer.jpg",
+      "name": "Magmer",
+      "hp": 80,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/58",
+      "type": "Fire",
+      "spells": [
+        {
+          "name": "Fire kick",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Flame showers",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Fire jix",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Scratch",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 40
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "ong ~~ La. an",
+        "ocr_moves_raw": "i} Fire Kick 18 *\n‘@ Flame showers 14 ¥\nee\n@3 — Scratch - U*x",
+        "seed_match": "Magmer",
+        "seed_match_via": "name",
+        "mtime": 1780829783,
+        "source_file": "magmer.jpg"
+      },
+      "id": "poke-013"
+    },
+    {
+      "slug": "mewtu",
+      "image": "mewtu.jpg",
+      "name": "mewtu",
+      "hp": 220,
+      "lvl": 10,
+      "url": "https://t.me/pokecardssolitems/54",
+      "type": "Legendary",
+      "spells": [
+        {
+          "name": "Psychic",
+          "attack": 20,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Big Bang",
+          "attack": 45,
+          "is_defence": false,
+          "max_count": 1
+        },
+        {
+          "name": "Meditate",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 5
+        },
+        {
+          "name": "Burst",
+          "attack": 12,
+          "is_defence": false,
+          "max_count": 50
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "| a0 X\n45 x\n0 @\ni? *",
+        "seed_match": "mewtu",
+        "seed_match_via": "name",
+        "mtime": 1780910996,
+        "source_file": "mewtu.jpg"
+      },
+      "id": "poke-033"
+    },
+    {
+      "slug": "miowth",
+      "image": "miowth.jpg",
+      "name": "Miowth",
+      "hp": 70,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/55",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Scratch",
+          "attack": 10,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Scream Out",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Cat kick",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Confuse",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "— et",
+        "ocr_moves_raw": "__ | PP:50\n(nS crear 15\n| — PP:d3 |\n/ PP:03\na : PP:03",
+        "seed_match": "Miowth",
+        "seed_match_via": "name",
+        "mtime": 1780911008,
+        "source_file": "miowth.jpg"
+      },
+      "id": "poke-034"
+    },
+    {
+      "slug": "moltras",
+      "image": "moltras.jpg",
+      "name": "Moltras",
+      "hp": 190,
+      "lvl": 10,
+      "url": "https://t.me/pokecardssolitems/47",
+      "type": "Legendary",
+      "spells": [
+        {
+          "name": "Death Flames",
+          "attack": 35,
+          "is_defence": false,
+          "max_count": 2
+        },
+        {
+          "name": "Soul Burn",
+          "attack": 43,
+          "is_defence": false,
+          "max_count": 1
+        },
+        {
+          "name": "Earth Crush",
+          "attack": 3,
+          "is_defence": true,
+          "max_count": 2
+        },
+        {
+          "name": "Fire Spin",
+          "attack": 10,
+          "is_defence": false,
+          "max_count": 50
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "fi) Death Flames 35\nPP:02\nMy) Soul Burn 43\nPP:01\n\nO Earth Crush 3x\nPP:02\n\nFire Spin 10 ¥\nOO p 10",
+        "seed_match": "Moltras",
+        "seed_match_via": "name",
+        "mtime": 1780829783,
+        "source_file": "moltras.jpg"
+      },
+      "id": "poke-014"
+    },
+    {
+      "slug": "onix",
+      "image": "onix.jpg",
+      "name": "Onix",
+      "hp": 210,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/70",
+      "type": "Rock",
+      "spells": [
+        {
+          "name": "Rock Shower",
+          "attack": 21,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Stone Impact",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 4
+        },
+        {
+          "name": "Deep Dig",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "RockHit",
+          "attack": 12,
+          "is_defence": false,
+          "max_count": 50
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "—",
+        "ocr_moves_raw": "ft) Rock Shower itd:\nobo boot  e  PPO\noy Stone Impact §§ 13 ¥\nee PRO\nee ais a) ee\ni RockHit l2 ¥\nPP:50 |\n| eae ReRRRIIR RRSeRERAE Taree Seema",
+        "seed_match": "Onix",
+        "seed_match_via": "name",
+        "mtime": 1780830398,
+        "source_file": "onix.jpg"
+      },
+      "id": "poke-015"
+    },
+    {
+      "slug": "pekachu",
+      "image": "pekachu.jpg",
+      "name": "Pekachu",
+      "hp": 70,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/56",
+      "type": "Electric",
+      "spells": [
+        {
+          "name": "Electro ball",
+          "attack": 25,
+          "is_defence": false,
+          "max_count": 1
+        },
+        {
+          "name": "Charge",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Pike strike",
+          "attack": 17,
+          "is_defence": false,
+          "max_count": 5
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "| <2 Electro ball - 25 ™é\ne Charge “ nD\n(&% Tackle 50x\n(= Pikestrike  . 17™",
+        "seed_match": "Pekachu",
+        "seed_match_via": "name",
+        "mtime": 1780830666,
+        "source_file": "pekachu.jpg"
+      },
+      "id": "poke-016"
+    },
+    {
+      "slug": "pidgei",
+      "image": "pidgei.jpg",
+      "name": "Pidgei",
+      "hp": 60,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/64",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Wings cut",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "WindSpin",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Gust",
+          "attack": 23,
+          "is_defence": false,
+          "max_count": 2
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "if NO. 41 BASIC Pokémon HT: 1°11\" WT: 4 Ibs,\nOK Wings cut - LX\nsee ceectuteven qntest wenatonesiantranseveremannan te cinsete te weer eel OS\nDK: Tackle 11 x\ncuvetieanwenuninunnnsiunnunnnnwnenn nl ho\nOk, WindSpin 0\nunnnnnanwaniunnnannenannnnunenmnnnnn nl hdd\nOC Gust 2a x\nPP:02",
+        "seed_match": "Pidgei",
+        "seed_match_via": "name",
+        "mtime": 1780829599,
+        "source_file": "pidgei.jpg"
+      },
+      "id": "poke-017"
+    },
+    {
+      "slug": "pidgiotto",
+      "image": "pidgiotto.jpg",
+      "name": "Pidgiotto",
+      "hp": 120,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/65",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Gust",
+          "attack": 23,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Peck",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Wing hit",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 5
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "_—_— ea\nTackle 11 x\nPP:50\nGust 23 x\nPP:03\nOk} Peck 15 x\n\nPP:03\nWing hit 13 3%",
+        "seed_match": "Pidgiotto",
+        "seed_match_via": "name",
+        "mtime": 1780830701,
+        "source_file": "pidgiotto.jpg"
+      },
+      "id": "poke-018"
+    },
+    {
+      "slug": "rattatey",
+      "image": "rattatey.jpg",
+      "name": "Rattatey",
+      "hp": 50,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/48",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Scratch",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Quick hit",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Tackle",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Focus",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "— - HP =",
+        "ocr_moves_raw": "red i ee bbe\nOK Scratch 11 ™\n- PP:50\nCs = Quick Hit 13\n- PP:03\ney) ~—Ss Tackle 13\nPP:03\n0 G\nes Focus pP:03\nf wWoearnace ty as I rocictanco I patrast a, . !",
+        "seed_match": "Rattatey",
+        "seed_match_via": "name",
+        "mtime": 1780830634,
+        "source_file": "rattatey.jpg"
+      },
+      "id": "poke-019"
+    },
+    {
+      "slug": "rhihorn",
+      "image": "rhihorn.jpg",
+      "name": "Rhihorn",
+      "hp": 110,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/68",
+      "type": "Rock",
+      "spells": [
+        {
+          "name": "Tight Hit",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Crush",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Horn smash",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Chop",
+          "attack": 10,
+          "is_defence": false,
+          "max_count": 50
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "Pe Pe) er , oe, asa. . a ap eS Pe d\n- rete - ni o-s, . == Ps ~*\nu wt mat low . . te oe gl ‘ ! “1\n4 “8 rent. s 7 . ae ro a . a wt* ren . - cn ” = i Fy 4\nire s a: ane 22 pose ueEe se a te : ea\nts CRE CROSS RVICT UES SCOT ERE TAIN KH HK TOTTI TT POSES SEIT SE KUT TUL IVT VV GEIS K SO TP SVC MLETST SST TT TER INCEST STS VITTae 8”\noy\n: . rs ral -Z - . - wd, - : 2 : 7. wet be LE 34 .\nWe NOL 19: Pokémon HT: 79\" WT: 923 Ibs...\n[. ze ' oa : ot - + ‘ . ‘ ie vo. . ”\nBe NDT. ‘Pokémon Hi #3 WE 923 los.: 0. 2\nEL LT LE Cr ET EGRET tee SeSBIClar se. SETERIS*TtSPSOR IRIE \"Oh\noe are\npet he cewek eee wee tte tala weet ce Lg. wee oe dd bee tee bed a ae Cr Oe oa [ rs er re Fr re err en ee rrr ne CrLPy\nteas . «ee hone fot von a ae ere yess lates hewn eat cee alte tar ate we uta, Veg At ene ee de ta tes nat el\na ro eT ae > halt ~s oe a es 2 ee ee EE, ‘a ae ra. or Seer\nace ‘ - rr ee teh oe thas to pe eye soe . rn) a cs Cr re ° ss co\n5 -S OOTP NAG DEAE EE RASH EATETSHPARHN ES SEWRREHHHTHRE KARR EROCP CHRON W ENE Rots wwe eee AS ame\nata! Lege ee HBr, i rr a er ar ae ete Sta oe peepee po ee ele eee ot ea rr oe cp ae\nae son Te ce. hoe are a Se Shee. Ties a a eae Mp the ek. eee pe we pee rer aoe oa . Can an Lode\nwee | RC Se ec es ar ae ee i a ns Se Re na ee . - ee oho:\nwoe aan . oc ee ir rT a . ore aoe: rr re ee Fo er Cr gee Mae tee we . .¥ ee ey\nut dees re eh a a 7 oo Sob taa the tReet wet yt EN ae et ae gg bee’ a . ee,\n., . Pore Vp ae an -3RS | rr oe ee det tee Se . cette\n“¢ > F =: rare cer\"? . vie fe 4 : . aye ep Ae Fay SO ar TORS EO ae we ee” “lee\n» + @ 7 Pr eer ae i ae] . + : hoot yt ott Sseg cl Ot ay te ea bee ree a\nnan hs He Le TN ye an wet! ere nee ea fe de ee AQ te, nite i - a ota yg\nre vote Coe Vay ae abe a tee ee ore SY OP Sk PO? Oe ae 20, a OR Se 4 4. on ne eed Tae\nsos ean) see ae + feet yp ae tee heel ee, . ere tee te at et ee ee Se ee a) Here ow a a es :\nVos, ern Dee pete aT ele nee re ytd Oye et Veet ge a ND OTE Gh ae ge tae ee is mc tage ae\n7 08 Oe Oe 2 EEE 88S SOO BURDEFASR SE RBAE RETEST PCRS ee weumee 43\nCoes a es Pe oer ce es a Sa a OE - ay ee Cee\nr . : cre 7. yo wong Je toe} ao Peete ve thts t. : Pare SORE” lant wean\n. 1! ny See Te ete eee oe : rc a ea a la yes\n“- 4a & Th ae pp -_- “My . y BB a tego a al P aceon\n> . (ie t a 0 a ee ee : ; - & : : Co Bf Repeepeeee aes Cie me bea eeraanrr eae leit Bereta\noo - g Me Te oo Bh. woBG:: : Th, CoE IE LEDEEROY CO SSN Sa RL EERIE POAT OO SETS\n“eat Me SEES LOUIE DGS Ted: Sat tae ee ae Sete QT Spree ells oY Deane ele ga Rake ry 5 my TE athe\nCo ee Stan aN wo ee elas ake eR Ae, be, oh phe Mae ie plies Beer ies el mele he ie . amt ae\nBe LS ee latte RT ne te Boge en ee i SORE Ue Se Sr Bo ee\nzits dee snare euvawiep eo wae worms oe ite aS ea a aD SPuSeVerts bene emnaes Ces ed orcas eee qa ae F\nor rr Caer save Bia ores niece Rr Dear Gat BORED a bo nore LO eeebre ats pe Rae Petts CGR aL Sarit tikinnn aL nie pe Palkia Pad SE cere eee eae Dies\ncome Pettey wee Tee eg Pe OY enna hah yt phy atat ea Ei bed de | spn tat mold elk pa ters die oP ORS Ce ae ao\nfo ye! me a ge Le, -. ft ee eel gate ses aids AS TE ba ET ae es een Ta eel ° ft Cee seen\nart | RRDOCOREPISIIEI Ser reararewes Glad Aer Pn An onan tne 1 er en hn ree’ Pil al SP Raroe\nfs . ae a. ers ae. lala + og ae . wales ¢ tus 3 wie et : OT a a etal] Jee % nea echo. s reas ewe i = Bet Fy\neee si, Dias CMON eSe en wa Ef ; ae a OW ihe ae STEER Wes GOS BURSTS Wt Pied Cars Ow Kea Aah aes se a8 oye\na sine ti eh Seka a wer te ye ORT tht i My eR Aas te otetonda pe Oe AOR, A oT\nsen . ’ eal are ceri rare ae rly A CUIMOSTON 6 oe pe er Je ae eS lee ce el See eee, ered tna hao plone nay Se erive aren\nean pg ee Oe ee eet, Le Ee hd a Oe tee me Ee PLA i gh erty Of hw Pee Sabo oar\nBe ap iemrane MERE AD a Mia ORL: Lines SS cea rete wie Th Lad wt MS dates Wary eelet wate ee Cpr meee rere abo tae 7 as eae hats was\nCPR TIO SAIC LI TIES NCI’ 9) OLIN CRE” POCO OP SHUI RICE TID ATSIC NCSI Con DRSrECR ROY ots et cael : ate 5 ey ea\noa MY SARA eee 1 ar Set eae Reeder mPlirhe tr ahi ed oP Pane hsaee het edt hee Peary Pe gene ihc as sine ad artes $.toe tal hee piesa Pea? rs Airco hy REY Ys SON re re ae it Atnot\nby Wf OTE FH COCCRRADOCe RE SECRMAREER SH IGS RCCCTRTEDCCERTALUTOVETODESEMDINSUTIPO EE vo eae FCFUOT eda TaOnneeTDIs Svsetes; HK\nae ee eee = ro” *. wey tl the tented se wt te Pa ie an tp tye a Nt ¢ cee PE est 2\not : e : ak 1 ls Dy ee Jaa bee . A : as Ty . A Cn a |\nse et tte Ee ees th oF 7 oe > ’ f:: hana ie oe? ote ot 7 vor tee ee oe ale ee en cf ero cn 7 a",
+        "seed_match": "Rhihorn",
+        "seed_match_via": "name",
+        "mtime": 1780911060,
+        "source_file": "rhihorn.jpg"
+      },
+      "id": "poke-035"
+    },
+    {
+      "slug": "scither",
+      "image": "scither.jpg",
+      "name": "scither",
+      "hp": 100,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/62",
+      "type": "Grass",
+      "spells": [
+        {
+          "name": "Razor Leaf",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Drool",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Sleep spell",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Scrach",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 30
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "| _ * e= 98 . ttt * an ante pee ”. 7 ‘ey my\nwoe . tee ae an e vf . e . te ee\nNO. 34° GRASS Pokémon HT: 4’9” WT: 393 Ibs. lS\n| Ho haa s\n| .\n| Fe ee eee eee eee ee eee eee eee eee eee Te eee eee eee CPT PET ee VETTES FEDS LOSER PSC COUP C SET RET SEL EYES MEOH EeE\ne cd\n| a\n! CLITTCLIS ES CLH LS TLSE SEL TC LITSS TTS LE SSCL CSHPUP MOLI P ALT CLS VPS SETH TIS CSCS CECE CESLET SOP RCE CC LETECTSSC CLS TPCTELE SESE TSST CRI OTR LL OTV EC PECLEMTTCETEUPE\nBe\n¢ i in crate\n: HET ITF KCK Tree Pp ECSPUETTP CVC TE PERT TROET OO PP VELTITESTTIFE SECT TRC PPO CURT FOL PUGET AOE AUVEVOTET EIST TE CUTTEDUPUTUCERDPVECE PERRI TUT US UES TET MAE T PEE\nSle ep spell\n| .\n| a\n| pa : abe ener sten acre wenanws o . F ay pore Searerrer ras:\nNicweakness gee: oS pesietance Ge eae retreat dob eee",
+        "seed_match": "scither",
+        "seed_match_via": "name",
+        "mtime": 1780911029,
+        "source_file": "scither.jpg"
+      },
+      "id": "poke-030"
+    },
+    {
+      "slug": "scuirtle",
+      "image": "scuirtle.jpg",
+      "name": "Scuirtle",
+      "hp": 80,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/69",
+      "type": "Water",
+      "spells": [
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 55
+        },
+        {
+          "name": "Water punch",
+          "attack": 21,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "splash",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Shell hit",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 5
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "a Tackle 11»\nLe ee PP:SS\nGs Water Punch 21 x\n— 7 ae PP:03\n4, Splash 14 *\nee 7 PP:03\n4, Shell Hit 11»\nPP:05",
+        "seed_match": "Scuirtle",
+        "seed_match_via": "name",
+        "mtime": 1780830712,
+        "source_file": "scuirtle.jpg"
+      },
+      "id": "poke-020"
+    },
+    {
+      "slug": "seahorse",
+      "image": "seahorse.jpg",
+      "name": "Seahorse",
+      "hp": 50,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/45",
+      "type": "Water",
+      "spells": [
+        {
+          "name": "Bite",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 25
+        },
+        {
+          "name": "Water Beam",
+          "attack": 10,
+          "is_defence": false,
+          "max_count": 30
+        },
+        {
+          "name": "Splash",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Shower",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 2
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "ry FN ne 7. q [:",
+        "ocr_moves_raw": "SND SEWSTEN Fokinan WT 7o UT at he\n\n& Bite 11 &.\nPP:25\n\nC3 Water Beam 10 x.\nPP:30\n\nC = Spalsh 13 *.\nPP: 03\n\nC} = Shower 14 x\n\nweakness 4x2 [| resistance E retreat &9",
+        "seed_match": "Seahorse",
+        "seed_match_via": "name",
+        "mtime": 1780830613,
+        "source_file": "seahorse.jpg"
+      },
+      "id": "poke-021"
+    },
+    {
+      "slug": "snorlex",
+      "image": "snorlex.jpg",
+      "name": "Snorlex",
+      "hp": 130,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/63",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Tight Slam",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Punch",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Rest",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 5
+        },
+        {
+          "name": "Heavt Imapct",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 1
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "Gk) Tight Slam 13 ¥\n\nGk) Punch 11%\n\nGk) Rest | 0 ©\nPP:05\n\nGk) Heavy Impact 18\n—_ PP:01",
+        "seed_match": "Snorlex",
+        "seed_match_via": "name",
+        "mtime": 1780829667,
+        "source_file": "snorlex.jpg"
+      },
+      "id": "poke-022"
+    },
+    {
+      "slug": "starey",
+      "image": "starey.jpg",
+      "name": "Starey",
+      "hp": 70,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/50",
+      "type": "Water",
+      "spells": [
+        {
+          "name": "Smack",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 55
+        },
+        {
+          "name": "Quick spin",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 4
+        },
+        {
+          "name": "Splash",
+          "attack": 13,
+          "is_defence": false,
+          "max_count": 6
+        },
+        {
+          "name": "Water jet",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "[ NG. 32 WATER Pokémon HT: 3°4” WT: 4.2 lbs.\nSmack 11\nnn\ni Quick Spin 1i *\n\nI) cance wee e ee cece eee e cece ce wee cece eee POF\nSplash 13 &.\ncece eee eee e eee eee w eee ee eee eee PO Oe\n\nWater jet iS x.\n\n: PP:03",
+        "seed_match": "Starey",
+        "seed_match_via": "name",
+        "mtime": 1780829783,
+        "source_file": "starey.jpg"
+      },
+      "id": "poke-023"
+    },
+    {
+      "slug": "sudowoodo",
+      "image": "sudowoodo.jpg",
+      "name": "Sudowoodo",
+      "hp": 140,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/67",
+      "type": "Rock",
+      "spells": [
+        {
+          "name": "Double Throw",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Tackle",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 40
+        },
+        {
+          "name": "Dance",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Chop",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 5
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "A ow ee a sa a. ne. -om\" one =. > ae s (oa ' gs © ¢i\n> ieee i ee aan. arial «. nine at ou 2. a) ae ar a” . Me\ni ; ee re . . a a seems ™ s er. * E “\ne =e a\" a \" s” ' ae. ~® . a aan Ea\n2 Te CO ee ee ee ee ee Oe ee ee ete er ‘71, re ‘\na _ “ee rene Soe oe a an a pEwes eRe _—. re . 5 rarer are Pete WS are ee ere a aren\nvo RT nn nS ne ee ee ee ee ee ee warren?! oe 4,\nBF pecceccsensienrereviencana sarsieesvrocis svenetserenett riers senaep ttre sonnet rane stercnmentten carey h",
+        "seed_match": "Sudowoodo",
+        "seed_match_via": "name",
+        "mtime": 1780911050,
+        "source_file": "sudowoodo.jpg"
+      },
+      "id": "poke-036"
+    },
+    {
+      "slug": "tangila",
+      "image": "tangila.jpg",
+      "name": "Tangila",
+      "hp": 80,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/61",
+      "type": "Grass",
+      "spells": [
+        {
+          "name": "Vine Tease",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Gentle Slap",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Grass Knot",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Run",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "- . a =) @ sp Gee soe BB ~ . a a@ or rT a\nwa saeee Sbrebed dteead Feu eabasite: : OCUeaasesesi nese aeaicneer erahion abee eka GerxE Pr eEE\nfF VineTease\nia ; PP:05\nce 11\n( Gentle Slap\na PP:50\ntee td eS eed Ded che Dh Bie Tae ee eRe 8 he eee ed ee he heen ee be ee ee 1 oe Ce Cee he od OS 2 kd tiie Oe i) bee et De ieee | ee 2d 6 Od & ed h et ek 8D\nne 14 x\n( Grass Knot\nina PP:05\ntl Seen beet Oe oer bee ee ee ee arin ee ee ee ee ee ee bine Oe bed Oe ie ee oe eee ee ee ee CP ies ee Seer 00 8 eee ie ore be 0 Gee eel oe oe\n+ PP:03",
+        "seed_match": "Tangila",
+        "seed_match_via": "name",
+        "mtime": 1780829783,
+        "source_file": "tangila.jpg"
+      },
+      "id": "poke-024"
+    },
+    {
+      "slug": "taures",
+      "image": "taures.jpg",
+      "name": "Taures",
+      "hp": 110,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/49",
+      "type": "Basic",
+      "spells": [
+        {
+          "name": "Combat hit",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Horn fury",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 2
+        },
+        {
+          "name": "TakeDown",
+          "attack": 10,
+          "is_defence": false,
+          "max_count": 50
+        },
+        {
+          "name": "Rage",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 5
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "= — ae a 2 3 ;",
+        "ocr_moves_raw": "Rage 05 &\nnn st\n| € Combat hit 18 x\nLeeann ance ccewcccceneccccencceec cece POS\nHorn fury i5 x*\nwee eee c eee e cence een eee c ence cece fA Oe oe.\nTakeDown 10 x\nPP:50",
+        "seed_match": "Taures",
+        "seed_match_via": "name",
+        "mtime": 1780830634,
+        "source_file": "taures.jpg"
+      },
+      "id": "poke-025"
+    },
+    {
+      "slug": "tenticruel",
+      "image": "tenticruel.jpg",
+      "name": "Tenticruel",
+      "hp": 170,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/51",
+      "type": "Water",
+      "spells": [
+        {
+          "name": "Wrap",
+          "attack": 16,
+          "is_defence": false,
+          "max_count": 5
+        },
+        {
+          "name": "Tight Sting",
+          "attack": 19,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Splash",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 60
+        },
+        {
+          "name": "Supersclosis",
+          "attack": 20,
+          "is_defence": false,
+          "max_count": 2
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": "Dk Wrap 16 &\n\nmeee cece eee ceeeeee eee cceteeeseeee ence ce hToO\n\n6, Tight Sting 19 x\n\nLecce cee eee cence ence eee e eee een eee BeOS\n\nm6. Splash 11 &\n\nCO Supersclosis 20 &\nPP:02 |",
+        "seed_match": "Tenticruel",
+        "seed_match_via": "name",
+        "mtime": 1780830645,
+        "source_file": "tenticruel.jpg"
+      },
+      "id": "poke-026"
+    },
+    {
+      "slug": "venusor",
+      "image": "venusor.jpg",
+      "name": "Venusor",
+      "hp": 150,
+      "lvl": 2,
+      "url": "https://t.me/pokecardssolitems/60",
+      "type": "Grass",
+      "spells": [
+        {
+          "name": "Razor Leaf",
+          "attack": 21,
+          "is_defence": false,
+          "max_count": 4
+        },
+        {
+          "name": "Sap Bite",
+          "attack": 15,
+          "is_defence": false,
+          "max_count": 9
+        },
+        {
+          "name": "Leaf Sting",
+          "attack": 18,
+          "is_defence": false,
+          "max_count": 2
+        },
+        {
+          "name": "Sling Scrach",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 30
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "",
+        "ocr_moves_raw": ") Razor Leaf 21 *\nPP:04\n\n() Sap Bite 15\n| PP:03\n() Leaf Sting 18 ¥\nPP:02\n(3 = Scratch 11 ¥\nPP: 30",
+        "seed_match": "Venusor",
+        "seed_match_via": "name",
+        "mtime": 1780830678,
+        "source_file": "venusor.jpg"
+      },
+      "id": "poke-027"
+    },
+    {
+      "slug": "vulpex",
+      "image": "vulpex.jpg",
+      "name": "Vulpex",
+      "hp": 70,
+      "lvl": 1,
+      "url": "https://t.me/pokecardssolitems/66",
+      "type": "Fire",
+      "spells": [
+        {
+          "name": "Flare",
+          "attack": 14,
+          "is_defence": false,
+          "max_count": 3
+        },
+        {
+          "name": "Confuse ray",
+          "attack": 0,
+          "is_defence": true,
+          "max_count": 3
+        },
+        {
+          "name": "Tail Fire",
+          "attack": 20,
+          "is_defence": false,
+          "max_count": 2
+        },
+        {
+          "name": "Scratch",
+          "attack": 11,
+          "is_defence": false,
+          "max_count": 40
+        }
+      ],
+      "meta": {
+        "name_source": "filename",
+        "ocr_name_raw": "— ef",
+        "ocr_moves_raw": "7\n( Flare 14 ¥\nPP:03\n, 9 Confuse Ray 0 g\n| , PP:03\n@) Tail Fire 20”\nPP:02\nOk scratch i |\n. ; oe _. ___PP:03",
+        "seed_match": "Vulpex",
+        "seed_match_via": "name",
+        "mtime": 1780830701,
+        "source_file": "vulpex.jpg"
+      },
+      "id": "poke-028"
+    }
+  ],
+  "stats": {
+    "scanned": 36,
+    "kept": 36,
+    "rejected": 0,
+    "restored_from_duplicates": 0,
+    "duplicates_file": 0
+  }
+}

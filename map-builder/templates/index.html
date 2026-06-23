@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaiPoke Map Builder</title>
+    <link rel="stylesheet" href="/static/builder.css">
+</head>
+<body>
+    <div id="app">
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-icon">🗺</span>
+                <div>
+                    <div class="brand-title">SaiPoke Map Builder</div>
+                    <div class="brand-sub">Drag sprites onto the grid · saves to game world</div>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <button type="button" class="btn btn-ghost" id="btn-undo" title="Undo">↶ Undo</button>
+                <button type="button" class="btn btn-ghost" id="btn-redo" title="Redo">↷ Redo</button>
+                <div class="divider"></div>
+                <button type="button" class="btn btn-ghost" id="btn-zoom-out">−</button>
+                <span id="zoom-label" class="zoom-label">100%</span>
+                <button type="button" class="btn btn-ghost" id="btn-zoom-in">+</button>
+                <div class="divider"></div>
+                <button type="button" class="btn btn-primary" id="btn-save">💾 Save to Game</button>
+            </div>
+        </header>
+
+        <div class="workspace">
+            <aside class="palette-panel">
+                <div class="panel-head">
+                    <h2>Sprites</h2>
+                    <span id="sprite-count" class="badge">0</span>
+                </div>
+
+                <input type="search" id="sprite-search" class="search-input" placeholder="Search sprites…" autocomplete="off">
+
+                <div class="sheet-tabs" id="sheet-tabs"></div>
+
+                <div class="layer-tabs">
+                    <span class="layer-label">Paint on:</span>
+                    <button type="button" class="layer-tab active" data-layer="floor">Floor</button>
+                    <button type="button" class="layer-tab" data-layer="above_floor">Above</button>
+                    <button type="button" class="layer-tab" data-layer="object">Object</button>
+                </div>
+
+                <div id="sprite-grid" class="sprite-grid"></div>
+            </aside>
+
+            <main class="canvas-panel">
+                <div class="canvas-toolbar">
+                    <div class="tool-group">
+                        <button type="button" class="tool-btn" data-tool="pan" title="Pan">✋ Pan</button>
+                        <button type="button" class="tool-btn active" data-tool="paint" title="Paint">🖌 Paint</button>
+                        <button type="button" class="tool-btn" data-tool="erase" title="Erase">🧹 Erase</button>
+                        <button type="button" class="tool-btn" data-tool="pick" title="Eyedropper">💧 Pick</button>
+                        <button type="button" class="tool-btn" data-tool="spawn" title="Set spawn">⭐ Spawn</button>
+                        <button type="button" class="tool-btn" data-tool="boundaries" title="Sprite boundaries">⬡ Boundaries</button>
+                        <button type="button" class="tool-btn" data-tool="message" title="Sign messages">💬 Messages</button>
+                        <button type="button" class="tool-btn" data-tool="portals" title="Portal links">🌀 Portals</button>
+                        <button type="button" class="tool-btn" data-tool="npc" title="NPC patrols">🚶 NPCs</button>
+                        <button type="button" class="tool-btn" data-tool="avatars" title="Avatar shop prices">🪙 Avatars</button>
+                        <button type="button" class="tool-btn" data-tool="animals" title="Animal sprite frames">🐄 Animals</button>
+                    </div>
+                    <div id="portal-preview-banner" class="portal-preview-banner hidden">
+                        <span id="portal-preview-label">Portal preview</span>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-close-portal-preview">← Back to map</button>
+                    </div>
+                    <div class="hint" id="toolbar-hint">Use Pan tool or middle mouse to move · Pinch/scroll to zoom · Left drag to paint</div>
+                    <div class="coords" id="coords">—</div>
+                </div>
+                <div id="canvas-wrap" class="canvas-wrap">
+                    <div class="map-name-overlay" id="map-name-overlay">
+                        <input
+                            type="text"
+                            id="map-name-overlay-input"
+                            class="map-name-overlay-input"
+                            maxlength="32"
+                            aria-label="Map name"
+                            placeholder="Map name"
+                        >
+                        <span class="map-name-overlay-id" id="map-name-overlay-id"></span>
+                    </div>
+                    <canvas id="map-canvas"></canvas>
+                </div>
+                <div id="boundary-wrap" class="boundary-wrap hidden">
+                    <div class="boundary-toolbar">
+                        <span id="boundary-sprite-label" class="boundary-label">Select a single sprite</span>
+                        <div class="boundary-actions">
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-boundary-undo">Undo point</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-boundary-clear">Clear</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="btn-boundary-save">Save boundary</button>
+                        </div>
+                    </div>
+                    <canvas id="boundary-canvas"></canvas>
+                    <p class="boundary-hint">Click to add points · auto-connects into a closed shape · blocked tiles fill inside</p>
+                </div>
+            </main>
+
+            <aside class="props-panel" id="props-panel">
+                <div class="props-resize-handle" id="props-resize-handle" title="Drag to resize panel"></div>
+                <div class="panel-head"><h2>Map</h2></div>
+
+                <label class="field">
+                    <span>Map name</span>
+                    <input type="text" id="room-name" maxlength="32" value="SaiPoke Realm">
+                </label>
+
+                <div class="panel-subhead">Maps (rooms)</div>
+                <div class="room-tabs" id="room-tabs"></div>
+                <div class="room-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-add-room">+ Map</button>
+                    <label class="field">
+                        <span>Map ID</span>
+                        <input type="text" id="room-map-id" maxlength="32" pattern="[a-zA-Z0-9_-]+" placeholder="map-0">
+                    </label>
+                </div>
+                <p class="prop-meta">Map ID is used by portals to teleport players between rooms.</p>
+
+                <div class="stat-grid">
+                    <div class="stat"><span>Tiles</span><strong id="stat-tiles">0</strong></div>
+                    <div class="stat"><span>Spawn</span><strong id="stat-spawn">—</strong></div>
+                </div>
+
+                <div class="selected-preview" id="selected-preview">
+                    <div class="preview-empty">Select a sprite</div>
+                </div>
+
+                <div id="paint-props" class="item-props">
+                    <div class="panel-subhead">Paint defaults</div>
+                    <div class="field-row">
+                        <label class="field field-inline">
+                            <span>Scale</span>
+                            <input type="number" id="paint-scale" value="1" min="0.05" max="10" step="0.05">
+                        </label>
+                    </div>
+                </div>
+
+                <div id="placement-props" class="item-props hidden">
+                    <div class="panel-subhead">Placed item</div>
+                    <div class="field-row">
+                        <label class="field field-inline">
+                            <span>X</span>
+                            <input type="number" id="prop-tile-x" step="1">
+                        </label>
+                        <label class="field field-inline">
+                            <span>Y</span>
+                            <input type="number" id="prop-tile-y" step="1">
+                        </label>
+                    </div>
+                    <label class="field">
+                        <span>Scale</span>
+                        <input type="number" id="prop-scale" value="1" min="0.05" max="10" step="0.05">
+                    </label>
+                    <div class="prop-meta" id="prop-sprite-id">—</div>
+                </div>
+
+                <div id="boundary-props" class="item-props hidden">
+                    <div class="panel-subhead">Boundary</div>
+                    <div class="stat-grid">
+                        <div class="stat"><span>Points</span><strong id="boundary-point-count">0</strong></div>
+                        <div class="stat"><span>Blocked tiles</span><strong id="boundary-tile-count">0</strong></div>
+                    </div>
+                    <div class="prop-meta">Saves to <code id="boundary-save-path">sprite.json</code> per sprite</div>
+                </div>
+
+                <div id="message-props" class="item-props hidden">
+                    <div class="panel-subhead">Sign / message</div>
+                    <div class="prop-meta" id="message-tile-label">Click a placed item on the map</div>
+                    <label class="field">
+                        <span>Title</span>
+                        <input type="text" id="interaction-title" maxlength="64" placeholder="Sign title">
+                    </label>
+                    <label class="field">
+                        <span>Message</span>
+                        <textarea id="interaction-message" rows="4" maxlength="500" placeholder="What players read when nearby"></textarea>
+                    </label>
+                    <label class="field field-inline">
+                        <span>Trigger radius (tiles)</span>
+                        <input type="number" id="interaction-radius" value="2" min="0.5" max="6" step="0.5">
+                    </label>
+                    <label class="field">
+                        <span>Pickup hold ID</span>
+                        <input type="text" id="interaction-pickup-hold" maxlength="32" placeholder="bag" list="hold-item-ids">
+                    </label>
+                    <p class="prop-meta">When set, this sign is hidden after the player collects that hold item.</p>
+                    <div class="panel-subhead">Action options</div>
+                    <div class="prop-meta">Buttons shown in the message box. Set <strong>Hold ID</strong> on an option to grant an item when clicked.</div>
+                    <div id="interaction-options-list" class="interaction-options-list"></div>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-add-interaction-option">+ Add option</button>
+                    <label class="audit-toggle">
+                        <input type="checkbox" id="interaction-show-exit" checked>
+                        Show Exit option
+                    </label>
+                    <div class="panel-subhead">Portal connection</div>
+                    <div class="portal-spot-block">
+                        <div class="portal-spot-label">Enter (where players step in)</div>
+                        <div id="portal-enter-spot" class="portal-spot-value">Not set</div>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-portal-enter">Pick Enter on map</button>
+                    </div>
+                    <label class="field">
+                        <span>Exit map</span>
+                        <select id="portal-map-id"></select>
+                    </label>
+                    <div class="portal-spot-block">
+                        <div class="portal-spot-label">Exit (where players arrive)</div>
+                        <div id="portal-exit-spot" class="portal-spot-value">Not set</div>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-portal-exit">Pick Exit on map</button>
+                    </div>
+                    <input type="hidden" id="portal-x">
+                    <input type="hidden" id="portal-y">
+                    <div class="portal-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-view-portal-link">View connection</button>
+                    </div>
+                    <p class="prop-meta">A connection links two spots: Enter on this map and Exit on another. Both spots can be changed anytime.</p>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-interaction">Clear message</button>
+                </div>
+
+                <div id="portal-props" class="item-props hidden">
+                    <div class="panel-subhead">Portal connections</div>
+                    <div class="portal-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-new-portal-connection">+ New connection</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-remove-all-portals">Remove all portals</button>
+                    </div>
+                    <div id="portal-list" class="portal-list"></div>
+                    <p class="prop-meta">Each link has an Enter spot and an Exit spot. Use Edit Enter or Edit Exit to move either side on the map.</p>
+                </div>
+
+                <div id="avatar-props" class="item-props hidden">
+                    <div class="panel-subhead">Avatar shop prices</div>
+                    <p class="prop-meta">Set coin cost per trainer avatar. Players pay once to unlock; default skin stays free.</p>
+                    <div class="avatar-shop-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-avatar-tier-defaults">Apply tier defaults</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-avatar-all-free">All free</button>
+                    </div>
+                    <input type="search" id="avatar-cost-search" class="search-input" placeholder="Filter avatars…" autocomplete="off">
+                    <div id="avatar-cost-grid" class="avatar-cost-grid"></div>
+                    <p class="prop-meta">Saved inside <code>defaultmap.json</code> as <code>avatarCosts</code>.</p>
+                </div>
+
+                <div id="animal-props" class="item-props hidden">
+                    <div class="panel-subhead">Animal NPC sprites</div>
+                    <p class="prop-meta">Draw frame boxes for each walk direction · saves to <code>*.frames.json</code></p>
+                    <div id="animal-list" class="animal-list"></div>
+                </div>
+
+                <div id="npc-props" class="item-props hidden">
+                    <div class="panel-subhead">NPC patrol</div>
+                    <label class="field">
+                        <span>NPC</span>
+                        <select id="npc-select"></select>
+                    </label>
+                    <div class="npc-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-npc-add">+ New</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-npc-delete">Delete</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-npc-undo">Undo point</button>
+                    </div>
+                    <label class="field">
+                        <span>Name</span>
+                        <input type="text" id="npc-name" maxlength="24" placeholder="Guide">
+                    </label>
+                    <div class="panel-subhead">Character</div>
+                    <div id="npc-skin-grid" class="npc-skin-grid"></div>
+                    <input type="hidden" id="npc-skin" value="009">
+                    <label class="field field-inline">
+                        <span>Wait (ms)</span>
+                        <input type="number" id="npc-wait" value="800" min="0" max="10000" step="100">
+                    </label>
+                    <label class="audit-toggle">
+                        <input type="checkbox" id="npc-loop" checked>
+                        Loop path
+                    </label>
+                    <label class="field field-inline">
+                        <span>Front view max (tiles, min 0.5)</span>
+                        <input type="number" id="npc-notice-radius" value="2" min="0.5" max="2" step="0.5">
+                    </label>
+                    <label class="field">
+                        <span>Notice messages (one per line)</span>
+                        <textarea id="npc-messages" rows="4" maxlength="2000" placeholder="Hey there!&#10;Same direction trigger.&#10;See you around."></textarea>
+                    </label>
+                    <div class="panel-subhead">Conditional flows</div>
+                    <p class="prop-meta">First matching flow wins. Use requires to gate dialogue on what the player holds.</p>
+                    <div id="npc-flows-list" class="npc-flows-list"></div>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-npc-add-flow">+ Add flow</button>
+                    <label class="field">
+                        <span>On complete (default messages only)</span>
+                    </label>
+                    <div class="npc-oncomplete-grid">
+                        <input type="text" id="npc-oncomplete-quest-step" maxlength="64" placeholder="quest step id" list="quest-step-ids">
+                        <input type="text" id="npc-oncomplete-grant-hold" maxlength="32" placeholder="grant hold" list="hold-item-ids">
+                    </div>
+                    <div class="stat-grid">
+                        <div class="stat"><span>Waypoints</span><strong id="npc-waypoint-count">0</strong></div>
+                        <div class="stat"><span>NPCs</span><strong id="npc-count">0</strong></div>
+                    </div>
+                    <div class="prop-meta">Click map to add waypoints · NPC spots player 0.5–2 tiles ahead in facing direction · next advances messages</div>
+                </div>
+
+                <div class="notice">
+                    Saving writes to <code>defaultmap.json</code>. Restart the game-server after save for in-game changes.
+                </div>
+
+                <datalist id="hold-item-ids">
+                    <option value="bag"></option>
+                    <option value="card_vault"></option>
+                    <option value="poketab"></option>
+                </datalist>
+                <datalist id="quest-step-ids">
+                    <option value="collect_trainer_bag"></option>
+                    <option value="meet_dr_ray"></option>
+                    <option value="collect_card_vault"></option>
+                    <option value="collect_poketab"></option>
+                </datalist>
+
+                <div id="toast" class="toast hidden"></div>
+            </aside>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-box">
+                <div class="spinner"></div>
+                <p id="loading-text">Loading sprites…</p>
+            </div>
+        </div>
+
+        <div id="animal-frame-modal" class="animal-frame-modal hidden" aria-hidden="true">
+            <div class="animal-frame-shell">
+                <header class="animal-frame-header">
+                    <div>
+                        <h2 id="animal-frame-title">Animal frames</h2>
+                        <p id="animal-frame-subtitle" class="animal-frame-subtitle">Drag empty area to draw · drag inside box to move · drag corners/edges to resize</p>
+                    </div>
+                    <div class="animal-frame-header-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-animal-frame-reset">Reset grid</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-animal-frame-save">Save frames</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-animal-frame-close">Close</button>
+                    </div>
+                </header>
+                <div class="animal-frame-body">
+                    <aside class="animal-frame-sidebar">
+                        <div class="panel-subhead">Direction</div>
+                        <div id="animal-frame-directions" class="animal-frame-directions"></div>
+                        <div class="panel-subhead">Walk frames</div>
+                        <div id="animal-frame-slots" class="animal-frame-slots"></div>
+                        <label class="field field-inline">
+                            <span>Display scale</span>
+                            <input type="number" id="animal-frame-scale" min="0.01" max="4" step="0.001">
+                        </label>
+                        <p class="prop-meta">Idle uses frame 1 · scale targets ~48px on the tile grid</p>
+                    </aside>
+                    <div class="animal-frame-canvas-wrap">
+                        <canvas id="animal-frame-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/builder.js?v=21"></script>
+</body>
+</html>

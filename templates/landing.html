@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="SaiPoke Realm — explore a pixel world, collect PokéCards, battle trainers, and climb the leaderboard on Telegram.">
+    <title>SaiPoke Realm — Pixel Adventure on Telegram</title>
+    <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
+    <link rel="stylesheet" href="/static/css/landing.css?v={{ asset_v.landing_css }}">
+</head>
+<body class="landing-body landing-is-loading">
+    <div id="landing-load-screen" class="landing-load-screen" aria-live="polite">
+        <img
+            class="landing-load-logo"
+            src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+            alt="SaiPoke Realm"
+            width="230"
+            height="83"
+            decoding="async"
+        >
+        <div class="landing-load-bar-track" aria-hidden="true">
+            <div class="landing-load-bar" id="landing-load-bar"></div>
+        </div>
+    </div>
+
+    <div id="landing-app" class="landing-app hidden" aria-hidden="true">
+    <div class="landing-sky" aria-hidden="true">
+        <div class="landing-cloud landing-cloud-a"></div>
+        <div class="landing-cloud landing-cloud-b"></div>
+        <div class="landing-cloud landing-cloud-c"></div>
+    </div>
+
+    <div class="landing-wrap">
+        <header class="landing-header">
+            <a class="landing-brand" href="#top" aria-label="SaiPoke Realm home">
+                <img src="/static/imgs/titles.png?v={{ asset_v.titles }}" width="190" height="69" alt="SaiPoke Realm">
+            </a>
+            <nav class="landing-nav" aria-label="Site sections">
+                <a href="#intro">Intro</a>
+                <a href="#play">Play</a>
+                <a href="#stats">Stats</a>
+                <a href="#socials">Socials</a>
+                <button
+                    type="button"
+                    class="landing-audio-toggle"
+                    id="landing-audio-toggle"
+                    aria-pressed="true"
+                    aria-label="Turn music off"
+                    title="Music"
+                >
+                    <span class="landing-audio-toggle__icon" aria-hidden="true">🔊</span>
+                </button>
+            </nav>
+        </header>
+
+        <main id="top">
+            <section class="landing-hero" aria-labelledby="hero-title">
+                <p class="landing-hero-tag" id="hero-title">
+                    A retro pixel realm on Telegram — wander, quest, wager battles, and build your PokéCard vault.
+                </p>
+
+                <div class="landing-party" aria-hidden="true">
+                    <div class="landing-sprite landing-sprite--walk landing-sprite--bob" id="trainer-a"></div>
+                    <div class="landing-sprite landing-sprite--walk landing-sprite--delay" id="trainer-b"></div>
+                    <div class="landing-sprite landing-sprite--walk landing-sprite--delay2" id="trainer-c"></div>
+                </div>
+
+                <figure class="landing-gif-slot landing-gif-slot--hero" id="gif-slot-2">
+                    {% if gif_url %}
+                    <img src="{{ gif_url }}" alt="Realm highlight" loading="lazy">
+                    {% else %}
+                    <div class="landing-gif-placeholder landing-gif-placeholder--wide" aria-hidden="true"><span>2</span></div>
+                    {% endif %}
+                </figure>
+
+                <div class="landing-cta-row">
+                    <a class="landing-btn landing-btn--pulse" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">Play Now on Telegram</a>
+                </div>
+            </section>
+
+            <section class="landing-panel" id="intro" aria-labelledby="intro-title">
+                <h2 class="landing-section-title" id="intro-title">
+                    INTRO
+                    <span>Welcome to the realm</span>
+                </h2>
+                <p class="landing-copy">
+                    SaiPoke Realm is a Pokémon-inspired social game inside Telegram. Create your trainer, explore a live multiplayer map, talk to NPCs, complete quests, and collect rare PokéCards from vending machines.
+                </p>
+                <p class="landing-copy">
+                    Battle other players for $POKECARD tokens in the group, track your rank on the leaderboard, and grow your vault. Every trainer starts with free coins to unlock their first avatar.
+                </p>
+            </section>
+
+            <section class="landing-panel landing-panel--play" id="play" aria-labelledby="play-title">
+                <h2 class="landing-section-title" id="play-title">
+                    HOW TO PLAY
+                    <span>Explore · loot · battle</span>
+                </h2>
+
+                <div class="landing-play-steps-box" aria-labelledby="steps-title">
+                    <div class="landing-play-steps-head">
+                        <span class="landing-play-steps-badge" aria-hidden="true">▶</span>
+                        <div>
+                            <h3 class="landing-play-steps-title" id="steps-title">Quick start</h3>
+                            <p class="landing-play-steps-lead">
+                                Step into a live pixel realm on Telegram. Walk the map, crack hidden quests, fill your bag, and wager PokéCards against other trainers.
+                            </p>
+                        </div>
+                    </div>
+                    <ol class="landing-play-line-list">
+                        {% for step in play_steps %}
+                        <li class="landing-play-line">
+                            <div class="landing-play-line-frame landing-play-step-icon landing-play-step-icon--{{ step.icon }}" aria-hidden="true"></div>
+                            <div class="landing-play-line-body">
+                                <strong>{{ step.title }}</strong>
+                                <span>{{ step.text }}</span>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+
+                <div class="landing-play-loot-box" aria-labelledby="loot-title">
+                    <div class="landing-play-loot-head">
+                        <span class="landing-play-loot-badge" aria-hidden="true">?</span>
+                        <div>
+                            <h3 class="landing-play-loot-title" id="loot-title">Hidden items</h3>
+                            <p class="landing-play-loot-lead">
+                                Quest gear is tucked across the map — NPCs, crates, and secret spots. Collect all three to unlock the full trainer kit.
+                            </p>
+                        </div>
+                    </div>
+                    <ul class="landing-play-line-list">
+                        {% for item in hold_items %}
+                        <li class="landing-play-line">
+                            <div class="landing-play-line-frame">
+                                <img src="{{ item.src }}" alt="" width="32" height="32" loading="lazy" decoding="async">
+                            </div>
+                            <div class="landing-play-line-body">
+                                <strong>{{ item.label }}</strong>
+                                <span>{{ item.text }}</span>
+                            </div>
+                        </li>
+                        {% endfor %}
+                        <li class="landing-play-line landing-play-line--more">
+                            <span class="landing-play-line-more" aria-hidden="true">+</span>
+                            <div class="landing-play-line-body">
+                                <strong>And many more</strong>
+                                <span>Keys, tools, and quest rewards tucked across NPCs, crates, and secret map spots.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="landing-play-cards-box" aria-labelledby="collect-title">
+                    <div class="landing-play-loot-head">
+                        <span class="landing-play-cards-badge" aria-hidden="true">★</span>
+                        <div>
+                            <h3 class="landing-play-loot-title" id="collect-title">Collect PokéCards</h3>
+                            <p class="landing-play-loot-lead">
+                                Hit vending machines, win battles, and stash originals in your vault — every card is custom pixel art.
+                            </p>
+                        </div>
+                    </div>
+                    <ul class="landing-play-loot-row landing-play-loot-row--cards">
+                        {% for card in showcase_cards %}
+                        <li class="landing-play-loot-item landing-play-card-item" style="--loot-i: {{ loop.index0 }}">
+                            <div class="landing-play-card-frame">
+                                <img src="{{ card.src }}" alt="{{ card.name }}" width="34" height="48" loading="lazy" decoding="async">
+                            </div>
+                            <span class="landing-play-chip-label">{{ card.name }}</span>
+                        </li>
+                        {% endfor %}
+                        <li class="landing-play-loot-item landing-play-loot-item--more">
+                            <span class="landing-play-more-mark" aria-hidden="true">+</span>
+                            <span class="landing-play-chip-label landing-play-chip-label--more">And many more</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="landing-cta-row">
+                    <a class="landing-btn landing-btn--pulse" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">Play Now on Telegram</a>
+                </div>
+            </section>
+
+            <section class="landing-panel" id="cards" aria-labelledby="cards-title">
+                <h2 class="landing-section-title" id="cards-title">
+                    CARD POOL
+                    <span>{{ pool_cards|length }} cards in the draw pool</span>
+                </h2>
+                <p class="landing-cards-tagline">Custom-made pixel art cards — original fan designs built for SaiPoke Realm.</p>
+                <p class="landing-cards-disclaimer" role="note">Unofficial fan parody — not affiliated with Nintendo, The Pokémon Company, Creatures, or Game Freak.</p>
+
+                <div class="landing-cards-stage">
+                    <div class="landing-card-show" aria-live="polite">
+                        <div class="landing-card-frame">
+                            <img id="card-show-img" src="" alt="" width="200" height="280">
+                            <div class="landing-card-shine" aria-hidden="true"></div>
+                        </div>
+                        <p class="landing-card-name" id="card-show-name"></p>
+                    </div>
+                </div>
+
+                <div class="landing-card-strip" id="card-strip" aria-label="Card pool slideshow">
+                    <div class="landing-card-track" id="card-strip-track"></div>
+                </div>
+            </section>
+
+            <section class="landing-panel landing-panel--live" id="stats" aria-labelledby="stats-title">
+                <div class="landing-live-head">
+                    <h2 class="landing-section-title landing-section-title--inline" id="stats-title">
+                        LIVE STATS
+                    </h2>
+                    <span class="landing-live-badge" aria-live="polite">
+                        <span class="landing-led" aria-hidden="true"></span>
+                        LIVE
+                    </span>
+                </div>
+
+                <div class="landing-stats-folder">
+                    <div class="landing-stats-tabs" role="tablist" aria-label="Live stats views">
+                        <button type="button" class="landing-stats-tab active" id="stats-tab-revenue" role="tab" aria-selected="true" aria-controls="stats-panel-revenue" data-stats-tab="revenue"><span class="landing-stats-tab-label">Revenue<br>Share</span></button>
+                        <button type="button" class="landing-stats-tab" id="stats-tab-leaderboard" role="tab" aria-selected="false" aria-controls="stats-panel-leaderboard" data-stats-tab="leaderboard"><span class="landing-stats-tab-label">Top<br>Trainers</span></button>
+                    </div>
+
+                    <div class="landing-stats-folder-body">
+                <div class="landing-stats-panel" id="stats-panel-revenue" role="tabpanel" aria-labelledby="stats-tab-revenue">
+                    <div class="landing-rev-hero">
+                        <h3 class="landing-rev-headline">100% REVENUE SHARE</h3>
+                        <p class="landing-rev-sub">Every $POKECARD fee flows back to trainers.</p>
+                    </div>
+
+                    <div class="landing-rev-pool-box">
+                        <span class="landing-rev-box-val" id="rev-pool">—</span>
+                        <span class="landing-rev-box-label">Reward Pool</span>
+                    </div>
+
+                    <div class="landing-rev-duo">
+                        <div class="landing-rev-stat-box">
+                            <span class="landing-rev-box-val" id="rev-distributed">—</span>
+                            <span class="landing-rev-box-label">Distributed</span>
+                        </div>
+                        <div class="landing-rev-stat-box">
+                            <span class="landing-rev-box-val" id="rev-holders">—</span>
+                            <span class="landing-rev-box-label">0.01% Holders</span>
+                        </div>
+                    </div>
+
+                    <div class="landing-rev-copy">
+                        <ul class="landing-rev-list">
+                            <li>Earn points by completing weekly quests</li>
+                            <li>Earn points from PvP battles and wagers</li>
+                            <li>Top 0.01% supply holders get daily rewards in SOL</li>
+                        </ul>
+                    </div>
+
+                    <div class="landing-rev-table-wrap">
+                        <p class="landing-rev-table-label">Distribution ledger</p>
+                        <table class="landing-rev-table" aria-label="Revenue share distribution">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Rank</th>
+                                    <th scope="col">Trainer</th>
+                                    <th scope="col">Points</th>
+                                    <th scope="col">Share</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rev-table-body">
+                                <tr class="landing-rev-table-empty">
+                                    <td colspan="4">Table coming soon — live payouts will appear here.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="landing-stats-panel hidden" id="stats-panel-leaderboard" role="tabpanel" aria-labelledby="stats-tab-leaderboard" hidden>
+                    <div class="landing-pulse-grid" id="landing-pulse">
+                        <div class="landing-pulse-card">
+                            <span class="landing-pulse-val" id="pulse-trainers">—</span>
+                            <span class="landing-pulse-label">Trainers</span>
+                        </div>
+                        <div class="landing-pulse-card">
+                            <span class="landing-pulse-val" id="pulse-online">—</span>
+                            <span class="landing-pulse-label">In Realm</span>
+                        </div>
+                        <div class="landing-pulse-card">
+                            <span class="landing-pulse-val" id="pulse-battles">—</span>
+                            <span class="landing-pulse-label">Battles</span>
+                        </div>
+                        <div class="landing-pulse-card">
+                            <span class="landing-pulse-val" id="pulse-wagered">—</span>
+                            <span class="landing-pulse-label">Wagered</span>
+                        </div>
+                        <div class="landing-pulse-card">
+                            <span class="landing-pulse-val" id="pulse-cards">—</span>
+                            <span class="landing-pulse-label">Vault Cards</span>
+                        </div>
+                        <div class="landing-pulse-card">
+                            <span class="landing-pulse-val" id="pulse-wins">—</span>
+                            <span class="landing-pulse-label">Total Wins</span>
+                        </div>
+                    </div>
+
+                    <div class="landing-lb">
+                        <div class="landing-lb-tabs" id="landing-lb-tabs" role="tablist" aria-label="Leaderboard categories"></div>
+                        <div class="landing-lb-head" id="landing-lb-head"></div>
+                        <div class="landing-lb-podium" id="landing-lb-podium"></div>
+                        <ol class="landing-lb-list" id="landing-lb-list"></ol>
+                    </div>
+                </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="landing-panel" id="roadmap" aria-labelledby="roadmap-title">
+                <h2 class="landing-section-title" id="roadmap-title">
+                    ROADMAP
+                    <span>Where the realm is headed</span>
+                </h2>
+                <div class="landing-roadmap">
+                    <article class="landing-road-item">
+                        <span class="landing-road-badge is-live">LIVE</span>
+                        <div>
+                            <p class="landing-road-phase">Phase 1</p>
+                            <h3>Realm &amp; Avatars</h3>
+                            <p>Multiplayer hub, NPC patrols, avatar shop, PIN login, and starter coin economy.</p>
+                        </div>
+                    </article>
+                    <article class="landing-road-item">
+                        <span class="landing-road-badge is-live">LIVE</span>
+                        <div>
+                            <p class="landing-road-phase">Phase 2</p>
+                            <h3>Battles &amp; Vault</h3>
+                            <p>Telegram PvP wagering, PokéCard vending, vault collection, and battle stats.</p>
+                        </div>
+                    </article>
+                    <article class="landing-road-item">
+                        <span class="landing-road-badge is-next">NEXT</span>
+                        <div>
+                            <p class="landing-road-phase">Phase 3</p>
+                            <h3>Quests &amp; Events</h3>
+                            <p>Weekly quest trails, world triggers, seasonal NPC stories, and reward loops.</p>
+                        </div>
+                    </article>
+                    <article class="landing-road-item">
+                        <span class="landing-road-badge">SOON</span>
+                        <div>
+                            <p class="landing-road-phase">Phase 4</p>
+                            <h3>Leaderboard Seasons</h3>
+                            <p>Rotating rankings, podium rewards, and cross-realm stat showcases.</p>
+                        </div>
+                    </article>
+                    <article class="landing-road-item">
+                        <span class="landing-road-badge">SOON</span>
+                        <div>
+                            <p class="landing-road-phase">Phase 5</p>
+                            <h3>Trade &amp; Revenue</h3>
+                            <p>Card trading, revenue-share tools, and creator-led realm expansions.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="landing-panel" id="socials" aria-labelledby="socials-title">
+                <h2 class="landing-section-title" id="socials-title">
+                    SOCIALS
+                    <span>Join the community</span>
+                </h2>
+                <div class="landing-socials">
+                    <a class="landing-social-card" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">
+                        <strong>@{{ bot_username }}</strong>
+                        <span>DM the bot, tap Start, then open Play to enter the realm.</span>
+                    </a>
+                    <a class="landing-social-card" href="https://t.me/pokecardssolitems" target="_blank" rel="noopener noreferrer">
+                        <strong>Card Drops</strong>
+                        <span>Follow PokéCard news and item reveals on Telegram.</span>
+                    </a>
+                </div>
+                <div class="landing-cta-row">
+                    <a class="landing-btn landing-btn--pulse" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">Play Now</a>
+                </div>
+            </section>
+        </main>
+
+        <footer class="landing-footer">
+            SaiPoke Realm · Pixel trainers, real battles · {{ starting_balance }} starter coins for new trainers
+        </footer>
+    </div>
+    </div>
+
+    <audio id="landing-audio-unlock" preload="auto" autoplay loop muted playsinline hidden aria-hidden="true"
+        src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="></audio>
+    <script>
+        (function () {
+            const el = document.getElementById("landing-audio-unlock")
+            if (el) void el.play().catch(function () {})
+        })();
+    </script>
+    <script>
+        window.LANDING_POOL = {{ pool_cards | tojson }};
+        window.LANDING_BOOT = {
+            titles: "/static/imgs/titles.png?v={{ asset_v.titles }}",
+            gif: {{ gif_url|tojson }}
+        };
+    </script>
+    <script src="/static/js/retro-audio.js?v={{ asset_v.retro_audio_js }}" defer></script>
+    <script src="/static/js/landing.js?v={{ asset_v.landing_js }}" defer></script>
+</body>
+</html>
