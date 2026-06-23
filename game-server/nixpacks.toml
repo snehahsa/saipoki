@@ -1,0 +1,8 @@
+[phases.install]
+cmds = ["NPM_CONFIG_CACHE=/tmp/npm-cache npm install --no-audit --no-fund"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node dist/index.js"
