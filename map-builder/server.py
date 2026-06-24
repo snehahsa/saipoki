@@ -31,6 +31,10 @@ from animal_catalog import (
 )
 
 WORLD_MAP_PATH = ROOT / "gather-clone/frontend/utils/defaultmap.json"
+DEPLOY_MAP_PATHS = (
+    ROOT / "data/defaultmap.json",
+    ROOT / "game-server/data/defaultmap.json",
+)
 BACKUP_DIR = ROOT / "map-builder/backups"
 SPRITES_ROOT = ROOT / "gather-clone/frontend/public/sprites"
 
@@ -45,6 +49,15 @@ app = Flask(
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+def write_world_map(payload: dict) -> None:
+    serialized = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+    WORLD_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    WORLD_MAP_PATH.write_text(serialized, encoding="utf-8")
+    for deploy_path in DEPLOY_MAP_PATHS:
+        deploy_path.parent.mkdir(parents=True, exist_ok=True)
+        deploy_path.write_text(serialized, encoding="utf-8")
 
 
 @app.route("/api/sprites")
@@ -136,16 +149,14 @@ def api_save_map():
         shutil.copy2(WORLD_MAP_PATH, backup_path)
 
     WORLD_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
-    WORLD_MAP_PATH.write_text(
-        json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
-        encoding="utf-8",
-    )
+    write_world_map(payload)
 
     return jsonify(
         {
             "ok": True,
             "path": str(WORLD_MAP_PATH.relative_to(ROOT)),
-            "message": "Map saved. Restart game-server to load it in-game.",
+            "deployed": [str(p.relative_to(ROOT)) for p in DEPLOY_MAP_PATHS],
+            "message": "Map saved to gather-clone, data/, and game-server/data/. Commit those files and redeploy saipoki + game.",
         }
     )
 
