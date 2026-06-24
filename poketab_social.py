@@ -79,16 +79,27 @@ def _user_brief(row: sqlite3.Row | None) -> Optional[dict]:
     name = (row["display_name"] or row["username"] or "Trainer").strip()
     if len(name) > MAX_DISPLAY_NAME_LEN:
         name = f"{name[: MAX_DISPLAY_NAME_LEN - 2]}.."
+    from quest_engine import parse_quest_progress
+    from trainer_stats import trainer_stats_row
+
+    stats = trainer_stats_row(row, parse_quest_progress(row["quest_progress"]))
     return {
         "telegram_id": row["telegram_id"],
         "display_name": name,
         "skin": row["skin"] or "009",
+        "level": stats["level"],
+        "level_title": stats["level_title"],
+        "stats_xp": stats["stats_xp"],
     }
 
 
 def _fetch_user(conn: sqlite3.Connection, telegram_id: str) -> Optional[dict]:
     row = conn.execute(
-        "SELECT telegram_id, display_name, username, skin FROM users WHERE telegram_id = ?",
+        """
+        SELECT telegram_id, display_name, username, skin, stats_xp, stats_wins,
+               quest_progress
+        FROM users WHERE telegram_id = ?
+        """,
         (telegram_id,),
     ).fetchone()
     return _user_brief(row)

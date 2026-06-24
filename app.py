@@ -47,7 +47,8 @@ from avatar_economy import (
     vending_spin_cost,
 )
 from leaderboard import build_leaderboard_payload
-from trainer_stats import ensure_trainer_stats_schema, trainer_stats_row, xp_progress
+from trainer_stats import ensure_trainer_stats_schema, trainer_stats_row
+from xp_levels import xp_config_for_client
 from poketab_social import (
     ensure_schema as ensure_poketab_schema,
     get_thread,
@@ -621,6 +622,7 @@ def home():
         starting_balance=STARTING_BALANCE,
         vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
         vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
+        xp_levels=xp_config_for_client(),
     )
 
 
@@ -767,7 +769,7 @@ def auth():
     with get_db() as conn:
         row = conn.execute(
             """
-            SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, vault, balance
+            SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress
             FROM users WHERE telegram_id = ?
             """,
             (telegram_id,),
@@ -800,7 +802,7 @@ def auth():
             "vending_spin_repeat_cost": VENDING_SPIN_REPEAT_COST,
             "has_pin": bool(user_pin),
             "trainer_stats": trainer_stats,
-            "level": trainer_stats["level"] if trainer_stats else 1,
+            "level": trainer_stats["level"] if trainer_stats else 0,
         }
     )
 
@@ -1298,6 +1300,19 @@ def poketab_battle_status_api():
     catalog = card_catalog_for_client()
     with get_db() as conn:
         payload = poketab_battle_status(conn, telegram_id, catalog)
+        battle = payload.get("battle") or {}
+        if battle.get("phase") == "ended":
+            row = conn.execute(
+                """
+                SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress
+                FROM users WHERE telegram_id = ?
+                """,
+                (telegram_id,),
+            ).fetchone()
+            if row:
+                stats = trainer_stats_row(row)
+                payload["trainer_stats"] = stats
+                payload["level"] = stats["level"]
     return jsonify({"success": True, **payload})
 
 
@@ -1313,6 +1328,18 @@ def poketab_battle_action_api():
         other_id = None
         if result.get("ok") and result.get("battle"):
             other_id = str(result["battle"].get("opponent", {}).get("id", ""))
+        if result.get("ok") and result.get("ended"):
+            row = conn.execute(
+                """
+                SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress
+                FROM users WHERE telegram_id = ?
+                """,
+                (telegram_id,),
+            ).fetchone()
+            if row:
+                stats = trainer_stats_row(row)
+                result["trainer_stats"] = stats
+                result["level"] = stats["level"]
     if not result.get("ok"):
         return jsonify({"success": False, "error": result.get("error", "Action failed")}), 400
     if other_id and other_id != telegram_id:
@@ -1322,6 +1349,11 @@ def poketab_battle_action_api():
             {"game_id": data.get("game_id"), "ended": result.get("ended")},
         )
     return jsonify({"success": True, **result})
+
+
+@app.route("/api/xp/levels")
+def xp_levels_api():
+    return jsonify({"success": True, **xp_config_for_client()})
 
 
 @app.route("/api/quests/complete", methods=["POST"])
@@ -1349,8 +1381,31 @@ def complete_quest_step():
                 return jsonify({"success": False, "error": "Quest removed for this player"}), 400
             return jsonify({"success": False, "error": "Unknown quest step"}), 400
         progress = result["quest_progress"]
+        trainer_stats = result.get("trainer_stats")
+        if not trainer_stats:
+            row = conn.execute(
+                """
+                SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress
+                FROM users WHERE telegram_id = ?
+                """,
+                (telegram_id,),
+            ).fetchone()
+            if row:
+                trainer_stats = trainer_stats_row(row)
 
-    return jsonify({"success": True, "step_id": step_id, "quest_progress": progress})
+    payload = {
+        "success": True,
+        "step_id": step_id,
+        "quest_progress": progress,
+        "xp_gained": result.get("xp_gained", 0),
+        "leveled_up": bool(result.get("leveled_up")),
+        "old_level": result.get("old_level"),
+        "new_level": result.get("new_level"),
+    }
+    if trainer_stats:
+        payload["trainer_stats"] = trainer_stats
+        payload["level"] = trainer_stats["level"]
+    return jsonify(payload)
 
 
 @app.route("/api/quests/remove", methods=["POST"])
@@ -1566,7 +1621,7 @@ def trainer_stats_api():
         row = conn.execute(
             """
             SELECT telegram_id, display_name, username, skin, vault, balance,
-                   stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp
+                   stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress
             FROM users WHERE telegram_id = ?
             """,
             (telegram_id,),

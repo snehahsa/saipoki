@@ -89,12 +89,19 @@ def complete_quest_step(
 
     progress["completed_steps"].append(step_id)
     _save_progress(conn, telegram_id, progress)
+
+    xp_payload: dict[str, Any] = {}
+    from trainer_stats import XP_PER_QUEST_STEP, award_xp_on_conn
+
+    xp_payload = award_xp_on_conn(conn, telegram_id, XP_PER_QUEST_STEP)
+
     return {
         "ok": True,
         "step_id": step_id,
         "quest_id": quest_id,
         "newly_completed": True,
         "quest_progress": progress,
+        **xp_payload,
     }
 
 

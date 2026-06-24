@@ -767,6 +767,9 @@
                 openArena(data.battle)
             }
             if (data.ended) {
+                if (data.trainer_stats && window.SaiPokeTrainer?.applyTrainerStats) {
+                    window.SaiPokeTrainer.applyTrainerStats(data.trainer_stats, { xp_gained: 20 })
+                }
                 onBalanceUpdate()
                 refreshSummary()
             }
@@ -783,6 +786,9 @@
             const data = await apiPost("/api/poketab/battle/status")
             statusCache = data
             updateBalanceDisplay(data.balance)
+            if (data.trainer_stats && window.SaiPokeTrainer?.applyTrainerStats) {
+                window.SaiPokeTrainer.applyTrainerStats(data.trainer_stats, { xp_gained: 20 })
+            }
             updateAlertPanel(data.incoming_invites, data.invite, data.battle_alerts)
             if (data.invite?.id) activeInviteId = data.invite.id
             syncBattleFromStatus(data, { forceOpen: !silent })

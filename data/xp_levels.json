@@ -1,0 +1,72 @@
+{
+  "xp_rewards": {
+    "quest_step": 5,
+    "battle_win": 20
+  },
+  "levels": [
+    {
+      "level": 0,
+      "title": "Newcomer",
+      "required_wins": 0,
+      "required_quests": [],
+      "xp_milestone": 0,
+      "description": "Welcome to SaiPoke Realm."
+    },
+    {
+      "level": 1,
+      "title": "Rookie Trainer",
+      "required_wins": 1,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 25,
+      "description": "Win 1 battle and complete all Week 1 quests."
+    },
+    {
+      "level": 2,
+      "title": "Vault Trail Graduate",
+      "required_wins": 3,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 80,
+      "description": "Win 3 battles with Week 1 complete."
+    },
+    {
+      "level": 3,
+      "title": "Arena Veteran",
+      "required_wins": 6,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 140,
+      "description": "Win 6 battles with Week 1 complete."
+    },
+    {
+      "level": 4,
+      "title": "Rising Champion",
+      "required_wins": 10,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 220,
+      "description": "Win 10 battles with Week 1 complete."
+    },
+    {
+      "level": 5,
+      "title": "Elite Trainer",
+      "required_wins": 15,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 320,
+      "description": "Win 15 battles with Week 1 complete."
+    },
+    {
+      "level": 6,
+      "title": "Realm Defender",
+      "required_wins": 22,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 450,
+      "description": "Win 22 battles with Week 1 complete."
+    },
+    {
+      "level": 7,
+      "title": "Grand Master",
+      "required_wins": 30,
+      "required_quests": ["week1_vault_trail"],
+      "xp_milestone": 600,
+      "description": "Win 30 battles with Week 1 complete."
+    }
+  ]
+}

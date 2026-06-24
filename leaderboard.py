@@ -9,11 +9,10 @@ from typing import Any, Optional
 from poke_registry import parse_vault, valid_card_ids, vault_card_ids
 from trainer_stats import (
     backfill_xp_from_wins,
+    backfill_xp_rewards,
     ensure_trainer_stats_schema,
-    level_from_xp,
     save_leaderboard_snapshot,
     trainer_stats_row,
-    xp_progress,
 )
 
 STAT_COLUMNS = (
@@ -58,7 +57,7 @@ CATEGORIES = (
         "id": "levels",
         "title": "Battle Levels",
         "emoji": "⭐",
-        "tagline": "Trainer level — 3 wins per level. Win battles to rank up.",
+        "tagline": "Trainer level — quest milestones + battle wins. Earn XP every step.",
         "fomo": "Every victory earns XP.",
         "value_label": "level",
         "computed": "level",
@@ -96,6 +95,7 @@ CATEGORIES = (
 def ensure_stats_schema(conn: sqlite3.Connection) -> None:
     ensure_trainer_stats_schema(conn)
     backfill_xp_from_wins(conn)
+    backfill_xp_rewards(conn)
 
 
 def _vault_count(raw_vault: str) -> int:
@@ -179,7 +179,7 @@ def backfill_stats_from_battles(conn: sqlite3.Connection) -> None:
 
 
 def _format_entry(row: sqlite3.Row, rank: int, value: int | float, value_display: str) -> dict:
-    xp = int(row["stats_xp"] if "stats_xp" in row.keys() else row["stats_wins"] or 0)
+    stats = trainer_stats_row(row)
     return {
         "rank": rank,
         "telegram_id": row["telegram_id"],
@@ -188,8 +188,9 @@ def _format_entry(row: sqlite3.Row, rank: int, value: int | float, value_display
         "skin": row["skin"],
         "value": value,
         "value_display": value_display,
-        "level": level_from_xp(xp),
-        "stats_xp": xp,
+        "level": stats["level"],
+        "level_title": stats["level_title"],
+        "stats_xp": stats["stats_xp"],
         "stats_wins": int(row["stats_wins"] or 0),
         "stats_battles": int(row["stats_battles"] or 0),
     }
@@ -200,7 +201,7 @@ def _fetch_sorted_users(conn: sqlite3.Connection, order_sql: str, limit: int) ->
         f"""
         SELECT telegram_id, display_name, username, skin, vault,
                balance, stats_wagered, stats_battles, stats_wins, stats_losses,
-               stats_xp
+               stats_xp, quest_progress
         FROM users
         ORDER BY {order_sql}
         LIMIT ?
@@ -244,7 +245,7 @@ def _entries_for_category(conn: sqlite3.Connection, cat: dict) -> list[dict]:
             """
             SELECT telegram_id, display_name, username, skin, vault,
                    balance, stats_wagered, stats_battles, stats_wins, stats_losses,
-                   stats_xp
+                   stats_xp, quest_progress
             FROM users
             """
         ).fetchall()
@@ -264,7 +265,7 @@ def _entries_for_category(conn: sqlite3.Connection, cat: dict) -> list[dict]:
             """
             SELECT telegram_id, display_name, username, skin, vault,
                    balance, stats_wagered, stats_battles, stats_wins, stats_losses,
-                   stats_xp
+                   stats_xp, quest_progress
             FROM users
             WHERE stats_xp > 0 OR stats_wins > 0
             """
@@ -272,15 +273,16 @@ def _entries_for_category(conn: sqlite3.Connection, cat: dict) -> list[dict]:
         ranked = sorted(
             rows,
             key=lambda r: (
-                level_from_xp(int(r["stats_xp"] or r["stats_wins"] or 0)),
-                int(r["stats_xp"] or r["stats_wins"] or 0),
+                trainer_stats_row(r)["level"],
+                int(r["stats_xp"] or 0),
                 int(r["stats_wins"] or 0),
             ),
             reverse=True,
         )
         for rank, row in enumerate(ranked[:LEADERBOARD_LIMIT], start=1):
-            xp = int(row["stats_xp"] or row["stats_wins"] or 0)
-            lvl = level_from_xp(xp)
+            stats = trainer_stats_row(row)
+            lvl = stats["level"]
+            xp = stats["stats_xp"]
             entries.append(_format_entry(row, rank, lvl, f"Lv.{lvl} · {xp} XP"))
         return entries
 
@@ -289,7 +291,7 @@ def _entries_for_category(conn: sqlite3.Connection, cat: dict) -> list[dict]:
             """
             SELECT telegram_id, display_name, username, skin, vault,
                    balance, stats_wagered, stats_battles, stats_wins, stats_losses,
-                   stats_xp
+                   stats_xp, quest_progress
             FROM users
             WHERE stats_battles >= 3
             """

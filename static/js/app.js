@@ -12,6 +12,7 @@ const STARTING_BALANCE = Number(window.APP_CONFIG.startingBalance) || 5000
 const VENDING_SPIN_FIRST_COST = Number(window.APP_CONFIG.vendingSpinFirstCost) || 1000
 const VENDING_SPIN_REPEAT_COST = Number(window.APP_CONFIG.vendingSpinRepeatCost) || 2000
 const GAME_JS_URL = window.APP_CONFIG.assets?.gameJs || "/static/game/game.js"
+const XP_LEVELS = window.APP_CONFIG.xpLevels || { levels: [], xp_rewards: { quest_step: 5, battle_win: 20 } }
 
 let itemGetCloseResolve = null
 let itemGetQueue = Promise.resolve()
@@ -75,6 +76,79 @@ function detectTestMode() {
 
 const TEST_MODE = detectTestMode()
 const TEST_PLAYER_SLUG = TEST_MODE ? (parseTestPlayerSlug() ?? "") : ""
+
+function questTitleForId(questId) {
+    const quest = QUEST_CATALOG.find((item) => item.quest_id === questId)
+    return quest?.title || questId
+}
+
+function formatNextLevelRequirements(stats) {
+    if (!stats || stats.next_level == null) return ""
+    const parts = []
+    if (Number(stats.wins_to_next_level) > 0) {
+        const n = Number(stats.wins_to_next_level)
+        parts.push(`${n} more win${n === 1 ? "" : "s"}`)
+    }
+    if (Array.isArray(stats.blocking_quests) && stats.blocking_quests.length) {
+        parts.push(`complete ${stats.blocking_quests.map(questTitleForId).join(", ")}`)
+    }
+    return parts.join(" · ")
+}
+
+function showXpGainToast(amount) {
+    const stack = document.getElementById("join-toast-stack")
+    if (!stack || !amount) return
+    const toast = document.createElement("div")
+    toast.className = "join-toast"
+    toast.textContent = `+${amount} XP`
+    stack.appendChild(toast)
+    setTimeout(() => toast.remove(), 2400)
+}
+
+function showLevelUpToast(level, title, xpGained) {
+    const stack = document.getElementById("join-toast-stack")
+    if (!stack) return
+    const toast = document.createElement("div")
+    toast.className = "join-toast join-toast-levelup"
+    toast.innerHTML = `<strong>LEVEL UP!</strong><br>Lv.${level} · ${escapeLbText(title || "Trainer")}${xpGained ? ` · +${Number(xpGained)} XP` : ""}`
+    stack.appendChild(toast)
+    setTimeout(() => toast.remove(), 4500)
+}
+
+function renderProfileXp() {
+    const stats = session?.trainer_stats
+    if (!stats) return
+    const lvlEl = document.getElementById("profile-level")
+    const xpEl = document.getElementById("profile-xp")
+    const fill = document.getElementById("profile-xpfill")
+    const hint = document.getElementById("profile-xp-hint")
+    const level = Number(stats.level ?? 0)
+    if (lvlEl) lvlEl.textContent = `Lv.${level} · ${stats.level_title || "Trainer"}`
+    if (xpEl) xpEl.textContent = `${Number(stats.stats_xp ?? 0)} XP`
+    const span = Math.max(1, Number(stats.xp_span ?? 1))
+    const into = Number(stats.xp_into_level ?? 0)
+    if (fill) fill.style.width = `${Math.min(100, (into / span) * 100)}%`
+    if (hint) {
+        const req = formatNextLevelRequirements(stats)
+        hint.textContent = req ? `Next level: ${req}` : (stats.level_description || "")
+    }
+}
+
+function applyTrainerStats(stats, meta = {}) {
+    if (!stats || !session) return
+    const prevLevel = Number(session.level ?? session.trainer_stats?.level ?? 0)
+    session.trainer_stats = stats
+    session.level = Number(stats.level ?? 0)
+    populateMenu()
+    renderProfileXp()
+    const nextLevel = Number(stats.level ?? 0)
+    const leveledUp = Boolean(meta.leveled_up) || (nextLevel > prevLevel && nextLevel > 0)
+    if (leveledUp) {
+        showLevelUpToast(nextLevel, stats.level_title, meta.xp_gained)
+    } else if (Number(meta.xp_gained) > 0) {
+        showXpGainToast(Number(meta.xp_gained))
+    }
+}
 
 function isSignedIn() {
     return TEST_MODE || Boolean(tg?.initData)
@@ -1300,6 +1374,14 @@ async function completeQuestStep(stepId, questId = null, opts = {}) {
     if (response.ok && data.success && session) {
         session.quest_progress = normalizeQuestProgress(data.quest_progress)
         renderQuestBoard()
+        if (data.trainer_stats) {
+            applyTrainerStats(data.trainer_stats, {
+                leveled_up: data.leveled_up,
+                xp_gained: data.xp_gained,
+            })
+        } else if (Number(data.xp_gained) > 0) {
+            showXpGainToast(Number(data.xp_gained))
+        }
 
         if (!wasComplete && stepId === "collect_first_card") {
             const item = resolveCardItem(opts.bagItem || opts.cardId || getVaultCardIds()[0])
@@ -1695,9 +1777,10 @@ async function saveSkin(skin, displayName) {
 
 function populateMenu() {
     updateBalanceDisplays()
-    const lvl = Number(session?.level || session?.trainer_stats?.level) || 1
+    const lvl = Number(session?.level ?? session?.trainer_stats?.level) || 0
+    const xp = Number(session?.trainer_stats?.stats_xp) || 0
     document.getElementById("menu-player-name").textContent = truncateDisplayName(session.display_name)
-    const metaParts = [`Lv.${lvl}`]
+    const metaParts = [`Lv.${lvl}`, `${xp} XP`]
     if (session.username) metaParts.push(`@${session.username}`)
     else metaParts.push("Telegram trainer")
     document.getElementById("menu-player-meta").textContent = metaParts.join(" · ")
@@ -1869,7 +1952,7 @@ function renderLbYouCard(data, categoryId) {
     }
 
     const parts = [
-        `Lv.${stats.level || 1} · ${stats.stats_xp ?? stats.stats_wins ?? 0} XP`,
+        `Lv.${stats.level ?? 0} · ${stats.stats_xp ?? 0} XP`,
         `${stats.stats_wagered.toLocaleString()} wagered`,
         `${stats.stats_battles} battles · ${stats.stats_wins}W / ${stats.stats_losses ?? 0}L`,
         `${stats.vault_count} vault cards`,
@@ -1897,7 +1980,7 @@ async function openTrainerStats(returnScreen = "menu") {
         if (!res.ok || !data.success) throw new Error(data.error || "Could not load stats")
         const stats = data.stats || {}
         session.trainer_stats = stats
-        session.level = stats.level || 1
+        session.level = stats.level ?? 0
         populateMenu()
         if (subtitle) {
             subtitle.textContent = stats.display_name
@@ -1907,12 +1990,20 @@ async function openTrainerStats(returnScreen = "menu") {
         const lvlEl = document.getElementById("trainer-stats-level")
         const xpEl = document.getElementById("trainer-stats-xp")
         const xpFill = document.getElementById("trainer-stats-xpfill")
-        if (lvlEl) lvlEl.textContent = `Lv.${stats.level || 1}`
+        if (lvlEl) lvlEl.textContent = `Lv.${stats.level ?? 0} · ${stats.level_title || "Trainer"}`
         const into = stats.xp_into_level ?? 0
-        const need = stats.wins_per_level || 3
-        const toNext = stats.xp_to_next_level ?? (need - into)
-        if (xpEl) xpEl.textContent = `${into} / ${need} XP this level · ${toNext} to level up`
-        if (xpFill) xpFill.style.width = `${Math.min(100, (into / need) * 100)}%`
+        const span = Math.max(1, stats.xp_span ?? 1)
+        const toNext = stats.xp_to_next_level ?? Math.max(0, span - into)
+        if (xpEl) {
+            xpEl.textContent = stats.next_level != null
+                ? `${stats.stats_xp ?? 0} XP · ${into}/${span} toward Lv.${stats.next_level}`
+                : `${stats.stats_xp ?? 0} XP · max level`
+        }
+        if (xpFill) xpFill.style.width = `${Math.min(100, (into / span) * 100)}%`
+        const reqHint = formatNextLevelRequirements(stats)
+        if (subtitle && reqHint) {
+            subtitle.textContent = `${stats.display_name ? `${stats.display_name}'s` : "Your"} record · ${reqHint}`
+        }
         if (grid) {
             grid.innerHTML = [
                 ["Battles", stats.stats_battles ?? 0],
@@ -2207,7 +2298,7 @@ async function enterGame() {
             uid: String(session.telegram_id),
             username: playName,
             skin: playSkin,
-            level: Number(session.level || session.trainer_stats?.level) || 1,
+            level: Number(session.level ?? session.trainer_stats?.level) || 0,
             holds: normalizeHolds(session.holds),
             holdGrantRules: holdGrantRulesForClient(),
             backendUrl: window.location.origin,
@@ -3146,7 +3237,7 @@ async function init() {
     session.vault = normalizeVault(session.vault)
     session.balance = Number(session.balance) || 0
     session.vending_spins = Number(session.vending_spins) || 0
-    session.level = Number(session.level || session.trainer_stats?.level) || 1
+    session.level = Number(session.level ?? session.trainer_stats?.level) || 0
     session.trainer_stats = session.trainer_stats || {}
     session.owned_skins = Array.isArray(session.owned_skins) ? session.owned_skins : [DEFAULT_SKIN]
     if (session.avatar_costs && typeof session.avatar_costs === "object") {
@@ -3155,6 +3246,7 @@ async function init() {
     refreshSortedSkins()
     syncHoldUi()
     updateBalanceDisplays()
+    renderProfileXp()
 
     if (session.skin) {
         skinIndex = Math.max(0, sortedSkins.indexOf(session.skin))
@@ -3224,10 +3316,8 @@ async function init() {
                             session.vault = normalizeVault(data.vault)
                         }
                         if (data.trainer_stats) {
-                            session.trainer_stats = data.trainer_stats
-                            session.level = data.trainer_stats.level || data.level || 1
-                            populateMenu()
-                        } else if (data.level) {
+                            applyTrainerStats(data.trainer_stats)
+                        } else if (data.level != null) {
                             session.level = data.level
                             populateMenu()
                         }
@@ -3239,6 +3329,8 @@ async function init() {
 
     preloadRemainingAssets()
     loadGameClient().then(bindGameEvents).catch(() => {})
+
+    window.SaiPokeTrainer = { applyTrainerStats, renderProfileXp }
 
     bindPinKeypad()
 
@@ -3293,6 +3385,7 @@ async function init() {
         handleEnterRealm()
     })
     document.getElementById("profile-btn").addEventListener("click", () => {
+        renderProfileXp()
         showScreen("profile")
     })
     document.getElementById("quests-btn").addEventListener("click", () => {

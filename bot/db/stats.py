@@ -82,7 +82,7 @@ async def record_battle_outcome(
             except Exception:
                 now = int(time.time())
                 for tg_id, wins, losses, xp_delta in (
-                    (str(winner_id), 1, 0, 1),
+                    (str(winner_id), 1, 0, 20),
                     (str(loser_id), 0, 1, 0),
                 ):
                     conn.execute(

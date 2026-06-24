@@ -127,11 +127,15 @@
 
     function renderUserRow(user, actionsHtml) {
         const online = user.online ? '<span class="poketab-online-dot" title="Online"></span>' : ""
+        const level = Number(user.level ?? 0)
+        const xp = Number(user.stats_xp ?? 0)
+        const meta = `Lv.${level} · ${xp} XP`
         return `
             <div class="poketab-row">
                 <div class="poketab-avatar" style="${skinThumbStyle(user.skin)}"></div>
                 <div class="poketab-row-main">
                     <div class="poketab-row-name">${online}${escapeHtml(user.display_name)}</div>
+                    <div class="poketab-row-meta">${escapeHtml(meta)}</div>
                 </div>
                 <div class="poketab-row-actions">${actionsHtml}</div>
             </div>
@@ -337,6 +341,7 @@
                                 <span class="poketab-row-name">${escapeHtml(peer.display_name)}</span>
                                 <span class="poketab-conv-time">${formatTime(conv.last_at)}</span>
                             </div>
+                            <div class="poketab-row-meta">Lv.${Number(peer.level ?? 0)} · ${Number(peer.stats_xp ?? 0)} XP</div>
                             <div class="poketab-conv-preview">${conv.last_from_self ? "YOU: " : ""}${preview}</div>
                         </div>
                         ${unread}

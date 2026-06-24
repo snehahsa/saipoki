@@ -218,5 +218,8 @@ def init_postgres_schema(conn: Any) -> None:
     ensure_trainer_stats_schema(conn)
     ensure_stats_schema(conn)
     backfill_stats_from_battles(conn)
+    from trainer_stats import backfill_xp_rewards
+
+    backfill_xp_rewards(conn)
     ensure_poketab_schema(conn)
     ensure_poketab_battle_schema(conn)

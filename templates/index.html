@@ -314,6 +314,13 @@
             <span id="profile-balance">0</span>
         </div>
 
+        <div class="profile-xp-block" aria-live="polite">
+            <p class="profile-level" id="profile-level">Lv.0 · Newcomer</p>
+            <p class="profile-xp" id="profile-xp">0 XP</p>
+            <div class="trainer-stats-xpbar profile-xpbar" aria-hidden="true"><div id="profile-xpfill"></div></div>
+            <p class="profile-xp-hint" id="profile-xp-hint"></p>
+        </div>
+
         <div class="profile-preview-block">
             <div class="skin-hero-stage skin-hero-stage-sm">
                 <div id="profile-preview" class="skin-sprite-preview skin-sprite-preview-profile" role="img" aria-label="Selected avatar preview"></div>
@@ -891,6 +898,7 @@
         startingBalance: {{ starting_balance|tojson }},
         vendingSpinFirstCost: {{ vending_spin_first_cost|tojson }},
         vendingSpinRepeatCost: {{ vending_spin_repeat_cost|tojson }},
+        xpLevels: {{ xp_levels|tojson }},
         testMode: {{ test_mode|tojson }},
         testPlayerSlug: {{ test_player_slug|tojson }},
         assets: {

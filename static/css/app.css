@@ -1780,6 +1780,59 @@ button::selection,
     margin-top: 0;
 }
 
+.profile-xp-block {
+    margin: 10px 0 14px;
+    padding: 10px 12px;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.22);
+    text-align: center;
+}
+
+.profile-level {
+    margin: 0 0 4px;
+    font-family: var(--font-pixel, monospace);
+    font-size: 0.95rem;
+    color: #ffe08a;
+}
+
+.profile-xp {
+    margin: 0 0 8px;
+    font-size: 0.82rem;
+    color: #d8e6ff;
+}
+
+.profile-xpbar {
+    margin: 0 auto 6px;
+    max-width: 240px;
+}
+
+.profile-xp-hint {
+    margin: 0;
+    font-size: 0.72rem;
+    color: #9eb0c8;
+    line-height: 1.35;
+}
+
+.poketab-row-meta {
+    margin-top: 2px;
+    font-size: 0.68rem;
+    color: #9eb0c8;
+    letter-spacing: 0.02em;
+}
+
+.join-toast-levelup {
+    border-color: #ffe08a;
+    color: #fff6d0;
+    background: rgba(40, 28, 8, 0.92);
+    text-align: center;
+    line-height: 1.35;
+}
+
+.join-toast-levelup strong {
+    color: #ffd76a;
+    letter-spacing: 0.06em;
+}
+
 .skin-hero-name {
     text-align: center;
     margin: 0;

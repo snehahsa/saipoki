@@ -128,6 +128,9 @@ def init_sqlite_schema(conn: Any) -> None:
     ensure_trainer_stats_schema(conn)
     ensure_stats_schema(conn)
     backfill_stats_from_battles(conn)
+    from trainer_stats import backfill_xp_rewards
+
+    backfill_xp_rewards(conn)
 
     vault_reset_key = "vault_reset_v1"
     if conn.execute(
