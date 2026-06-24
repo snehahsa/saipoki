@@ -4159,6 +4159,7 @@ body.poketab-open {
     --battle-opp-sprite-mul: 2.75;
     --battle-hp-stack-player: calc(118px * var(--pt-scale, 0.78) * var(--battle-hp-scale, 1.5));
     --battle-hp-stack-opp: calc(92px * var(--pt-scale, 0.78) * var(--battle-hp-scale, 1.5));
+    --battle-field-inset: 6px;
 }
 
 .poketab-gb-hud {
@@ -4172,6 +4173,8 @@ body.poketab-open {
     min-height: 240px;
     max-height: none;
     margin-bottom: 2px;
+    padding: 0 var(--battle-field-inset, 6px);
+    box-sizing: border-box;
     overflow: hidden;
 }
 
@@ -4249,7 +4252,7 @@ body.poketab-open {
     width: calc(96px * var(--pt-scale, 0.78) * var(--battle-player-sprite-mul, 2.75));
     height: calc(96px * var(--pt-scale, 0.78) * var(--battle-player-sprite-mul, 2.75));
     align-self: flex-start;
-    margin-left: calc(-1 * (96px * var(--pt-scale, 0.78) * var(--battle-player-sprite-mul, 2.75) - var(--battle-hp-stack-player)));
+    margin-left: 0;
     max-width: none;
 }
 
@@ -4257,7 +4260,7 @@ body.poketab-open {
     width: calc(72px * var(--pt-scale, 0.78) * var(--battle-opp-sprite-mul, 2.75));
     height: calc(72px * var(--pt-scale, 0.78) * var(--battle-opp-sprite-mul, 2.75));
     align-self: flex-end;
-    margin-right: calc(-1 * (72px * var(--pt-scale, 0.78) * var(--battle-opp-sprite-mul, 2.75) - var(--battle-hp-stack-opp)));
+    margin-right: 0;
     max-width: none;
 }
 

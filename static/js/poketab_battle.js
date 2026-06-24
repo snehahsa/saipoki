@@ -608,7 +608,7 @@
                     </div>
                     <div class="poketab-gb-me-panel">
                         <div class="poketab-gb-mon-stack">
-                            ${myMon ? spriteHtml(myMon, true) : ""}
+                            ${myMon ? spriteHtml(myMon, false) : ""}
                             ${myMon ? hpBarHtml(myMon.hp, myMon.max_hp, myMon.name) : `<span class="poketab-gb-hpname">${escapeHtml(me.name)}</span>`}
                         </div>
                     </div>
