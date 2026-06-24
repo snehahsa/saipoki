@@ -1170,7 +1170,16 @@ def poketab_battle_opponents_api():
                 "SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,)
             ).fetchone()
             my_balance = int(balance["balance"] or 0) if balance else 0
-        return jsonify({"success": True, "opponents": opponents, "balance": my_balance})
+            from poketab_battle import MAX_DAILY_BATTLES_PER_CARD, eligible_battle_cards
+
+            my_eligible = len(eligible_battle_cards(conn, telegram_id, set(catalog.keys())))
+        return jsonify({
+            "success": True,
+            "opponents": opponents,
+            "balance": my_balance,
+            "eligible_cards": my_eligible,
+            "daily_battles_per_card": MAX_DAILY_BATTLES_PER_CARD,
+        })
     except Exception:
         app.logger.exception("poketab battle opponents failed")
         return jsonify({"success": False, "error": "Could not scan online trainers. Try again."}), 500
@@ -1225,14 +1234,21 @@ def poketab_battle_respond_api():
             int(invite_id),
             accept=action == "accept",
             valid_ids=set(catalog.keys()),
+            catalog=catalog,
         )
     if not result.get("ok"):
         return jsonify({"success": False, "error": result.get("error", "Could not respond")}), 400
-    if row:
+    if row and result.get("started"):
+        _notify_poketab_player(
+            row["challenger_id"],
+            "battle_start",
+            {"invite_id": invite_id, "game_id": result.get("game_id")},
+        )
+    elif row and result.get("accepted") is False:
         _notify_poketab_player(
             row["challenger_id"],
             "battle_update",
-            {"invite_id": invite_id, "accepted": result.get("accepted")},
+            {"invite_id": invite_id, "accepted": False},
         )
     return jsonify({"success": True, **result})
 

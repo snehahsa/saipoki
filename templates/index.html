@@ -455,6 +455,9 @@
 
 <div id="game-screen" class="screen hidden">
     <div id="game-hud" class="game-hud">
+        <div class="hud-line hud-line--level">lv: <span id="stat-level" class="hud-v">0 · Newcomer</span></div>
+        <div class="hud-line hud-line--xp">xp: <span id="stat-xp" class="hud-v">0</span></div>
+        <div class="hud-xpbar" aria-hidden="true"><div id="stat-xpfill"></div></div>
         <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
         <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
         <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-coin poke-coin--sm hud-coin" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
@@ -806,14 +809,9 @@
                                             <input type="number" id="poketab-battle-wager" class="poketab-battle-wager-input" min="1" value="50" inputmode="numeric">
                                             <span class="poketab-battle-wager-hint">$POKECARD</span>
                                         </div>
-                                        <p class="poketab-crt-line poketab-battle-sub">&gt; CHALLENGE ONLINE TRAINERS WITH CARDS</p>
+                                        <p class="poketab-crt-line poketab-battle-sub" id="poketab-battle-sub">&gt; RANDOM CARD · 3 FIGHTS/CARD/DAY</p>
+                                        <p class="poketab-crt-line poketab-battle-eligible" id="poketab-battle-eligible"></p>
                                         <div class="poketab-list" id="poketab-battle-opponents"></div>
-                                    </div>
-                                    <div id="poketab-battle-team" class="poketab-battle-team hidden">
-                                        <p class="poketab-crt-title">PICK YOUR TEAM</p>
-                                        <p class="poketab-crt-line" id="poketab-battle-team-hint">&gt; SELECT 1 CARD</p>
-                                        <div class="poketab-battle-card-grid" id="poketab-battle-team-grid"></div>
-                                        <button type="button" class="poketab-battle-confirm-btn" id="poketab-battle-team-confirm">LOCK TEAM</button>
                                     </div>
                                 </div>
                                 <div id="poketab-battle-overlay" class="poketab-battle-overlay hidden" aria-hidden="true">

@@ -2804,6 +2804,31 @@ button::selection,
     image-rendering: pixelated;
 }
 
+.hud-line--level .hud-v {
+    color: #8b5a14;
+}
+
+.hud-line--xp .hud-v {
+    color: #2d6a2d;
+}
+
+.hud-xpbar {
+    width: 100%;
+    height: 6px;
+    margin: 2px 0 4px;
+    background: #d8d0c4;
+    border: 1px solid #a89880;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.hud-xpbar div {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #78c850, #ffd838);
+    transition: width 0.3s ease;
+}
+
 .hud-line {
     text-transform: uppercase;
     white-space: nowrap;
@@ -3371,7 +3396,7 @@ body.poketab-open {
 }
 
 .poketab-monitor-glass--battle,
-.poketab-monitor-glass:has(.poketab-battle-team:not(.hidden)) {
+.poketab-monitor-glass:has([data-poketab-view="battle"].active) {
     height: min(calc(78vh * var(--pt-scale, 1.3)), calc(680px * var(--pt-scale, 1.3)));
     min-height: calc(560px * var(--pt-scale, 1.3));
     max-height: calc(780px * var(--pt-scale, 1.3));
@@ -4001,8 +4026,14 @@ body.poketab-open {
 }
 
 .poketab-battle-sub {
+    margin-bottom: 4px !important;
+    font-size: 8px !important;
+}
+
+.poketab-battle-eligible {
     margin-bottom: 8px !important;
     font-size: 8px !important;
+    color: #ffe08a;
 }
 
 .poketab-battle-opp-meta {

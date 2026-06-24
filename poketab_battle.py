@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import re
 import sqlite3
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,6 +34,7 @@ from trainer_stats import record_battle_outcome_on_conn
 MAX_TEAM_SIZE = 1
 INVITE_TTL_SEC = 300
 MIN_BET = 1
+MAX_DAILY_BATTLES_PER_CARD = 3
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -62,6 +65,17 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_poketab_battle_challenger
         ON poketab_battle_invites(challenger_id, status)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS poketab_card_daily_usage (
+            telegram_id TEXT NOT NULL,
+            card_id TEXT NOT NULL,
+            usage_date TEXT NOT NULL,
+            battle_count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (telegram_id, card_id, usage_date)
+        )
         """
     )
     conn.execute(
@@ -118,6 +132,62 @@ def _user_vault_ids(conn: sqlite3.Connection, user_id: str, valid_ids: set[str])
     raw = row["vault"] if row and "vault" in row.keys() else None
     vault = parse_vault(raw, valid_ids)
     return vault_card_ids(vault)
+
+
+def _usage_date_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def card_battles_today(conn: sqlite3.Connection, user_id: str, card_id: str) -> int:
+    row = conn.execute(
+        """
+        SELECT battle_count FROM poketab_card_daily_usage
+        WHERE telegram_id = ? AND card_id = ? AND usage_date = ?
+        """,
+        (str(user_id), str(card_id), _usage_date_utc()),
+    ).fetchone()
+    return int(row["battle_count"] or 0) if row else 0
+
+
+def eligible_battle_cards(
+    conn: sqlite3.Connection,
+    user_id: str,
+    valid_ids: set[str],
+) -> list[str]:
+    vault_ids = _user_vault_ids(conn, user_id, valid_ids)
+    return [
+        card_id
+        for card_id in vault_ids
+        if card_battles_today(conn, user_id, card_id) < MAX_DAILY_BATTLES_PER_CARD
+    ]
+
+
+def _pick_random_team(
+    conn: sqlite3.Connection,
+    user_id: str,
+    valid_ids: set[str],
+) -> Optional[list[str]]:
+    eligible = eligible_battle_cards(conn, user_id, valid_ids)
+    if not eligible:
+        return None
+    return [random.choice(eligible)]
+
+
+def _record_card_battle_usage(
+    conn: sqlite3.Connection,
+    user_id: str,
+    card_id: str,
+) -> None:
+    today = _usage_date_utc()
+    conn.execute(
+        """
+        INSERT INTO poketab_card_daily_usage (telegram_id, card_id, usage_date, battle_count)
+        VALUES (?, ?, ?, 1)
+        ON CONFLICT(telegram_id, card_id, usage_date) DO UPDATE SET
+            battle_count = battle_count + 1
+        """,
+        (str(user_id), str(card_id), today),
+    )
 
 
 def _user_display_name(conn: sqlite3.Connection, user_id: str) -> str:
@@ -189,18 +259,7 @@ def count_battle_alerts(conn: sqlite3.Connection, user_id: str) -> int:
         """,
         (user_id, now),
     ).fetchone()["c"]
-    team_turn = conn.execute(
-        """
-        SELECT COUNT(*) AS c FROM poketab_battle_invites
-        WHERE status = 'team_select' AND expires_at > ?
-          AND (
-            (target_id = ? AND target_team IS NULL)
-            OR (challenger_id = ? AND challenger_team IS NULL)
-          )
-        """,
-        (now, user_id, user_id),
-    ).fetchone()["c"]
-    return int(incoming) + int(team_turn)
+    return int(incoming)
 
 
 def _expire_stale_invites(conn: sqlite3.Connection) -> None:
@@ -289,6 +348,9 @@ def battleable_opponents(
         vault_ids = _user_vault_ids(conn, uid, valid_ids)
         if len(vault_ids) < config.min_vault_cards:
             continue
+        eligible = eligible_battle_cards(conn, uid, valid_ids)
+        if not eligible:
+            continue
         seen.add(uid)
         opp_balance = _user_balance(conn, uid)
         name = (player.get("username") or _user_display_name(conn, uid))[:24]
@@ -299,6 +361,7 @@ def battleable_opponents(
                 "skin": player.get("skin") or "009",
                 "online": True,
                 "vault_cards": len(vault_ids),
+                "eligible_cards": len(eligible),
                 "balance": opp_balance,
                 "can_afford_min_bet": opp_balance >= MIN_BET,
                 "is_friend": uid in friend_ids,
@@ -323,6 +386,12 @@ def _pre_battle_check(
     vault_ids = _user_vault_ids(conn, user_id, valid_ids)
     if len(vault_ids) < config.min_vault_cards:
         return f"You need at least {config.min_vault_cards} PokéCard(s) in your vault."
+    eligible = eligible_battle_cards(conn, user_id, valid_ids)
+    if not eligible:
+        return (
+            f"No battle-ready cards today — each card can fight "
+            f"{MAX_DAILY_BATTLES_PER_CARD} times per day."
+        )
     if bet < MIN_BET:
         return f"Minimum wager is {MIN_BET} $POKECARD."
     if _user_balance(conn, user_id) < bet:
@@ -378,6 +447,7 @@ def respond_invite(
     invite_id: int,
     accept: bool,
     valid_ids: set[str],
+    catalog: Optional[dict] = None,
 ) -> dict:
     _expire_stale_invites(conn)
     row = conn.execute(
@@ -418,15 +488,156 @@ def respond_invite(
     if challenger_err:
         return {"ok": False, "error": f"Challenger unavailable: {challenger_err}"}
 
+    start = _assign_random_teams_and_start(
+        conn,
+        invite_id,
+        valid_ids,
+        catalog=catalog,
+        viewer_id=user_id,
+    )
+    if not start.get("ok"):
+        return start
+
+    return {
+        "ok": True,
+        "accepted": True,
+        "invite_id": invite_id,
+        "started": True,
+        "game_id": start.get("game_id"),
+        "battle": start.get("battle"),
+        "my_card": start.get("target_card") if user_id == row["target_id"] else start.get("challenger_card"),
+        "opponent_card": start.get("challenger_card") if user_id == row["target_id"] else start.get("target_card"),
+    }
+
+
+def _assign_random_teams_and_start(
+    conn: sqlite3.Connection,
+    invite_id: int,
+    valid_ids: set[str],
+    *,
+    catalog: Optional[dict] = None,
+    viewer_id: Optional[str] = None,
+) -> dict:
+    row = conn.execute(
+        "SELECT * FROM poketab_battle_invites WHERE id = ?", (invite_id,)
+    ).fetchone()
+    if not row:
+        return {"ok": False, "error": "Invite not found."}
+    if row["status"] not in ("pending", "team_select"):
+        return {"ok": False, "error": "Invite is not ready to start."}
+
+    p1 = str(row["challenger_id"])
+    p2 = str(row["target_id"])
+    team1 = _pick_random_team(conn, p1, valid_ids)
+    if not team1:
+        return {
+            "ok": False,
+            "error": (
+                "Challenger has no cards left today "
+                f"(max {MAX_DAILY_BATTLES_PER_CARD} battles per card per day)."
+            ),
+        }
+    team2 = _pick_random_team(conn, p2, valid_ids)
+    if not team2:
+        return {
+            "ok": False,
+            "error": (
+                "You have no cards left today "
+                f"(max {MAX_DAILY_BATTLES_PER_CARD} battles per card per day)."
+            ),
+        }
+
+    now = int(time.time())
     conn.execute(
         """
         UPDATE poketab_battle_invites
-        SET status = 'team_select', responded_at = ?, expires_at = ?
+        SET status = 'team_select',
+            responded_at = ?,
+            expires_at = ?,
+            challenger_team = ?,
+            target_team = ?
         WHERE id = ?
         """,
-        (now, now + INVITE_TTL_SEC, invite_id),
+        (now, now + INVITE_TTL_SEC, json.dumps(team1), json.dumps(team2), invite_id),
     )
-    return {"ok": True, "accepted": True, "invite_id": invite_id}
+
+    started = _try_start_battle(conn, invite_id, valid_ids)
+    if not started:
+        conn.execute(
+            "UPDATE poketab_battle_invites SET status = 'cancelled' WHERE id = ?",
+            (invite_id,),
+        )
+        return {"ok": False, "error": "Could not start battle."}
+
+    invite_row = conn.execute(
+        "SELECT game_id FROM poketab_battle_invites WHERE id = ?",
+        (invite_id,),
+    ).fetchone()
+    game_id = invite_row["game_id"] if invite_row else None
+    out: dict[str, Any] = {
+        "ok": True,
+        "started": True,
+        "game_id": game_id,
+        "challenger_card": team1[0],
+        "target_card": team2[0],
+    }
+    if catalog and viewer_id and game_id:
+        game = _load_game_from_conn(conn, game_id)
+        if game:
+            out["battle"] = _serialize_game(
+                game,
+                viewer_id,
+                catalog,
+                [
+                    "A random PokéCard enters the arena!",
+                    f"{_user_display_name(conn, p1)} vs {_user_display_name(conn, p2)}",
+                ],
+            )
+    return out
+
+
+def _resolve_stale_team_select(
+    conn: sqlite3.Connection,
+    invite_id: int,
+    valid_ids: set[str],
+) -> bool:
+    """Finish legacy team_select invites by auto-picking random cards."""
+    row = conn.execute(
+        "SELECT * FROM poketab_battle_invites WHERE id = ?", (invite_id,)
+    ).fetchone()
+    if not row or row["status"] != "team_select":
+        return False
+    if row["game_id"]:
+        return True
+
+    p1 = str(row["challenger_id"])
+    p2 = str(row["target_id"])
+    team1 = (
+        json.loads(row["challenger_team"])
+        if row["challenger_team"]
+        else _pick_random_team(conn, p1, valid_ids)
+    )
+    team2 = (
+        json.loads(row["target_team"])
+        if row["target_team"]
+        else _pick_random_team(conn, p2, valid_ids)
+    )
+    if not team1 or not team2:
+        conn.execute(
+            "UPDATE poketab_battle_invites SET status = 'cancelled' WHERE id = ?",
+            (invite_id,),
+        )
+        return False
+
+    conn.execute(
+        """
+        UPDATE poketab_battle_invites
+        SET challenger_team = ?, target_team = ?
+        WHERE id = ?
+        """,
+        (json.dumps(team1), json.dumps(team2), invite_id),
+    )
+    return _try_start_battle(conn, invite_id, valid_ids)
 
 
 def cancel_invite(conn: sqlite3.Connection, user_id: str, invite_id: int) -> dict:
@@ -454,64 +665,42 @@ def set_team(
     valid_ids: set[str],
     catalog: Optional[dict] = None,
 ) -> dict:
+    """Legacy endpoint — battles now auto-pick a random eligible vault card."""
     _expire_stale_invites(conn)
     row = conn.execute(
         "SELECT * FROM poketab_battle_invites WHERE id = ?", (invite_id,)
     ).fetchone()
     if not row:
         return {"ok": False, "error": "Invite not found."}
-    if row["status"] != "team_select":
-        return {"ok": False, "error": "Not in team selection."}
     if user_id not in (row["challenger_id"], row["target_id"]):
         return {"ok": False, "error": "Not part of this battle."}
 
-    if not isinstance(card_ids, list) or not card_ids:
-        return {"ok": False, "error": "Pick at least one PokéCard."}
-    if len(card_ids) > MAX_TEAM_SIZE:
-        return {"ok": False, "error": f"Maximum {MAX_TEAM_SIZE} PokéCards per team."}
+    if row["status"] == "pending":
+        return _assign_random_teams_and_start(
+            conn, invite_id, valid_ids, catalog=catalog, viewer_id=user_id
+        )
 
-    vault_ids = set(_user_vault_ids(conn, user_id, valid_ids))
-    team: list[str] = []
-    seen: set[str] = set()
-    for raw in card_ids:
-        try:
-            cid = resolve_card_id(str(raw).strip())
-        except KeyError:
-            return {"ok": False, "error": f"Unknown card: {raw}"}
-        if cid not in vault_ids:
-            return {"ok": False, "error": "Card not in your vault."}
-        if cid in seen:
-            continue
-        seen.add(cid)
-        team.append(cid)
+    if row["status"] == "team_select":
+        if _resolve_stale_team_select(conn, invite_id, valid_ids):
+            invite_row = conn.execute(
+                "SELECT game_id FROM poketab_battle_invites WHERE id = ?",
+                (invite_id,),
+            ).fetchone()
+            game_id = invite_row["game_id"] if invite_row else None
+            out: dict[str, Any] = {"ok": True, "started": True, "game_id": game_id}
+            if catalog and game_id:
+                game = _load_game_from_conn(conn, game_id)
+                if game:
+                    out["battle"] = _serialize_game(
+                        game,
+                        user_id,
+                        catalog,
+                        ["A random PokéCard enters the arena!"],
+                    )
+            return out
+        return {"ok": False, "error": "Could not start battle."}
 
-    if not team:
-        return {"ok": False, "error": "Pick at least one valid PokéCard."}
-
-    col = "challenger_team" if user_id == row["challenger_id"] else "target_team"
-    conn.execute(
-        f"UPDATE poketab_battle_invites SET {col} = ? WHERE id = ?",
-        (json.dumps(team), invite_id),
-    )
-
-    started = _try_start_battle(conn, invite_id, valid_ids)
-    out: dict = {"ok": True, "team": team, "started": bool(started)}
-    if started and catalog is not None:
-        invite_row = conn.execute(
-            "SELECT game_id FROM poketab_battle_invites WHERE id = ?",
-            (invite_id,),
-        ).fetchone()
-        game_id = invite_row["game_id"] if invite_row else None
-        if game_id:
-            game = _load_game_from_conn(conn, game_id)
-            if game:
-                out["battle"] = _serialize_game(
-                    game,
-                    user_id,
-                    catalog,
-                    ["The battle begins! Choose your fighter!"],
-                )
-    return out
+    return {"ok": False, "error": "Battle already started or invite closed."}
 
 
 def _adjust_balance_on_conn(conn: sqlite3.Connection, user_id: str, delta: int) -> None:
@@ -668,6 +857,8 @@ def _try_start_battle(conn: sqlite3.Connection, invite_id: int, valid_ids: set[s
         """,
         (game_id, invite_id),
     )
+    _record_card_battle_usage(conn, p1, team1[0])
+    _record_card_battle_usage(conn, p2, team2[0])
     return True
 
 
@@ -802,7 +993,11 @@ def get_status(
     pending = _pending_invite_for_user(conn, user_id)
     invite = None
     if pending:
-        invite = _invite_brief(pending, conn, user_id)
+        if pending["status"] == "team_select":
+            _resolve_stale_team_select(conn, int(pending["id"]), set(catalog.keys()))
+            pending = _pending_invite_for_user(conn, user_id)
+        if pending and pending["status"] in ("pending", "team_select", "active"):
+            invite = _invite_brief(pending, conn, user_id)
 
     active_doc = _active_game_for_user(conn, user_id)
     battle = None
@@ -836,6 +1031,8 @@ def get_status(
         "incoming_invites": incoming,
         "invite": invite,
         "battle": battle,
+        "eligible_cards": len(eligible_battle_cards(conn, user_id, set(catalog.keys()))),
+        "daily_battles_per_card": MAX_DAILY_BATTLES_PER_CARD,
     }
 
 

@@ -117,20 +117,39 @@ function showLevelUpToast(level, title, xpGained) {
 
 function renderProfileXp() {
     const stats = session?.trainer_stats
-    if (!stats) return
-    const lvlEl = document.getElementById("profile-level")
-    const xpEl = document.getElementById("profile-xp")
-    const fill = document.getElementById("profile-xpfill")
-    const hint = document.getElementById("profile-xp-hint")
-    const level = Number(stats.level ?? 0)
-    if (lvlEl) lvlEl.textContent = `Lv.${level} · ${stats.level_title || "Trainer"}`
-    if (xpEl) xpEl.textContent = `${Number(stats.stats_xp ?? 0)} XP`
-    const span = Math.max(1, Number(stats.xp_span ?? 1))
-    const into = Number(stats.xp_into_level ?? 0)
-    if (fill) fill.style.width = `${Math.min(100, (into / span) * 100)}%`
-    if (hint) {
-        const req = formatNextLevelRequirements(stats)
-        hint.textContent = req ? `Next level: ${req}` : (stats.level_description || "")
+    if (stats) {
+        const lvlEl = document.getElementById("profile-level")
+        const xpEl = document.getElementById("profile-xp")
+        const fill = document.getElementById("profile-xpfill")
+        const hint = document.getElementById("profile-xp-hint")
+        const level = Number(stats.level ?? 0)
+        if (lvlEl) lvlEl.textContent = `Lv.${level} · ${stats.level_title || "Trainer"}`
+        if (xpEl) xpEl.textContent = `${Number(stats.stats_xp ?? 0)} XP`
+        const span = Math.max(1, Number(stats.xp_span ?? 1))
+        const into = Number(stats.xp_into_level ?? 0)
+        if (fill) fill.style.width = `${Math.min(100, (into / span) * 100)}%`
+        if (hint) {
+            const req = formatNextLevelRequirements(stats)
+            hint.textContent = req ? `Next level: ${req}` : (stats.level_description || "")
+        }
+    }
+    renderGameHudXp()
+}
+
+function renderGameHudXp() {
+    const stats = session?.trainer_stats
+    const level = Number(session?.level ?? stats?.level ?? 0)
+    const title = stats?.level_title || "Newcomer"
+    const xp = Number(stats?.stats_xp ?? 0)
+    const lvlEl = document.getElementById("stat-level")
+    const xpEl = document.getElementById("stat-xp")
+    const fill = document.getElementById("stat-xpfill")
+    if (lvlEl) lvlEl.textContent = `${level} · ${title}`
+    if (xpEl) xpEl.textContent = String(xp)
+    if (fill) {
+        const span = Math.max(1, Number(stats?.xp_span ?? 1))
+        const into = Number(stats?.xp_into_level ?? 0)
+        fill.style.width = `${Math.min(100, (into / span) * 100)}%`
     }
 }
 
@@ -257,6 +276,7 @@ function startGameHud() {
     if (!window.TelegramGame?.onPlayerPosition) return
 
     updateBalanceDisplays()
+    renderGameHudXp()
     fetchWorldStats()
     statsInterval = setInterval(fetchWorldStats, 3000)
 
@@ -1789,6 +1809,7 @@ async function saveSkin(skin, displayName) {
 
 function populateMenu() {
     updateBalanceDisplays()
+    renderGameHudXp()
     const lvl = Number(session?.level ?? session?.trainer_stats?.level) || 0
     const xp = Number(session?.trainer_stats?.stats_xp) || 0
     document.getElementById("menu-player-name").textContent = truncateDisplayName(session.display_name)

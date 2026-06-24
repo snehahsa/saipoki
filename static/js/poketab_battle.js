@@ -2,7 +2,7 @@
  * PokéTab Battle — wager matches with Game Boy-style arena UI.
  */
 (function () {
-    const MAX_TEAM = 1
+    const MAX_DAILY_BATTLES_PER_CARD = 3
     const CARD_CATALOG = window.APP_CONFIG?.cardCatalog || {}
     const TYPE_COLORS = {
         Normal: "#a8a878",
@@ -37,7 +37,6 @@
     let alertPollTimer = null
     let turnTimer = null
     let statusCache = null
-    let selectedTeam = new Set()
     let activeInviteId = null
     let battleLog = []
     let pendingAutoSelect = null
@@ -165,10 +164,6 @@
         return !document.getElementById("poketab-battle-overlay")?.classList.contains("hidden")
     }
 
-    function isInTeamSelect() {
-        return !document.getElementById("poketab-battle-team")?.classList.contains("hidden")
-    }
-
     function isBattleViewActive() {
         return document.querySelector('[data-poketab-view="battle"]')?.classList.contains("active")
     }
@@ -181,7 +176,7 @@
     function syncBattleFromStatus(data, { forceOpen = false } = {}) {
         const battle = data?.battle
         const invite = data?.invite
-        const autoOpen = forceOpen || (isPoketabOpen() && (isBattleViewActive() || isInArena() || isInTeamSelect()))
+        const autoOpen = forceOpen || (isPoketabOpen() && (isBattleViewActive() || isInArena()))
 
         if (battle) {
             if (autoOpen || isInArena()) {
@@ -190,25 +185,17 @@
             return
         }
 
-        if (invite?.status === "team_select" && !invite.my_team_ready) {
-            if (autoOpen || isInTeamSelect()) {
-                openTeamSelect(invite.id, invite.bet)
-            }
-            return
-        }
-
-        if (invite?.status === "team_select" && invite.my_team_ready && !invite.opponent_team_ready) {
-            if (autoOpen || isInTeamSelect() || isBattleViewActive()) {
-                showBattleWaiting("TEAM LOCKED — WAITING FOR FOE...")
+        if (invite?.status === "pending" && invite.is_challenger) {
+            if (autoOpen || isBattleViewActive()) {
+                showBattleWaiting("CHALLENGE SENT — AWAITING REPLY...")
             }
         }
     }
 
     function showBattleWaiting(message) {
-        document.getElementById("poketab-battle-team")?.classList.add("hidden")
         document.getElementById("poketab-battle-lobby")?.classList.remove("hidden")
         closeArena()
-        setTallMonitor(false)
+        setTallMonitor(true)
         setView("battle")
         const list = document.getElementById("poketab-battle-opponents")
         if (list) {
@@ -217,11 +204,11 @@
     }
 
     function isFlowLocked() {
-        if (isInArena() || isInTeamSelect()) return true
+        if (isInArena()) return true
         const battle = statusCache?.battle
         if (battle && battle.phase !== "ended") return true
         const invite = statusCache?.invite
-        return !!(invite && (invite.status === "pending" || invite.status === "team_select"))
+        return !!(invite && invite.status === "pending")
     }
 
     function resumeBattleView() {
@@ -231,22 +218,8 @@
             return true
         }
         const invite = statusCache?.invite
-        if (invite?.status === "team_select" && !invite.my_team_ready) {
-            openTeamSelect(invite.id, invite.bet)
-            return true
-        }
-        if (invite?.status === "team_select" && invite.my_team_ready && !invite.opponent_team_ready) {
-            showBattleWaiting("TEAM LOCKED — WAITING FOR FOE...")
-            return true
-        }
         if (invite?.status === "pending" && invite.is_challenger) {
-            setView("battle")
-            document.getElementById("poketab-battle-team")?.classList.add("hidden")
-            document.getElementById("poketab-battle-lobby")?.classList.remove("hidden")
-            const list = document.getElementById("poketab-battle-opponents")
-            if (list) {
-                list.innerHTML = `<p class="poketab-empty">CHALLENGE SENT — AWAITING REPLY...</p>`
-            }
+            showBattleWaiting("CHALLENGE SENT — AWAITING REPLY...")
             return true
         }
         return false
@@ -259,9 +232,7 @@
         const battle = statusCache?.battle
         const count = (invites?.length || 0) + (battleAlerts || 0)
         const hasContent = (invites?.length || 0) > 0
-            || (invite?.status === "team_select" && !invite.my_team_ready)
             || (invite?.status === "pending" && invite.is_challenger)
-            || (invite?.status === "team_select" && invite.my_team_ready && !invite.opponent_team_ready)
             || (battle && battle.phase !== "ended")
         panel.classList.toggle("poketab-duel-module-alert", count > 0 || hasContent)
         if (!invites?.length && !invite && !battle) {
@@ -292,25 +263,6 @@
                 </div>
             `)
         }
-        if (invite?.status === "team_select" && !invite.my_team_ready) {
-            chunks.push(`
-                <div class="poketab-duel-card poketab-duel-card-warn">
-                    <p class="poketab-duel-title">TEAM</p>
-                    <p class="poketab-duel-body">vs ${escapeHtml(invite.opponent?.display_name || "Trainer")}</p>
-                    <p class="poketab-duel-wager">${formatCoins(invite.bet)} $POKE</p>
-                    <button type="button" class="poketab-duel-btn accept" data-battle-pick-team="${invite.id}">PICK</button>
-                </div>
-            `)
-        }
-        if (invite?.status === "team_select" && invite.my_team_ready && !invite.opponent_team_ready) {
-            chunks.push(`
-                <div class="poketab-duel-card poketab-duel-card-warn">
-                    <p class="poketab-duel-title">READY</p>
-                    <p class="poketab-duel-body">vs ${escapeHtml(invite.opponent?.display_name || "Trainer")}</p>
-                    <p class="poketab-duel-wager">WAITING FOR FOE TEAM...</p>
-                </div>
-            `)
-        }
         if (battle && battle.phase !== "ended") {
             chunks.push(`
                 <div class="poketab-duel-card poketab-duel-card-live">
@@ -328,6 +280,20 @@
         if (el) el.textContent = `> BALANCE: ${formatCoins(balance)} $POKE`
     }
 
+    function updateEligibleHint(data) {
+        const el = document.getElementById("poketab-battle-eligible")
+        if (!el) return
+        const eligible = Number(data?.eligible_cards)
+        const daily = Number(data?.daily_battles_per_card) || MAX_DAILY_BATTLES_PER_CARD
+        if (!Number.isFinite(eligible)) {
+            el.textContent = ""
+            return
+        }
+        el.textContent = eligible > 0
+            ? `> ${eligible} CARD${eligible === 1 ? "" : "S"} READY TODAY (${daily}/CARD/DAY)`
+            : `> NO CARDS LEFT TODAY (${daily} FIGHTS PER CARD)`
+    }
+
     async function loadOpponents() {
         const list = document.getElementById("poketab-battle-opponents")
         if (!list) return
@@ -336,6 +302,7 @@
         try {
             const data = await apiPost("/api/poketab/battle/opponents")
             updateBalanceDisplay(data.balance)
+            updateEligibleHint(data)
             const opponents = data.opponents || []
             if (!opponents.length) {
                 list.innerHTML = `<p class="poketab-empty">NO BATTLE-READY TRAINERS ONLINE.</p>`
@@ -348,11 +315,12 @@
                 const friendTag = opp.is_friend
                     ? `<span class="poketab-pill poketab-pill-friend">FRIEND</span> `
                     : ""
+                const readyCards = opp.eligible_cards ?? opp.vault_cards ?? 0
                 return `
                     <div class="poketab-row poketab-battle-opp-row">
                         <div class="poketab-row-main">
                             <div class="poketab-row-name">${friendTag}${escapeHtml(opp.display_name)}</div>
-                            <div class="poketab-battle-opp-meta">${opp.vault_cards} cards · ${formatCoins(opp.balance)} $POKE</div>
+                            <div class="poketab-battle-opp-meta">${readyCards} ready · ${formatCoins(opp.balance)} $POKE</div>
                         </div>
                         <button type="button" class="poketab-action-btn poketab-battle-challenge-btn"
                             data-challenge-id="${escapeHtml(opp.telegram_id)}"
@@ -418,11 +386,30 @@
                 action: accept ? "accept" : "decline",
             })
             if (accept) {
-                showToast("Challenge accepted — pick your team!")
                 activeInviteId = inviteId
                 setView("battle")
-                await refreshStatus()
-                await openTeamSelect(inviteId, statusCache?.invite?.bet)
+                if (data.battle) {
+                    showToast(data.my_card
+                        ? `Random pick: ${cardMeta(data.my_card).name || data.my_card}!`
+                        : "Battle begins!")
+                    statusCache = { ...(statusCache || {}), battle: data.battle, invite: null }
+                    openArena(data.battle)
+                    await refreshStatus(true)
+                } else if (data.started) {
+                    showToast("Battle begins!")
+                    await refreshStatus()
+                    if (statusCache?.battle) {
+                        openArena(statusCache.battle)
+                    } else {
+                        showBattleWaiting("STARTING BATTLE...")
+                        window.setTimeout(() => refreshStatus().then(() => {
+                            if (statusCache?.battle) openArena(statusCache.battle)
+                        }), 600)
+                    }
+                } else {
+                    showToast("Challenge accepted!")
+                    await refreshStatus()
+                }
                 if (triggerBtn) triggerBtn.textContent = "GO"
             } else {
                 showToast("Challenge declined.")
@@ -444,97 +431,6 @@
             "poketab-monitor-glass--battle",
             Boolean(on),
         )
-    }
-
-    async function openTeamSelect(inviteId, bet) {
-        activeInviteId = inviteId
-        selectedTeam = new Set()
-        document.getElementById("poketab-battle-lobby")?.classList.add("hidden")
-        const teamEl = document.getElementById("poketab-battle-team")
-        teamEl?.classList.remove("hidden")
-        setTallMonitor(true)
-        const hint = document.getElementById("poketab-battle-team-hint")
-        if (hint) {
-            hint.textContent = `> WAGER ${formatCoins(bet || 0)} $POKE · PICK 1 CARD`
-        }
-        try {
-            await Promise.resolve(onBalanceUpdate())
-        } catch {
-            /* vault refresh best-effort */
-        }
-        renderTeamGrid()
-        setView("battle")
-    }
-
-    function renderTeamGrid() {
-        const grid = document.getElementById("poketab-battle-team-grid")
-        const hint = document.getElementById("poketab-battle-team-hint")
-        if (!grid) return
-        const vault = getVault()
-        if (!vault.length) {
-            grid.innerHTML = `<p class="poketab-empty">NO CARDS IN VAULT.</p>`
-            return
-        }
-        grid.innerHTML = vault.map((cardId) => {
-            const meta = cardMeta(cardId)
-            const selected = selectedTeam.has(cardId)
-            const src = meta.src
-            return `
-                <button type="button" class="poketab-battle-card${selected ? " selected" : ""}" data-team-card="${escapeHtml(cardId)}">
-                    ${src ? `<img src="${escapeHtml(src)}" alt="">` : `<span class="poketab-battle-card-fallback" style="background:${typeColor(meta.type)}"></span>`}
-                    <span class="poketab-battle-card-name">${escapeHtml(meta.name || cardId)}</span>
-                    <span class="poketab-battle-card-type">${escapeHtml(meta.type || "")}</span>
-                </button>
-            `
-        }).join("")
-        if (hint) {
-            const bet = statusCache?.invite?.bet || 0
-            hint.textContent = `> WAGER ${formatCoins(bet)} $POKE · PICK 1 CARD${selectedTeam.size ? " ✓" : ""}`
-        }
-    }
-
-    async function confirmTeam() {
-        if (!activeInviteId || selectedTeam.size < 1) {
-            showToast("Pick at least one card.", true)
-            return
-        }
-        const confirmBtn = document.getElementById("poketab-battle-team-confirm")
-        if (confirmBtn) confirmBtn.disabled = true
-        setLedState("busy")
-        try {
-            const data = await apiPost("/api/poketab/battle/team", {
-                invite_id: activeInviteId,
-                card_ids: [...selectedTeam],
-            })
-            document.getElementById("poketab-battle-team")?.classList.add("hidden")
-            if (data.battle) {
-                showToast("Battle begins!")
-                statusCache = { ...(statusCache || {}), battle: data.battle, invite: null }
-                openArena(data.battle)
-                await refreshStatus(true)
-            } else if (data.started) {
-                showToast("Battle begins!")
-                await refreshStatus()
-                if (statusCache?.battle) {
-                    openArena(statusCache.battle)
-                } else {
-                    showBattleWaiting("STARTING BATTLE...")
-                    window.setTimeout(() => refreshStatus().then(() => {
-                        if (statusCache?.battle) openArena(statusCache.battle)
-                    }), 600)
-                }
-            } else {
-                showToast("Team locked — waiting for opponent...")
-                showBattleWaiting("TEAM LOCKED — WAITING FOR FOE...")
-                await refreshStatus(true)
-            }
-            setLedState("ready")
-        } catch (err) {
-            showToast(err.message, true)
-            setLedState("error")
-        } finally {
-            if (confirmBtn) confirmBtn.disabled = false
-        }
     }
 
     function stopPoll() {
@@ -563,7 +459,6 @@
 
     function openArena(battle) {
         if (!battle) return
-        document.getElementById("poketab-battle-team")?.classList.add("hidden")
         document.getElementById("poketab-battle-lobby")?.classList.add("hidden")
         const overlay = document.getElementById("poketab-battle-overlay")
         const monitorInner = document.querySelector(".poketab-monitor-inner")
@@ -585,7 +480,7 @@
         overlay?.classList.add("hidden")
         overlay?.setAttribute("aria-hidden", "true")
         document.querySelector(".poketab-monitor-inner")?.classList.remove("poketab-monitor-inner--battle")
-        setTallMonitor(isInTeamSelect())
+        setTallMonitor(isBattleViewActive())
         battleLog = []
         bagMenuOpen = false
         revivePickOptions = null
@@ -786,6 +681,7 @@
             const data = await apiPost("/api/poketab/battle/status")
             statusCache = data
             updateBalanceDisplay(data.balance)
+            updateEligibleHint(data)
             if (data.trainer_stats && window.SaiPokeTrainer?.applyTrainerStats) {
                 window.SaiPokeTrainer.applyTrainerStats(data.trainer_stats, { xp_gained: 20 })
             }
@@ -801,9 +697,8 @@
     function openBattleLobby() {
         if (resumeBattleView()) return
         document.getElementById("poketab-battle-lobby")?.classList.remove("hidden")
-        document.getElementById("poketab-battle-team")?.classList.add("hidden")
         closeArena()
-        setTallMonitor(false)
+        setTallMonitor(true)
         setView("battle")
         updateBalanceDisplay(getBalance())
         loadOpponents()
@@ -852,28 +747,12 @@
 
         document.getElementById("poketab-battle-wager")?.addEventListener("change", loadOpponents)
 
-        document.getElementById("poketab-battle-team-grid")?.addEventListener("click", (e) => {
-            const btn = e.target.closest("[data-team-card]")
-            if (!btn) return
-            const id = btn.dataset.teamCard
-            if (selectedTeam.has(id)) {
-                selectedTeam.delete(id)
-            } else {
-                selectedTeam.clear()
-                selectedTeam.add(id)
-            }
-            renderTeamGrid()
-        })
-
-        document.getElementById("poketab-battle-team-confirm")?.addEventListener("click", confirmTeam)
-
         const duelRoot = document.getElementById("poketab-modal") || document.getElementById("poketab-alert-panel")
         duelRoot?.addEventListener("click", async (e) => {
             const accept = e.target.closest("[data-battle-accept]")
             const decline = e.target.closest("[data-battle-decline]")
-            const pick = e.target.closest("[data-battle-pick-team]")
             const resume = e.target.closest("[data-battle-resume]")
-            if (!accept && !decline && !pick && !resume) return
+            if (!accept && !decline && !resume) return
             e.preventDefault()
             e.stopPropagation()
             if (accept) {
@@ -884,14 +763,6 @@
             if (decline) {
                 const inviteId = parseInviteId(decline.dataset.battleDecline)
                 if (inviteId) await respondInvite(inviteId, false, decline)
-                return
-            }
-            if (pick) {
-                const inviteId = parseInviteId(pick.dataset.battlePickTeam)
-                if (inviteId) {
-                    setView("battle")
-                    await openTeamSelect(inviteId, statusCache?.invite?.bet)
-                }
                 return
             }
             if (resume && statusCache?.battle) {
