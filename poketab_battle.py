@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import re
 import sqlite3
@@ -30,6 +31,8 @@ from bot.utils.config_reader import config
 
 from poke_registry import parse_vault, vault_card_ids
 from trainer_stats import record_battle_outcome_on_conn
+
+log = logging.getLogger(__name__)
 
 MAX_TEAM_SIZE = 1
 INVITE_TTL_SEC = 300
@@ -114,6 +117,16 @@ def _run_async(coro):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(asyncio.run, coro).result()
+
+
+def notify_battle_quests(player_ids: list[int]) -> None:
+    """Fire quest hooks after the battle transaction commits (avoids nested DB locks)."""
+    if not player_ids:
+        return
+    try:
+        _run_async(quest_db.on_telegram_battle_finished(player_ids))
+    except Exception:
+        log.exception("battle quest notify failed")
 
 
 def _user_balance(conn: sqlite3.Connection, user_id: str) -> int:
@@ -794,8 +807,35 @@ def _player_from_team(user_id: str, name: str, team: list[str]) -> Player:
     )
 
 
-def _end_game(conn: sqlite3.Connection, winner_id: int, game: Game) -> None:
-    _update_game_on_conn(conn, game.game_id, {"winner": winner_id})
+def _end_game(conn: sqlite3.Connection, winner_id: int, game: Game) -> bool:
+    """Pay wager + record outcome once. Returns True if this call settled the battle."""
+    row = conn.execute(
+        "SELECT winner, bet FROM battle_games WHERE id = ?",
+        (str(game.game_id),),
+    ).fetchone()
+    if not row:
+        return False
+    if row["winner"] is not None:
+        game.winner = int(row["winner"])
+        return False
+
+    winner_id = int(winner_id)
+    updated = conn.execute(
+        "UPDATE battle_games SET winner = ? WHERE id = ? AND winner IS NULL",
+        (winner_id, str(game.game_id)),
+    ).rowcount
+    if not updated:
+        settled = conn.execute(
+            "SELECT winner FROM battle_games WHERE id = ?",
+            (str(game.game_id),),
+        ).fetchone()
+        if settled and settled["winner"] is not None:
+            game.winner = int(settled["winner"])
+        return False
+
+    game.winner = winner_id
+    _update_game_on_conn(conn, game.game_id, game.to_mongo())
+
     loser_id = game.player2.id if winner_id == game.player1.id else game.player1.id
     record_battle_outcome_on_conn(
         conn,
@@ -805,14 +845,60 @@ def _end_game(conn: sqlite3.Connection, winner_id: int, game: Game) -> None:
         bet=game.bet,
         source="poketab",
     )
-    _run_async(quest_db.on_telegram_battle_finished([game.player1.id, game.player2.id]))
 
-    if game.bet is None:
-        return
-    for_winner = game.bet * 2 * 0.95
-    prize_pool = game.bet * 2 * 0.05
-    _adjust_balance_on_conn(conn, str(winner_id), int(for_winner))
-    _deposit_burn_on_conn(conn, prize_pool)
+    bet = int(row["bet"] or game.bet or 0)
+    if bet > 0:
+        for_winner = int(bet * 2 * 0.95)
+        prize_pool = bet * 2 * 0.05
+        _adjust_balance_on_conn(conn, str(winner_id), for_winner)
+        _deposit_burn_on_conn(conn, prize_pool)
+
+    conn.execute(
+        """
+        UPDATE poketab_battle_invites
+        SET status = 'finished'
+        WHERE game_id = ? AND status IN ('active', 'team_select')
+        """,
+        (str(game.game_id),),
+    )
+    return True
+
+
+def _settle_battle(
+    conn: sqlite3.Connection,
+    game: Game,
+    winner: Player,
+    loser: Player,
+    log: list[str],
+    *,
+    win_type: str,
+) -> dict[str, Any]:
+    """Resolve timeout / flee / KO — idempotent payout for the winner."""
+    _save_game(conn, game)
+    settled = _end_game(conn, winner.id, game)
+    if win_type == "timeout":
+        log.append(f"⌛ {loser.name} ran out of time — {winner.name} wins!")
+    elif win_type == "flee":
+        log.append(f"🏃 {loser.name} fled — {winner.name} wins!")
+    elif win_type == "clear":
+        log.append(f"🏆 {winner.name} wins!")
+    return {
+        "settled": settled,
+        "winner_id": winner.id,
+        "log": log,
+        "quest_player_ids": [game.player1.id, game.player2.id] if settled else [],
+    }
+
+
+def _resolve_timeout_if_due(conn: sqlite3.Connection, game: Game) -> Optional[dict[str, Any]]:
+    if game.winner is not None:
+        return None
+    outcome = _maybe_timeout(game)
+    if not outcome:
+        return None
+    winner, loser = outcome
+    game.winner = winner.id
+    return _settle_battle(conn, game, winner, loser, [], win_type="timeout")
 
 
 def _try_start_battle(conn: sqlite3.Connection, invite_id: int, valid_ids: set[str]) -> bool:
@@ -841,13 +927,24 @@ def _try_start_battle(conn: sqlite3.Connection, invite_id: int, valid_ids: set[s
     _inc_stat_on_conn(conn, p1, "stats_wagered", bet)
     _inc_stat_on_conn(conn, p2, "stats_wagered", bet)
 
-    game = Game.new(
-        _player_from_team(p1, _user_display_name(conn, p1), team1),
-        _player_from_team(p2, _user_display_name(conn, p2), team2),
-        bet=bet,
-    )
-    game_id = _create_game_on_conn(conn, game.to_mongo())
-    game.game_id = game_id
+    try:
+        game = Game.new(
+            _player_from_team(p1, _user_display_name(conn, p1), team1),
+            _player_from_team(p2, _user_display_name(conn, p2), team2),
+            bet=bet,
+        )
+        game_id = _create_game_on_conn(conn, game.to_mongo())
+        game.game_id = game_id
+    except Exception:
+        _adjust_balance_on_conn(conn, p1, bet)
+        _adjust_balance_on_conn(conn, p2, bet)
+        _inc_stat_on_conn(conn, p1, "stats_wagered", -bet)
+        _inc_stat_on_conn(conn, p2, "stats_wagered", -bet)
+        conn.execute(
+            "UPDATE poketab_battle_invites SET status = 'cancelled' WHERE id = ?",
+            (invite_id,),
+        )
+        return False
 
     conn.execute(
         """
@@ -1001,36 +1098,29 @@ def get_status(
 
     active_doc = _active_game_for_user(conn, user_id)
     battle = None
+    quest_player_ids: list[int] = []
     if active_doc and active_doc.get("winner") is None:
         game = Game.from_mongo(active_doc)
-        timeout = _maybe_timeout(game)
-        if timeout:
-            winner, loser = timeout
-            game.winner = winner.id
-            _save_game(conn, game)
-            _end_game(conn, winner.id, game)
-            conn.execute(
-                """
-                UPDATE poketab_battle_invites SET status = 'finished'
-                WHERE game_id = ? AND status = 'active'
-                """,
-                (game.game_id,),
-            )
+        timeout_result = _resolve_timeout_if_due(conn, game)
+        if timeout_result:
+            quest_player_ids = timeout_result.get("quest_player_ids") or []
             battle = _serialize_game(
                 game,
                 user_id,
                 catalog,
-                [f"⌛ {loser.name} ran out of time — {winner.name} wins!"],
+                timeout_result["log"],
             )
         else:
             battle = _serialize_game(game, user_id, catalog, [])
 
+    balance = _user_balance(conn, user_id)
     return {
         "balance": balance,
         "battle_alerts": alerts,
         "incoming_invites": incoming,
         "invite": invite,
         "battle": battle,
+        "quest_player_ids": quest_player_ids,
         "eligible_cards": len(eligible_battle_cards(conn, user_id, set(catalog.keys()))),
         "daily_battles_per_card": MAX_DAILY_BATTLES_PER_CARD,
     }
@@ -1053,28 +1143,20 @@ def perform_action(
 
     game = Game.from_mongo(active_doc)
     if game.winner is not None:
-        return {"ok": False, "error": "Battle already ended."}
+        return {
+            "ok": True,
+            "ended": True,
+            "battle": _serialize_game(game, user_id, catalog, ["Battle already finished."]),
+        }
 
-    timeout = _maybe_timeout(game)
-    if timeout:
-        winner, loser = timeout
-        game.winner = winner.id
-        _save_game(conn, game)
-        _end_game(conn, winner.id, game)
-        conn.execute(
-            "UPDATE poketab_battle_invites SET status = 'finished' WHERE game_id = ?",
-            (game.game_id,),
-        )
+    timeout_result = _resolve_timeout_if_due(conn, game)
+    if timeout_result:
         return {
             "ok": True,
             "ended": True,
             "win_type": "timeout",
-            "battle": _serialize_game(
-                game,
-                user_id,
-                catalog,
-                [f"⌛ {loser.name} ran out of time!"],
-            ),
+            "quest_player_ids": timeout_result.get("quest_player_ids") or [],
+            "battle": _serialize_game(game, user_id, catalog, timeout_result["log"]),
         }
 
     viewer_int = int(user_id)
@@ -1105,18 +1187,13 @@ def perform_action(
     if action == "flee":
         winner, loser = game.game_over_coz_flee(viewer_int)
         game.winner = winner.id
-        _save_game(conn, game)
-        _end_game(conn, winner.id, game)
-        conn.execute(
-            "UPDATE poketab_battle_invites SET status = 'finished' WHERE game_id = ?",
-            (game.game_id,),
-        )
-        log.append(f"🏃 {loser.name} fled!")
+        result = _settle_battle(conn, game, winner, loser, [], win_type="flee")
         return {
             "ok": True,
             "ended": True,
             "win_type": "flee",
-            "battle": _serialize_game(game, user_id, catalog, log),
+            "quest_player_ids": result.get("quest_player_ids") or [],
+            "battle": _serialize_game(game, user_id, catalog, result["log"]),
         }
 
     if action == "attack":
@@ -1161,17 +1238,14 @@ def perform_action(
         if outcome:
             winner, loser = outcome
             game.winner = winner.id
-            _save_game(conn, game)
-            _end_game(conn, winner.id, game)
-            conn.execute(
-                "UPDATE poketab_battle_invites SET status = 'finished' WHERE game_id = ?",
-                (game.game_id,),
-            )
+            result = _settle_battle(conn, game, winner, loser, log, win_type="clear")
+            log = result["log"]
             log.append(f"☠️ {loser.name} is out of cards!")
             return {
                 "ok": True,
                 "ended": True,
                 "win_type": "clear",
+                "quest_player_ids": result.get("quest_player_ids") or [],
                 "battle": _serialize_game(game, user_id, catalog, log),
             }
         _save_game(conn, game)
@@ -1181,18 +1255,13 @@ def perform_action(
     if outcome:
         winner, loser = outcome
         game.winner = winner.id
-        _save_game(conn, game)
-        _end_game(conn, winner.id, game)
-        conn.execute(
-            "UPDATE poketab_battle_invites SET status = 'finished' WHERE game_id = ?",
-            (game.game_id,),
-        )
-        log.append(f"🏆 {winner.name} wins!")
+        result = _settle_battle(conn, game, winner, loser, log, win_type="clear")
         return {
             "ok": True,
             "ended": True,
             "win_type": "clear",
-            "battle": _serialize_game(game, user_id, catalog, log),
+            "quest_player_ids": result.get("quest_player_ids") or [],
+            "battle": _serialize_game(game, user_id, catalog, result["log"]),
         }
 
     return {"ok": True, "battle": _serialize_game(game, user_id, catalog, log)}

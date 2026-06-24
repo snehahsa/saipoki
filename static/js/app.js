@@ -143,14 +143,8 @@ function renderGameHudXp() {
     const xp = Number(stats?.stats_xp ?? 0)
     const lvlEl = document.getElementById("stat-level")
     const xpEl = document.getElementById("stat-xp")
-    const fill = document.getElementById("stat-xpfill")
     if (lvlEl) lvlEl.textContent = `${level} · ${title}`
     if (xpEl) xpEl.textContent = String(xp)
-    if (fill) {
-        const span = Math.max(1, Number(stats?.xp_span ?? 1))
-        const into = Number(stats?.xp_into_level ?? 0)
-        fill.style.width = `${Math.min(100, (into / span) * 100)}%`
-    }
 }
 
 function applyTrainerStats(stats, meta = {}) {

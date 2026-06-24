@@ -2812,23 +2812,6 @@ button::selection,
     color: #2d6a2d;
 }
 
-.hud-xpbar {
-    width: 100%;
-    height: 6px;
-    margin: 2px 0 4px;
-    background: #d8d0c4;
-    border: 1px solid #a89880;
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.hud-xpbar div {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, #78c850, #ffd838);
-    transition: width 0.3s ease;
-}
-
 .hud-line {
     text-transform: uppercase;
     white-space: nowrap;
@@ -4178,12 +4161,18 @@ body.poketab-open {
 .poketab-gb-field {
     flex-shrink: 0;
     display: flex;
+    flex-direction: column;
     justify-content: space-between;
-    align-items: flex-end;
-    gap: 10px;
-    min-height: 170px;
-    max-height: 240px;
+    align-items: stretch;
+    gap: 0;
+    min-height: 190px;
+    max-height: 260px;
     margin-bottom: 8px;
+}
+
+.poketab-gb-field-gap {
+    flex: 1 1 auto;
+    min-height: 18px;
 }
 
 .poketab-gb-timer {
@@ -4210,22 +4199,25 @@ body.poketab-open {
 .poketab-gb-me-panel {
     position: relative;
     min-height: 0;
-    flex: 1;
+    flex: 0 0 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    width: min(100%, calc(220px * var(--battle-hp-scale, 1.3)));
+    max-width: 100%;
 }
 
 .poketab-gb-me-panel {
+    align-self: flex-start;
     align-items: flex-start;
     justify-content: flex-end;
 }
 
 .poketab-gb-opp-panel {
+    align-self: flex-end;
     align-items: flex-end;
     justify-content: flex-start;
-    transform: translateY(-14px);
 }
 
 .poketab-gb-mon-stack {
@@ -4242,14 +4234,14 @@ body.poketab-open {
 }
 
 .poketab-gb-me-panel .poketab-gb-sprite {
-    width: calc(120px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
-    height: calc(120px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
+    width: calc(132px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
+    height: calc(132px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
     align-self: flex-start;
 }
 
 .poketab-gb-opp-panel .poketab-gb-sprite {
-    width: calc(72px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
-    height: calc(72px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
+    width: calc(68px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
+    height: calc(68px * var(--pt-scale, 0.78) * var(--battle-sprite-scale, 1.3));
     align-self: flex-end;
 }
 

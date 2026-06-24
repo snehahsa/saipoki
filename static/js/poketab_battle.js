@@ -583,16 +583,17 @@
                     <div class="poketab-gb-wager">⚡ ${formatCoins(battle.bet)} $POKE</div>
                 </div>
                 <div class="poketab-gb-field">
+                    <div class="poketab-gb-opp-panel">
+                        <div class="poketab-gb-mon-stack poketab-gb-mon-stack--opp">
+                            ${oppMon ? spriteHtml(oppMon, false) : ""}
+                            ${oppMon ? hpBarHtml(oppMon.hp, oppMon.max_hp, oppMon.name) : `<span class="poketab-gb-hpname">${escapeHtml(opp.name)}</span>`}
+                        </div>
+                    </div>
+                    <div class="poketab-gb-field-gap" aria-hidden="true"></div>
                     <div class="poketab-gb-me-panel">
                         <div class="poketab-gb-mon-stack">
                             ${myMon ? spriteHtml(myMon, true) : ""}
                             ${myMon ? hpBarHtml(myMon.hp, myMon.max_hp, myMon.name) : `<span class="poketab-gb-hpname">${escapeHtml(me.name)}</span>`}
-                        </div>
-                    </div>
-                    <div class="poketab-gb-opp-panel">
-                        <div class="poketab-gb-mon-stack poketab-gb-mon-stack--opp">
-                            ${oppMon ? hpBarHtml(oppMon.hp, oppMon.max_hp, oppMon.name) : `<span class="poketab-gb-hpname">${escapeHtml(opp.name)}</span>`}
-                            ${oppMon ? spriteHtml(oppMon, false) : ""}
                         </div>
                     </div>
                 </div>
@@ -664,6 +665,9 @@
             if (data.ended) {
                 if (data.trainer_stats && window.SaiPokeTrainer?.applyTrainerStats) {
                     window.SaiPokeTrainer.applyTrainerStats(data.trainer_stats, { xp_gained: 20 })
+                }
+                if (data.balance != null && window.session) {
+                    window.session.balance = data.balance
                 }
                 onBalanceUpdate()
                 refreshSummary()

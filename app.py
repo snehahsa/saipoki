@@ -67,6 +67,7 @@ from poketab_battle import (
     count_battle_alerts,
     ensure_schema as ensure_poketab_battle_schema,
     get_status as poketab_battle_status,
+    notify_battle_quests,
     perform_action as poketab_battle_action,
     respond_invite,
     send_challenge,
@@ -93,6 +94,7 @@ TEST_PLAYER_USER = {
     "username": "test_trainer",
 }
 TEST_PLAYER_HOLDS = ["bag", "card_vault", "poketab"]
+TEST_PLAYER_STARTER_CARDS = ("poke-006", "poke-009", "poke-010")
 TEST_QUERY_RESERVED = frozenset({"tgWebAppStartParam", "v", "_"})
 def resolve_game_server_internal() -> str:
     """Game server URL for Flask → game proxy (Railway private or public)."""
@@ -292,6 +294,44 @@ def test_telegram_id_for_slug(slug: str) -> str:
     digest = hashlib.sha256(slug.encode()).hexdigest()
     offset = int(digest[:8], 16) % 8998
     return str(999990002 + offset)
+
+
+def ensure_test_player_profile(conn, telegram_id: str) -> None:
+    """Persist starter vault + holds for URL test trainers (same DB as real users)."""
+    row = conn.execute(
+        "SELECT holds, vault FROM users WHERE telegram_id = ?",
+        (telegram_id,),
+    ).fetchone()
+    if not row:
+        return
+
+    catalog = load_card_catalog(Path(__file__).resolve().parent / "poke.json")
+    vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+    holds = list(parse_holds(row["holds"] if "holds" in row.keys() else None))
+    vault_changed = False
+
+    for card_id in TEST_PLAYER_STARTER_CARDS:
+        if card_id not in catalog:
+            continue
+        vault, added = add_card_to_vault(vault, card_id, source="test_starter")
+        vault_changed = vault_changed or added
+
+    holds_changed = False
+    for hold_id in TEST_PLAYER_HOLDS:
+        if hold_id not in holds:
+            holds.append(hold_id)
+            holds_changed = True
+
+    if not vault_changed and not holds_changed:
+        return
+
+    conn.execute(
+        """
+        UPDATE users SET vault = ?, holds = ?, updated_at = ?
+        WHERE telegram_id = ?
+        """,
+        (json.dumps(vault), json.dumps(holds), int(time.time()), telegram_id),
+    )
 
 
 def build_test_user(slug: Optional[str] = None) -> dict:
@@ -765,6 +805,16 @@ def auth():
             ).fetchone()
             if row_after:
                 quest_progress = parse_quest_progress(row_after["quest_progress"])
+
+        if request_is_test_mode(data):
+            ensure_test_player_profile(conn, telegram_id)
+            row_test = conn.execute(
+                "SELECT vault, holds FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+            ).fetchone()
+            if row_test:
+                vault = vault_for_user(row_test["vault"] if "vault" in row_test.keys() else None)
+                holds = parse_holds(row_test["holds"] if "holds" in row_test.keys() else None)
 
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
 
@@ -1320,8 +1370,10 @@ def poketab_battle_status_api():
     if err:
         return err
     catalog = card_catalog_for_client()
+    quest_player_ids: list[int] = []
     with get_db() as conn:
         payload = poketab_battle_status(conn, telegram_id, catalog)
+        quest_player_ids = payload.pop("quest_player_ids", []) or []
         battle = payload.get("battle") or {}
         if battle.get("phase") == "ended":
             row = conn.execute(
@@ -1335,6 +1387,7 @@ def poketab_battle_status_api():
                 stats = trainer_stats_row(row)
                 payload["trainer_stats"] = stats
                 payload["level"] = stats["level"]
+    notify_battle_quests(quest_player_ids)
     return jsonify({"success": True, **payload})
 
 
@@ -1345,15 +1398,17 @@ def poketab_battle_action_api():
         return err
     data = request.get_json(silent=True) or {}
     catalog = card_catalog_for_client()
+    quest_player_ids: list[int] = []
     with get_db() as conn:
         result = poketab_battle_action(conn, telegram_id, catalog, data)
+        quest_player_ids = result.pop("quest_player_ids", []) or []
         other_id = None
         if result.get("ok") and result.get("battle"):
             other_id = str(result["battle"].get("opponent", {}).get("id", ""))
         if result.get("ok") and result.get("ended"):
             row = conn.execute(
                 """
-                SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress
+                SELECT stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp, quest_progress, balance
                 FROM users WHERE telegram_id = ?
                 """,
                 (telegram_id,),
@@ -1362,6 +1417,8 @@ def poketab_battle_action_api():
                 stats = trainer_stats_row(row)
                 result["trainer_stats"] = stats
                 result["level"] = stats["level"]
+                result["balance"] = int(row["balance"] or 0)
+    notify_battle_quests(quest_player_ids)
     if not result.get("ok"):
         return jsonify({"success": False, "error": result.get("error", "Action failed")}), 400
     if other_id and other_id != telegram_id:
