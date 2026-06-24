@@ -91,6 +91,22 @@
         return "hp-low"
     }
 
+    function fitHpNames(root) {
+        if (!root) return
+        root.querySelectorAll(".poketab-gb-hpname").forEach((el) => {
+            el.style.fontSize = ""
+            const block = el.closest(".poketab-gb-hpblock")
+            if (!block) return
+            const maxW = block.clientWidth
+            let size = parseFloat(window.getComputedStyle(el).fontSize) || 8
+            const minSize = Math.max(5, size * 0.5)
+            while (el.scrollWidth > maxW && size > minSize) {
+                size -= 0.5
+                el.style.fontSize = `${size}px`
+            }
+        })
+    }
+
     function hpBarHtml(current, max, label) {
         const pct = max > 0 ? Math.max(0, Math.min(100, (current / max) * 100)) : 0
         const tier = hpColorTier(pct)
@@ -619,6 +635,8 @@
                 ${menuHtml}
             </div>
         `
+
+        requestAnimationFrame(() => fitHpNames(arena))
 
         if (battle.phase === "select_active" && battle.is_my_turn) {
             const selectable = (me?.pool || []).filter((c) => c.alive)

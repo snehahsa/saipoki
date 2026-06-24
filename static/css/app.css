@@ -3381,9 +3381,9 @@ body.poketab-open {
 
 .poketab-monitor-glass--battle,
 .poketab-monitor-glass:has([data-poketab-view="battle"].active) {
-    height: min(calc(78vh * var(--pt-scale, 1.3)), calc(680px * var(--pt-scale, 1.3)));
-    min-height: calc(560px * var(--pt-scale, 1.3));
-    max-height: calc(780px * var(--pt-scale, 1.3));
+    height: min(calc(90vh * var(--pt-scale, 1.3)), calc(760px * var(--pt-scale, 1.3)));
+    min-height: calc(640px * var(--pt-scale, 1.3));
+    max-height: calc(920px * var(--pt-scale, 1.3));
 }
 
 .poketab-monitor-inner--battle {
@@ -4151,14 +4151,15 @@ body.poketab-open {
     border: 3px solid #283818;
     box-sizing: border-box;
     overflow: hidden;
-    --battle-sprite-scale: 2;
+    --battle-sprite-scale: 2.3;
     --battle-hp-scale: 1.5;
-    --battle-font-scale: 2;
-    --battle-menu-scale: 0.7;
-    --battle-player-sprite-mul: 2.75;
-    --battle-opp-sprite-mul: 2.75;
-    --battle-hp-stack-player: calc(118px * var(--pt-scale, 0.78) * var(--battle-hp-scale, 1.5));
-    --battle-hp-stack-opp: calc(92px * var(--pt-scale, 0.78) * var(--battle-hp-scale, 1.5));
+    --battle-font-scale: 1.5;
+    --battle-menu-scale: 1.05;
+    --battle-hp-box-scale: 1;
+    --battle-player-sprite-mul: 3.2;
+    --battle-opp-sprite-mul: 3.2;
+    --battle-hp-stack-player: calc(118px * var(--pt-scale, 0.78) * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6));
+    --battle-hp-stack-opp: calc(92px * var(--pt-scale, 0.78) * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6));
     --battle-field-inset: 6px;
 }
 
@@ -4234,7 +4235,7 @@ body.poketab-open {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: calc(4px * var(--battle-hp-scale, 1.5));
+    gap: calc(3px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6));
     width: 100%;
     max-width: 100%;
 }
@@ -4297,27 +4298,32 @@ body.poketab-open {
 .poketab-gb-hpblock {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: calc(2px * var(--battle-hp-scale, 1.5)) calc(6px * var(--battle-hp-scale, 1.5));
+    gap: calc(2px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6)) calc(4px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6));
     align-items: center;
     width: 100%;
     box-sizing: border-box;
-    padding: calc(4px * var(--battle-hp-scale, 1.5)) calc(6px * var(--battle-hp-scale, 1.5));
+    padding: calc(3px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6)) calc(4px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6));
     background: #f8f8f0;
-    border: calc(2px * var(--battle-hp-scale, 1.5)) solid #283818;
-    border-radius: calc(6px * var(--battle-hp-scale, 1.5));
+    border: calc(2px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6)) solid #283818;
+    border-radius: calc(4px * var(--battle-hp-scale, 1.5) * var(--battle-hp-box-scale, 0.6));
 }
 
 .poketab-gb-hpname {
     font-family: silkscreen, monospace;
-    font-size: calc(7px * var(--battle-font-scale, 2) * var(--battle-hp-scale, 1.5) / 1.5);
+    font-size: calc(7px * var(--battle-font-scale, 2) * var(--battle-hp-box-scale, 0.6));
     color: #283818;
     grid-column: 1 / -1;
-    white-space: normal;
-    overflow: visible;
+    white-space: nowrap;
+    overflow: hidden;
     text-overflow: clip;
-    word-break: break-word;
-    line-height: 1.15;
-    hyphens: auto;
+    word-break: keep-all;
+    hyphens: none;
+    line-height: 1;
+    letter-spacing: -0.04em;
+}
+
+.poketab-gb-mon-stack--opp .poketab-gb-hpname {
+    text-align: right;
 }
 
 .poketab-gb-hpbar {
@@ -4350,10 +4356,11 @@ body.poketab-open {
 
 .poketab-gb-hpnums {
     font-family: silkscreen, monospace;
-    font-size: calc(6px * var(--battle-font-scale, 2) * var(--battle-hp-scale, 1.5) / 1.5);
+    font-size: calc(6px * var(--battle-font-scale, 2) * var(--battle-hp-box-scale, 0.6));
     color: #283818;
     grid-column: 1 / -1;
     justify-self: end;
+    line-height: 1;
 }
 
 .poketab-gb-textbox {
@@ -4382,16 +4389,16 @@ body.poketab-open {
 .poketab-gb-menu {
     flex-shrink: 0;
     margin-top: 0;
-    padding: calc(4px * var(--battle-menu-scale, 0.7));
+    padding: calc(6px * var(--battle-menu-scale, 1.05));
     background: #f8f8f0;
     border: 2px solid #283818;
     position: relative;
     z-index: 5;
-    max-height: 30%;
+    max-height: 38%;
 }
 
 .poketab-gb-menu-result {
-    padding: calc(4px * var(--battle-menu-scale, 0.7));
+    padding: calc(6px * var(--battle-menu-scale, 1.05));
 }
 
 .poketab-gb-menu-select {
@@ -4401,11 +4408,11 @@ body.poketab-open {
 
 .poketab-gb-menu-title {
     font-family: silkscreen, monospace;
-    font-size: calc(9px * var(--battle-font-scale, 2) * var(--battle-menu-scale, 0.7) * var(--ui-scale, 1));
+    font-size: calc(10px * var(--battle-font-scale, 1.5) * var(--battle-menu-scale, 1.05) * var(--ui-scale, 1));
     color: #283818;
-    margin: 0 0 2px;
+    margin: 0 0 4px;
     text-align: center;
-    line-height: 1.15;
+    line-height: 1.2;
     white-space: normal;
     word-break: break-word;
 }
@@ -4413,20 +4420,20 @@ body.poketab-open {
 .poketab-gb-moves {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: calc(3px * var(--battle-menu-scale, 0.7));
+    gap: calc(5px * var(--battle-menu-scale, 1.05));
 }
 
 .poketab-gb-picks {
     grid-template-columns: 1fr;
-    max-height: calc(84px * var(--battle-menu-scale, 0.7));
+    max-height: calc(130px * var(--battle-menu-scale, 1.05));
     overflow-y: auto;
 }
 
 .poketab-gb-move {
-    padding: calc(4px * var(--battle-menu-scale, 0.7)) calc(4px * var(--battle-menu-scale, 0.7));
-    min-height: calc(34px * var(--battle-font-scale, 2) / 2 * var(--battle-menu-scale, 0.7));
+    padding: calc(6px * var(--battle-menu-scale, 1.05)) calc(6px * var(--battle-menu-scale, 1.05));
+    min-height: calc(40px * var(--battle-font-scale, 1.5) / 1.5 * var(--battle-menu-scale, 1.05));
     font-family: silkscreen, monospace;
-    font-size: calc(8px * var(--battle-font-scale, 2) * var(--battle-menu-scale, 0.7) * var(--ui-scale, 1));
+    font-size: calc(9px * var(--battle-font-scale, 1.5) * var(--battle-menu-scale, 1.05) * var(--ui-scale, 1));
     text-align: left;
     cursor: pointer;
     touch-action: manipulation;
@@ -4448,18 +4455,18 @@ body.poketab-open {
 
 .poketab-gb-move-stats {
     display: block;
-    font-size: calc(7px * var(--battle-font-scale, 2) * var(--battle-menu-scale, 0.7) * var(--ui-scale, 1));
+    font-size: calc(8px * var(--battle-font-scale, 1.5) * var(--battle-menu-scale, 1.05) * var(--ui-scale, 1));
     color: #487038;
 }
 
 .poketab-gb-pick {
     display: flex;
     align-items: center;
-    gap: calc(6px * var(--battle-menu-scale, 0.7));
-    font-size: calc(9px * var(--battle-font-scale, 2) * var(--battle-menu-scale, 0.7) * var(--ui-scale, 1));
+    gap: calc(8px * var(--battle-menu-scale, 1.05));
+    font-size: calc(10px * var(--battle-font-scale, 1.5) * var(--battle-menu-scale, 1.05) * var(--ui-scale, 1));
     background: #ffe850;
     border-color: #886008;
-    min-height: calc(40px * var(--battle-font-scale, 2) / 2 * var(--battle-menu-scale, 0.7));
+    min-height: calc(46px * var(--battle-font-scale, 1.5) / 1.5 * var(--battle-menu-scale, 1.05));
 }
 
 .poketab-gb-pick-img {
@@ -4529,7 +4536,7 @@ body.poketab-open {
 
 .poketab-gb-wait {
     font-family: silkscreen, monospace;
-    font-size: calc(7px * var(--battle-font-scale, 2) * var(--battle-menu-scale, 0.7));
+    font-size: calc(8px * var(--battle-font-scale, 1.5) * var(--battle-menu-scale, 1.05));
     color: #687858;
     margin: 0;
     animation: poketab-cursor-blink 0.8s steps(2) infinite;
