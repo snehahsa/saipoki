@@ -79,20 +79,29 @@ def _fetch_stats_row(conn: sqlite3.Connection, telegram_id: str) -> sqlite3.Row 
     ).fetchone()
 
 
+def _row_int(row: sqlite3.Row | dict, key: str, default: int = 0) -> int:
+    try:
+        if hasattr(row, "keys") and key not in row.keys():
+            return default
+        return int(row[key] or 0)
+    except (KeyError, IndexError, TypeError, ValueError):
+        return default
+
+
 def trainer_stats_row(
     row: sqlite3.Row | dict,
     quest_progress: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
-    battles = int(row["stats_battles"] or 0)
-    wins = int(row["stats_wins"] or 0)
-    losses = int(row["stats_losses"] or 0)
-    xp = int(row["stats_xp"] if "stats_xp" in row.keys() else 0)
+    battles = _row_int(row, "stats_battles")
+    wins = _row_int(row, "stats_wins")
+    losses = _row_int(row, "stats_losses")
+    xp = _row_int(row, "stats_xp")
     if quest_progress is None:
         raw = row["quest_progress"] if "quest_progress" in row.keys() else None
         quest_progress = parse_quest_progress(raw)
     prog = level_progress(wins, xp, quest_progress)
     return {
-        "stats_wagered": int(row["stats_wagered"] or 0),
+        "stats_wagered": _row_int(row, "stats_wagered"),
         "stats_battles": battles,
         "stats_wins": wins,
         "stats_losses": losses,

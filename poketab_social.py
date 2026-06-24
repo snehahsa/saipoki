@@ -96,7 +96,8 @@ def _user_brief(row: sqlite3.Row | None) -> Optional[dict]:
 def _fetch_user(conn: sqlite3.Connection, telegram_id: str) -> Optional[dict]:
     row = conn.execute(
         """
-        SELECT telegram_id, display_name, username, skin, stats_xp, stats_wins,
+        SELECT telegram_id, display_name, username, skin,
+               stats_wagered, stats_battles, stats_wins, stats_losses, stats_xp,
                quest_progress
         FROM users WHERE telegram_id = ?
         """,
