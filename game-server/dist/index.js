@@ -21,15 +21,20 @@ for (const envPath of [
 }
 const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5000').split(',');
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 app.use((0, cors_1.default)({
     origin: allowedOrigins,
+    credentials: true,
 }));
 app.use(express_1.default.json());
 const POKETAB_NOTIFY_SECRET = process.env.POKETAB_NOTIFY_SECRET || 'poketab-local-dev';
 const io = new socket_io_1.Server(server, {
     cors: {
         origin: allowedOrigins,
+        credentials: true,
     },
 });
 exports.io = io;

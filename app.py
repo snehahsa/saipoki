@@ -110,7 +110,9 @@ def resolve_game_server_internal() -> str:
 
 
 GAME_SERVER_INTERNAL = resolve_game_server_internal()
-GAME_PUBLIC_URL = (os.getenv("GAME_PUBLIC_URL") or "").strip().rstrip("/")
+GAME_SOCKET_URL = (
+    os.getenv("GAME_SOCKET_URL") or os.getenv("GAME_PUBLIC_URL") or ""
+).strip().rstrip("/")
 if os.getenv("RAILWAY_ENVIRONMENT") and (
     "127.0.0.1" in GAME_SERVER_INTERNAL or "localhost" in GAME_SERVER_INTERNAL
 ):
@@ -563,7 +565,8 @@ def home():
     test_mode = test_slug is not None
     return render_template(
         "index.html",
-        game_server_url=GAME_PUBLIC_URL,
+        game_server_url="",
+        game_socket_url=GAME_SOCKET_URL,
         test_mode=test_mode,
         test_player_slug=test_slug if test_slug is not None else "",
         skins=SKINS,
@@ -1677,7 +1680,8 @@ def api_status():
         {
             "web": "ok",
             "gameServerInternal": GAME_SERVER_INTERNAL,
-            "gamePublicUrl": GAME_PUBLIC_URL or None,
+            "gameSocketUrl": GAME_SOCKET_URL or None,
+            "gamePublicUrl": GAME_SOCKET_URL or None,
             "gameServerReachable": game_ok,
             "gameServerError": game_detail,
             "gameServerHealth": game_body,

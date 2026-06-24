@@ -15,8 +15,11 @@ class Server {
     private uid: string = ''
     private connectionToken = 0
 
-    public configure(backendUrl: string, uid: string) {
+    private socketUrl: string = ''
+
+    public configure(backendUrl: string, uid: string, socketUrl: string = '') {
         this.backendUrl = backendUrl || window.location.origin
+        this.socketUrl = socketUrl || ''
         this.uid = String(uid)
     }
 
@@ -34,10 +37,12 @@ class Server {
         this.disconnect()
         const token = ++this.connectionToken
 
-        this.socket = io(this.backendUrl, {
+        const socketBase = this.socketUrl || this.backendUrl
+        this.socket = io(socketBase, {
             transports: ['polling'],
             reconnection: false,
             autoConnect: false,
+            withCredentials: true,
             query: {
                 uid: this.uid,
             },

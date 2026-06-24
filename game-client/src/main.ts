@@ -10,6 +10,7 @@ export type GameSession = {
     skin: string
     level?: number
     backendUrl: string
+    socketUrl?: string
     holds?: string[]
     holdGrantRules?: Record<string, { holds?: string[]; notHolds?: string[] }>
     onProgress?: (message: string) => void
@@ -57,7 +58,7 @@ export async function startGame(session: GameSession): Promise<{ success: boolea
 
     container.innerHTML = ''
 
-    server.configure(session.backendUrl, session.uid)
+    server.configure(session.backendUrl, session.uid, session.socketUrl || '')
 
     let realmData: RealmData
     try {

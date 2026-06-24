@@ -2210,7 +2210,8 @@ async function enterGame() {
             level: Number(session.level || session.trainer_stats?.level) || 1,
             holds: normalizeHolds(session.holds),
             holdGrantRules: holdGrantRulesForClient(),
-            backendUrl: window.APP_CONFIG.gameServerUrl || window.location.origin,
+            backendUrl: window.location.origin,
+            socketUrl: window.APP_CONFIG.gameSocketUrl || "",
             onProgress: (message) => setGameLoading(message.toUpperCase()),
         })
     } catch (error) {

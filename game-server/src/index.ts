@@ -18,11 +18,15 @@ for (const envPath of [
 const app = express()
 const server = http.createServer(app)
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5000').split(',')
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
 
 app.use(
     cors({
         origin: allowedOrigins,
+        credentials: true,
     })
 )
 app.use(express.json())
@@ -32,6 +36,7 @@ const POKETAB_NOTIFY_SECRET = process.env.POKETAB_NOTIFY_SECRET || 'poketab-loca
 const io = new SocketIOServer(server, {
     cors: {
         origin: allowedOrigins,
+        credentials: true,
     },
 })
 
