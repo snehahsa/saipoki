@@ -94,7 +94,6 @@ TEST_PLAYER_USER = {
     "username": "test_trainer",
 }
 TEST_PLAYER_HOLDS = ["bag", "card_vault", "poketab"]
-TEST_PLAYER_STARTER_CARDS = ("poke-006", "poke-009", "poke-010")
 TEST_QUERY_RESERVED = frozenset({"tgWebAppStartParam", "v", "_"})
 def resolve_game_server_internal() -> str:
     """Game server URL for Flask → game proxy (Railway private or public)."""
@@ -297,40 +296,30 @@ def test_telegram_id_for_slug(slug: str) -> str:
 
 
 def ensure_test_player_profile(conn, telegram_id: str) -> None:
-    """Persist starter vault + holds for URL test trainers (same DB as real users)."""
+    """Persist holds for URL test trainers (cards come from the vending machine)."""
     row = conn.execute(
-        "SELECT holds, vault FROM users WHERE telegram_id = ?",
+        "SELECT holds FROM users WHERE telegram_id = ?",
         (telegram_id,),
     ).fetchone()
     if not row:
         return
 
-    catalog = load_card_catalog(Path(__file__).resolve().parent / "poke.json")
-    vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
     holds = list(parse_holds(row["holds"] if "holds" in row.keys() else None))
-    vault_changed = False
-
-    for card_id in TEST_PLAYER_STARTER_CARDS:
-        if card_id not in catalog:
-            continue
-        vault, added = add_card_to_vault(vault, card_id, source="test_starter")
-        vault_changed = vault_changed or added
-
     holds_changed = False
     for hold_id in TEST_PLAYER_HOLDS:
         if hold_id not in holds:
             holds.append(hold_id)
             holds_changed = True
 
-    if not vault_changed and not holds_changed:
+    if not holds_changed:
         return
 
     conn.execute(
         """
-        UPDATE users SET vault = ?, holds = ?, updated_at = ?
+        UPDATE users SET holds = ?, updated_at = ?
         WHERE telegram_id = ?
         """,
-        (json.dumps(vault), json.dumps(holds), int(time.time()), telegram_id),
+        (json.dumps(holds), int(time.time()), telegram_id),
     )
 
 
@@ -1605,6 +1594,7 @@ def vending_spin():
         if not pool:
             return jsonify({"success": False, "error": "Vending machine is empty."}), 503
 
+        random.shuffle(pool)
         winner = random.choice(pool)
         card_id = str(winner.get("id") or "").strip()
         if not card_id:

@@ -175,40 +175,43 @@
 
     function syncBattleFromStatus(data, { forceOpen = false } = {}) {
         const battle = data?.battle
-        const invite = data?.invite
         const autoOpen = forceOpen || (isPoketabOpen() && (isBattleViewActive() || isInArena()))
 
-        if (battle) {
+        if (battle && battle.phase !== "ended") {
             if (autoOpen || isInArena()) {
                 openArena(battle)
             }
             return
         }
-
-        if (invite?.status === "pending" && invite.is_challenger) {
-            if (autoOpen || isBattleViewActive()) {
-                showBattleWaiting("CHALLENGE SENT — AWAITING REPLY...")
-            }
-        }
     }
 
-    function showBattleWaiting(message) {
-        document.getElementById("poketab-battle-lobby")?.classList.remove("hidden")
-        closeArena()
-        setTallMonitor(true)
-        setView("battle")
-        const list = document.getElementById("poketab-battle-opponents")
-        if (list) {
-            list.innerHTML = `<p class="poketab-empty">${escapeHtml(message || "WAITING...")}</p>`
+    function outgoingSentMap() {
+        const map = new Map()
+        for (const inv of statusCache?.outgoing_invites || []) {
+            const tid = String(inv.opponent?.telegram_id || "")
+            if (tid) map.set(tid, inv)
         }
+        return map
+    }
+
+    function applyOutgoingToOpponentButtons() {
+        const list = document.getElementById("poketab-battle-opponents")
+        if (!list) return
+        const sentMap = outgoingSentMap()
+        list.querySelectorAll("[data-challenge-id]").forEach((btn) => {
+            const tid = btn.dataset.challengeId
+            if (sentMap.has(tid)) {
+                btn.disabled = true
+                btn.textContent = "SENT"
+                btn.classList.add("is-sent")
+            }
+        })
     }
 
     function isFlowLocked() {
         if (isInArena()) return true
         const battle = statusCache?.battle
-        if (battle && battle.phase !== "ended") return true
-        const invite = statusCache?.invite
-        return !!(invite && invite.status === "pending")
+        return !!(battle && battle.phase !== "ended")
     }
 
     function resumeBattleView() {
@@ -217,25 +220,21 @@
             openArena(battle)
             return true
         }
-        const invite = statusCache?.invite
-        if (invite?.status === "pending" && invite.is_challenger) {
-            showBattleWaiting("CHALLENGE SENT — AWAITING REPLY...")
-            return true
-        }
         return false
     }
 
-    function updateAlertPanel(invites, invite, battleAlerts) {
+    function updateAlertPanel(invites, outgoingInvites, battleAlerts) {
         const panel = document.getElementById("poketab-alert-panel")
         const list = document.getElementById("poketab-alert-list")
         if (!panel || !list) return
         const battle = statusCache?.battle
+        const outgoing = outgoingInvites || statusCache?.outgoing_invites || []
         const count = (invites?.length || 0) + (battleAlerts || 0)
         const hasContent = (invites?.length || 0) > 0
-            || (invite?.status === "pending" && invite.is_challenger)
+            || outgoing.length > 0
             || (battle && battle.phase !== "ended")
         panel.classList.toggle("poketab-duel-module-alert", count > 0 || hasContent)
-        if (!invites?.length && !invite && !battle) {
+        if (!invites?.length && !outgoing.length && !battle) {
             list.innerHTML = `<p class="poketab-duel-empty">STANDBY</p>`
             return
         }
@@ -253,12 +252,12 @@
                 </div>
             `)
         }
-        if (invite?.status === "pending" && invite.is_challenger) {
+        for (const inv of outgoing) {
             chunks.push(`
                 <div class="poketab-duel-card poketab-duel-card-warn">
                     <p class="poketab-duel-title">SENT</p>
-                    <p class="poketab-duel-body">vs ${escapeHtml(invite.opponent?.display_name || "Trainer")}</p>
-                    <p class="poketab-duel-wager">${formatCoins(invite.bet)} $POKE</p>
+                    <p class="poketab-duel-body">vs ${escapeHtml(inv.opponent?.display_name || "Trainer")}</p>
+                    <p class="poketab-duel-wager">${formatCoins(inv.bet)} $POKE</p>
                     <p class="poketab-duel-body">AWAITING REPLY...</p>
                 </div>
             `)
@@ -310,22 +309,30 @@
                 return
             }
             const wager = Number(document.getElementById("poketab-battle-wager")?.value) || 50
+            const sentMap = outgoingSentMap()
+            const inBattle = statusCache?.battle && statusCache.battle.phase !== "ended"
             list.innerHTML = opponents.map((opp) => {
-                const canAfford = opp.balance >= wager && data.balance >= wager
+                const tid = String(opp.telegram_id)
+                const alreadySent = sentMap.has(tid)
+                const canAfford = !inBattle && opp.balance >= wager && data.balance >= wager && !alreadySent
                 const friendTag = opp.is_friend
                     ? `<span class="poketab-pill poketab-pill-friend">FRIEND</span> `
                     : ""
                 const readyCards = opp.eligible_cards ?? opp.vault_cards ?? 0
+                let btnLabel = "CHALLENGE"
+                if (inBattle) btnLabel = "IN BATTLE"
+                else if (alreadySent) btnLabel = "SENT"
+                else if (!canAfford) btnLabel = "LOW FUNDS"
                 return `
                     <div class="poketab-row poketab-battle-opp-row">
                         <div class="poketab-row-main">
                             <div class="poketab-row-name">${friendTag}${escapeHtml(opp.display_name)}</div>
                             <div class="poketab-battle-opp-meta">${readyCards} ready · ${formatCoins(opp.balance)} $POKE</div>
                         </div>
-                        <button type="button" class="poketab-action-btn poketab-battle-challenge-btn"
-                            data-challenge-id="${escapeHtml(opp.telegram_id)}"
-                            ${canAfford ? "" : "disabled"}>
-                            ${canAfford ? "CHALLENGE" : "LOW FUNDS"}
+                        <button type="button" class="poketab-action-btn poketab-battle-challenge-btn${alreadySent ? " is-sent" : ""}"
+                            data-challenge-id="${escapeHtml(tid)}"
+                            ${canAfford || alreadySent ? (alreadySent ? "disabled" : "") : "disabled"}>
+                            ${btnLabel}
                         </button>
                     </div>
                 `
@@ -349,19 +356,30 @@
             showToast("Insufficient balance for this wager.", true)
             return
         }
+        if (statusCache?.battle && statusCache.battle.phase !== "ended") {
+            showToast("Finish your current battle first.", true)
+            return
+        }
+        if (outgoingSentMap().has(String(targetId))) {
+            showToast("Challenge already sent to this trainer.", true)
+            return
+        }
         if (btn) {
             btn.disabled = true
-            btn.textContent = "SENT"
-            btn.classList.add("is-sent")
+            btn.textContent = "..."
         }
         setLedState("busy")
         try {
             const data = await apiPost("/api/poketab/battle/challenge", { target_id: targetId, bet })
+            if (btn) {
+                btn.textContent = "SENT"
+                btn.classList.add("is-sent")
+            }
             showToast(data.notify_delivered === false
-                ? "Challenge sent — opponent will be alerted shortly"
-                : "Battle challenge sent!")
-            activeInviteId = data.invite_id
-            await refreshStatus()
+                ? "Sent — opponent will be alerted shortly"
+                : "Challenge sent!")
+            await refreshStatus(true)
+            applyOutgoingToOpponentButtons()
             setLedState("ready")
         } catch (err) {
             if (btn) {
@@ -401,7 +419,6 @@
                     if (statusCache?.battle) {
                         openArena(statusCache.battle)
                     } else {
-                        showBattleWaiting("STARTING BATTLE...")
                         window.setTimeout(() => refreshStatus().then(() => {
                             if (statusCache?.battle) openArena(statusCache.battle)
                         }), 600)
@@ -589,7 +606,6 @@
                             ${oppMon ? hpBarHtml(oppMon.hp, oppMon.max_hp, oppMon.name) : `<span class="poketab-gb-hpname">${escapeHtml(opp.name)}</span>`}
                         </div>
                     </div>
-                    <div class="poketab-gb-field-gap" aria-hidden="true"></div>
                     <div class="poketab-gb-me-panel">
                         <div class="poketab-gb-mon-stack">
                             ${myMon ? spriteHtml(myMon, true) : ""}
@@ -689,9 +705,12 @@
             if (data.trainer_stats && window.SaiPokeTrainer?.applyTrainerStats) {
                 window.SaiPokeTrainer.applyTrainerStats(data.trainer_stats, { xp_gained: 20 })
             }
-            updateAlertPanel(data.incoming_invites, data.invite, data.battle_alerts)
+            updateAlertPanel(data.incoming_invites, data.outgoing_invites, data.battle_alerts)
             if (data.invite?.id) activeInviteId = data.invite.id
             syncBattleFromStatus(data, { forceOpen: !silent })
+            if (!isInArena() && isBattleViewActive()) {
+                applyOutgoingToOpponentButtons()
+            }
             if (!silent) refreshSummary()
         } catch {
             if (!silent) updateAlertPanel([], null, 0)

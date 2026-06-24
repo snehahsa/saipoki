@@ -35,6 +35,7 @@ from trainer_stats import record_battle_outcome_on_conn
 log = logging.getLogger(__name__)
 
 MAX_TEAM_SIZE = 1
+BATTLE_ROULETTE_POOL_SIZE = 3
 INVITE_TTL_SEC = 300
 MIN_BET = 1
 MAX_DAILY_BATTLES_PER_CARD = 3
@@ -180,10 +181,15 @@ def _pick_random_team(
     user_id: str,
     valid_ids: set[str],
 ) -> Optional[list[str]]:
+    """Pick exactly one battle card from up to 3 eligible vault cards (daily cap respected)."""
     eligible = eligible_battle_cards(conn, user_id, valid_ids)
     if not eligible:
         return None
-    return [random.choice(eligible)]
+    if len(eligible) > BATTLE_ROULETTE_POOL_SIZE:
+        candidates = random.sample(eligible, BATTLE_ROULETTE_POOL_SIZE)
+    else:
+        candidates = list(eligible)
+    return [random.choice(candidates)]
 
 
 def _record_card_battle_usage(
@@ -312,6 +318,79 @@ def _invite_brief(row: sqlite3.Row, conn: sqlite3.Connection, viewer_id: str) ->
     }
 
 
+def list_outgoing_invites(conn: sqlite3.Connection, user_id: str) -> list[dict]:
+    _expire_stale_invites(conn)
+    now = int(time.time())
+    rows = conn.execute(
+        """
+        SELECT * FROM poketab_battle_invites
+        WHERE challenger_id = ? AND status = 'pending' AND expires_at > ?
+        ORDER BY created_at DESC
+        """,
+        (user_id, now),
+    ).fetchall()
+    return [_invite_brief(row, conn, user_id) for row in rows]
+
+
+def _pending_challenge_between(
+    conn: sqlite3.Connection,
+    challenger_id: str,
+    target_id: str,
+) -> Optional[sqlite3.Row]:
+    now = int(time.time())
+    return conn.execute(
+        """
+        SELECT * FROM poketab_battle_invites
+        WHERE challenger_id = ? AND target_id = ?
+          AND status = 'pending' AND expires_at > ?
+        LIMIT 1
+        """,
+        (challenger_id, target_id, now),
+    ).fetchone()
+
+
+def _user_in_team_select(
+    conn: sqlite3.Connection,
+    user_id: str,
+    exclude_invite_id: Optional[int] = None,
+) -> bool:
+    now = int(time.time())
+    params: list = [now, user_id, user_id]
+    exclude_sql = ""
+    if exclude_invite_id:
+        exclude_sql = " AND id != ?"
+        params.append(int(exclude_invite_id))
+    row = conn.execute(
+        f"""
+        SELECT 1 FROM poketab_battle_invites
+        WHERE status = 'team_select' AND expires_at > ?
+          AND (challenger_id = ? OR target_id = ?){exclude_sql}
+        LIMIT 1
+        """,
+        params,
+    ).fetchone()
+    return row is not None
+
+
+def _cancel_other_invites_for_battle(
+    conn: sqlite3.Connection,
+    player_ids: tuple[str, str],
+    active_invite_id: int,
+) -> None:
+    """Drop other pending/team_select invites once a battle actually starts."""
+    now = int(time.time())
+    conn.execute(
+        """
+        UPDATE poketab_battle_invites
+        SET status = 'cancelled'
+        WHERE id != ? AND status IN ('pending', 'team_select')
+          AND expires_at > ?
+          AND (challenger_id IN (?, ?) OR target_id IN (?, ?))
+        """,
+        (active_invite_id, now, player_ids[0], player_ids[1], player_ids[0], player_ids[1]),
+    )
+
+
 def list_incoming_invites(conn: sqlite3.Connection, user_id: str) -> list[dict]:
     _expire_stale_invites(conn)
     now = int(time.time())
@@ -390,12 +469,17 @@ def _pre_battle_check(
     bet: int,
     valid_ids: set[str],
     exclude_invite_id: Optional[int] = None,
+    *,
+    allow_pending_invites: bool = False,
 ) -> Optional[str]:
     if _active_game_for_user(conn, user_id):
         return "You are already in a battle."
-    pending = _pending_invite_for_user(conn, user_id, exclude_invite_id=exclude_invite_id)
-    if pending:
-        return "You already have an active battle invite."
+    if _user_in_team_select(conn, user_id, exclude_invite_id=exclude_invite_id):
+        return "You are already setting up a battle."
+    if not allow_pending_invites:
+        pending = _pending_invite_for_user(conn, user_id, exclude_invite_id=exclude_invite_id)
+        if pending:
+            return "You already have an active battle invite."
     vault_ids = _user_vault_ids(conn, user_id, valid_ids)
     if len(vault_ids) < config.min_vault_cards:
         return f"You need at least {config.min_vault_cards} PokéCard(s) in your vault."
@@ -427,7 +511,9 @@ def send_challenge(
     except (TypeError, ValueError):
         return {"ok": False, "error": "Invalid wager amount."}
 
-    err = _pre_battle_check(conn, challenger_id, bet, valid_ids)
+    err = _pre_battle_check(
+        conn, challenger_id, bet, valid_ids, allow_pending_invites=True
+    )
     if err:
         return {"ok": False, "error": err}
 
@@ -438,8 +524,10 @@ def send_challenge(
         return {"ok": False, "error": "Opponent cannot afford this wager."}
     if _active_game_for_user(conn, target_id):
         return {"ok": False, "error": "That trainer is already battling."}
-    if _pending_invite_for_user(conn, target_id):
-        return {"ok": False, "error": "That trainer already has a pending battle."}
+    if _user_in_team_select(conn, target_id):
+        return {"ok": False, "error": "That trainer is setting up a battle."}
+    if _pending_challenge_between(conn, challenger_id, target_id):
+        return {"ok": False, "error": "You already challenged this trainer."}
 
     now = int(time.time())
     cur = conn.execute(
@@ -492,11 +580,23 @@ def respond_invite(
         return {"ok": True, "accepted": False}
 
     bet = int(row["bet"])
-    err = _pre_battle_check(conn, user_id, bet, valid_ids, exclude_invite_id=invite_id)
+    err = _pre_battle_check(
+        conn,
+        user_id,
+        bet,
+        valid_ids,
+        exclude_invite_id=invite_id,
+        allow_pending_invites=True,
+    )
     if err:
         return {"ok": False, "error": err}
     challenger_err = _pre_battle_check(
-        conn, row["challenger_id"], bet, valid_ids, exclude_invite_id=invite_id
+        conn,
+        row["challenger_id"],
+        bet,
+        valid_ids,
+        exclude_invite_id=invite_id,
+        allow_pending_invites=True,
     )
     if challenger_err:
         return {"ok": False, "error": f"Challenger unavailable: {challenger_err}"}
@@ -956,6 +1056,7 @@ def _try_start_battle(conn: sqlite3.Connection, invite_id: int, valid_ids: set[s
     )
     _record_card_battle_usage(conn, p1, team1[0])
     _record_card_battle_usage(conn, p2, team2[0])
+    _cancel_other_invites_for_battle(conn, (p1, p2), invite_id)
     return True
 
 
@@ -1086,6 +1187,7 @@ def get_status(
     balance = _user_balance(conn, user_id)
     alerts = count_battle_alerts(conn, user_id)
     incoming = list_incoming_invites(conn, user_id)
+    outgoing = list_outgoing_invites(conn, user_id)
 
     pending = _pending_invite_for_user(conn, user_id)
     invite = None
@@ -1118,6 +1220,7 @@ def get_status(
         "balance": balance,
         "battle_alerts": alerts,
         "incoming_invites": incoming,
+        "outgoing_invites": outgoing,
         "invite": invite,
         "battle": battle,
         "quest_player_ids": quest_player_ids,
