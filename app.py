@@ -124,6 +124,9 @@ def resolve_game_socket_url() -> str:
     internal = GAME_SERVER_INTERNAL
     if internal.startswith("https://"):
         return internal
+    # Local dev: browser connects to game server directly (avoids broken socket.io proxy).
+    if internal.startswith("http://127.0.0.1:") or internal.startswith("http://localhost:"):
+        return internal
 
     return ""
 
@@ -775,9 +778,12 @@ def auth():
             (telegram_id,),
         ).fetchone()
         if row:
-            trainer_stats = trainer_stats_row(row)
-            trainer_stats["vault_count"] = len(vault_card_ids(vault))
-            trainer_stats["balance"] = balance
+            try:
+                trainer_stats = trainer_stats_row(row)
+                trainer_stats["vault_count"] = len(vault_card_ids(vault))
+                trainer_stats["balance"] = balance
+            except Exception as err:
+                app.logger.exception("trainer_stats_row failed for %s: %s", telegram_id, err)
 
     return jsonify(
         {

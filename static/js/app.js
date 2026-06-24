@@ -1587,7 +1587,19 @@ async function authenticate() {
         body: JSON.stringify(apiAuthBody()),
     })
 
-    const data = await response.json()
+    const raw = await response.text()
+    let data
+    try {
+        data = JSON.parse(raw)
+    } catch {
+        dismissBootSplash()
+        showError(
+            response.ok
+                ? "Authentication failed (invalid server response)."
+                : `Server error (${response.status}). Is Flask running on port 5000?`
+        )
+        return null
+    }
     if (!response.ok || !data.success) {
         dismissBootSplash()
         showError(

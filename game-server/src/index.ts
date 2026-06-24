@@ -116,7 +116,12 @@ sessionManager.createSession(WORLD_ID, mapData)
 
 sockets(io)
 
-const PORT = process.env.PORT || 3001
+// Prefer GAME_PORT so a shared root .env PORT=5000 (Flask) does not steal this port locally.
+const PORT =
+    process.env.GAME_PORT ||
+    process.env.GAME_SERVICE_PORT ||
+    process.env.PORT ||
+    3001
 server.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Game server running on 0.0.0.0:${PORT}`)
 })
