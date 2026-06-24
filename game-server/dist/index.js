@@ -41,12 +41,24 @@ exports.io = io;
 app.get('/health', (_req, res) => {
     const session = session_1.sessionManager.getSession(session_1.WORLD_ID);
     const players = session?.getPlayerCount() ?? 0;
+    let mapHash = '';
+    let mapVersion = '';
+    try {
+        mapHash = (0, worldMap_1.worldMapFileHash)();
+        mapVersion = (0, worldMap_1.worldMapFileVersion)();
+    }
+    catch {
+        mapHash = 'missing';
+    }
     res.json({
         ok: true,
         players,
         maxPlayers: 50,
         world: 'SaiPoke Realm',
+        worldId: session_1.WORLD_ID,
         rooms: session?.map_data?.rooms?.length ?? 1,
+        worldMapHash: mapHash,
+        worldMapVersion: mapVersion,
     });
 });
 app.get('/getPlayersInRoom', (req, res) => {

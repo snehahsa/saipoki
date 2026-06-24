@@ -38,8 +38,10 @@ class Server {
         const token = ++this.connectionToken
 
         const socketBase = this.socketUrl || this.backendUrl
+        const directToGameServer = Boolean(this.socketUrl) && this.socketUrl !== this.backendUrl
+
         this.socket = io(socketBase, {
-            transports: ['polling'],
+            transports: directToGameServer ? ['websocket', 'polling'] : ['polling'],
             reconnection: false,
             autoConnect: false,
             withCredentials: true,
@@ -111,8 +113,12 @@ class Server {
             return { data: null, error: { message: 'Failed to fetch players' } }
         }
 
-        const data = await response.json()
-        return { data, error: null }
+        try {
+            const data = await response.json()
+            return { data, error: null }
+        } catch {
+            return { data: null, error: { message: 'Invalid player list response' } }
+        }
     }
 }
 

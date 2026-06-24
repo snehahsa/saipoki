@@ -1,3 +1,4 @@
+import gzip
 import hashlib
 import hmac
 import json
@@ -110,9 +111,30 @@ def resolve_game_server_internal() -> str:
 
 
 GAME_SERVER_INTERNAL = resolve_game_server_internal()
-GAME_SOCKET_URL = (
-    os.getenv("GAME_SOCKET_URL") or os.getenv("GAME_PUBLIC_URL") or ""
-).strip().rstrip("/")
+
+
+def resolve_game_socket_url() -> str:
+    """Browser-facing socket.io URL. Must be reachable from clients (HTTPS public), not private Railway DNS."""
+    for key in ("GAME_SOCKET_URL", "GAME_PUBLIC_URL"):
+        val = (os.getenv(key) or "").strip().rstrip("/")
+        if val:
+            return val
+
+    internal = GAME_SERVER_INTERNAL
+    if internal.startswith("https://"):
+        return internal
+
+    return ""
+
+
+GAME_SOCKET_URL = resolve_game_socket_url()
+if os.getenv("RAILWAY_ENVIRONMENT") and not GAME_SOCKET_URL:
+    print(
+        "WARNING: GAME_SOCKET_URL is not set. Multiplayer sockets will proxy through Flask and break.\n"
+        "  Set GAME_SOCKET_URL=https://<your-game-service>.up.railway.app\n"
+        "  or use GAME_SERVER_INTERNAL=https://... (public HTTPS) so it can be reused for sockets.",
+        flush=True,
+    )
 if os.getenv("RAILWAY_ENVIRONMENT") and (
     "127.0.0.1" in GAME_SERVER_INTERNAL or "localhost" in GAME_SERVER_INTERNAL
 ):
@@ -217,6 +239,12 @@ def world_map_version() -> str:
     if WORLD_MAP_PATH.exists():
         return str(int(WORLD_MAP_PATH.stat().st_mtime))
     return "0"
+
+
+def world_map_hash() -> str:
+    if not WORLD_MAP_PATH.exists():
+        return ""
+    return hashlib.md5(WORLD_MAP_PATH.read_bytes()).hexdigest()
 
 
 def get_db():
@@ -601,13 +629,16 @@ def world_map():
     if not WORLD_MAP_PATH.exists():
         return jsonify({"error": "World map not found"}), 404
 
-    response = send_from_directory(
-        WORLD_MAP_PATH.parent,
-        WORLD_MAP_PATH.name,
-        mimetype="application/json",
-    )
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    try:
+        with open(WORLD_MAP_PATH, "rb") as map_file:
+            payload = json.loads(map_file.read())
+    except (OSError, json.JSONDecodeError):
+        return jsonify({"error": "World map corrupt"}), 500
+
+    response = jsonify(payload)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, no-transform"
     response.headers["X-World-Version"] = world_map_version()
+    response.headers["X-World-Hash"] = world_map_hash()
     return response
 
 
@@ -1612,8 +1643,24 @@ def fonts(filename):
     return jsonify({"error": "font not found", "path": filename}), 404
 
 
-SKIP_REQUEST_HEADERS = {"host", "content-length", "transfer-encoding", "connection"}
+SKIP_REQUEST_HEADERS = {
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "accept-encoding",
+}
 SKIP_RESPONSE_HEADERS = {"transfer-encoding", "connection", "content-encoding", "content-length"}
+
+
+@app.after_request
+def prevent_json_compression_mismatch(response: Response) -> Response:
+    """Stop intermediaries from gzip-encoding JSON without a matching Content-Encoding."""
+    if response.content_type and "json" in response.content_type:
+        cache_control = response.headers.get("Cache-Control", "")
+        if "no-transform" not in cache_control:
+            response.headers["Cache-Control"] = f"{cache_control}, no-transform".strip(", ")
+    return response
 
 
 def proxy_to_game_server(path: str) -> Response:
@@ -1635,19 +1682,29 @@ def proxy_to_game_server(path: str) -> Response:
 
     try:
         with urllib.request.urlopen(proxy_request, timeout=90) as upstream:
+            body = upstream.read()
+            encoding = upstream.headers.get("Content-Encoding", "").lower()
+            if encoding == "gzip":
+                body = gzip.decompress(body)
+
             response_headers = [
                 (key, value)
                 for key, value in upstream.headers.items()
                 if key.lower() not in SKIP_RESPONSE_HEADERS
             ]
-            return Response(upstream.read(), upstream.status, response_headers)
+            return Response(body, upstream.status, response_headers)
     except urllib.error.HTTPError as err:
+        body = err.read()
+        encoding = err.headers.get("Content-Encoding", "").lower()
+        if encoding == "gzip":
+            body = gzip.decompress(body)
+
         response_headers = [
             (key, value)
             for key, value in err.headers.items()
             if key.lower() not in SKIP_RESPONSE_HEADERS
         ]
-        return Response(err.read(), err.code, response_headers)
+        return Response(body, err.code, response_headers)
     except urllib.error.URLError as err:
         return jsonify(
             {
@@ -1676,6 +1733,13 @@ def api_status():
             game_body = json.loads(upstream.read().decode())
     except Exception as err:
         game_detail = str(err)
+    web_map_hash = world_map_hash()
+    game_map_hash = (game_body or {}).get("worldMapHash") if game_body else None
+    maps_in_sync = bool(
+        web_map_hash
+        and game_map_hash
+        and web_map_hash == game_map_hash
+    )
     return jsonify(
         {
             "web": "ok",
@@ -1686,6 +1750,12 @@ def api_status():
             "gameServerError": game_detail,
             "gameServerHealth": game_body,
             "worldMapPresent": WORLD_MAP_PATH.is_file(),
+            "worldMapHash": web_map_hash or None,
+            "worldMapVersion": world_map_version(),
+            "worldMapsInSync": maps_in_sync,
+            "multiplayerReady": bool(
+                game_ok and GAME_SOCKET_URL and maps_in_sync
+            ),
         }
     )
 

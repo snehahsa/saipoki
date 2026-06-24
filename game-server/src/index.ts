@@ -6,7 +6,7 @@ import { Server as SocketIOServer } from 'socket.io'
 import dotenv from 'dotenv'
 import { sockets } from './sockets'
 import { sessionManager, WORLD_ID } from './session'
-import { loadWorldMapFromDisk } from './worldMap'
+import { loadWorldMapFromDisk, worldMapFileHash, worldMapFileVersion } from './worldMap'
 
 for (const envPath of [
     path.join(__dirname, '../../../.env'),
@@ -43,12 +43,23 @@ const io = new SocketIOServer(server, {
 app.get('/health', (_req, res) => {
     const session = sessionManager.getSession(WORLD_ID)
     const players = session?.getPlayerCount() ?? 0
+    let mapHash = ''
+    let mapVersion = ''
+    try {
+        mapHash = worldMapFileHash()
+        mapVersion = worldMapFileVersion()
+    } catch {
+        mapHash = 'missing'
+    }
     res.json({
         ok: true,
         players,
         maxPlayers: 50,
         world: 'SaiPoke Realm',
+        worldId: WORLD_ID,
         rooms: session?.map_data?.rooms?.length ?? 1,
+        worldMapHash: mapHash,
+        worldMapVersion: mapVersion,
     })
 })
 

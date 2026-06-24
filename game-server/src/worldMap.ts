@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 import { RealmData } from './session'
 
 const DEFAULT_ROOM_NAME = 'SaiPoke Realm'
@@ -22,6 +23,17 @@ function resolveMapPath(): string {
     throw new Error(
         `World map not found. Tried: ${candidates.join(', ')}`
     )
+}
+
+export function worldMapFileHash(): string {
+    const mapPath = resolveMapPath()
+    const raw = fs.readFileSync(mapPath)
+    return crypto.createHash('md5').update(raw).digest('hex')
+}
+
+export function worldMapFileVersion(): string {
+    const mapPath = resolveMapPath()
+    return String(Math.floor(fs.statSync(mapPath).mtimeMs / 1000))
 }
 
 export function loadWorldMapFromDisk(): RealmData {

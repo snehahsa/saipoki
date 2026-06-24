@@ -32,6 +32,15 @@ function normalizeRealmData(data: RealmData): RealmData {
     }
 }
 
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+    const text = await response.text()
+    try {
+        return JSON.parse(text) as T
+    } catch {
+        throw new SyntaxError(`Invalid JSON from ${response.url}`)
+    }
+}
+
 async function loadWorldMap(backendUrl: string): Promise<RealmData> {
     const response = await fetch(`${backendUrl}/api/world?t=${Date.now()}`, {
         cache: 'no-store',
@@ -41,7 +50,7 @@ async function loadWorldMap(backendUrl: string): Promise<RealmData> {
         throw new Error('Failed to load world map')
     }
 
-    const data = (await response.json()) as RealmData
+    const data = await parseJsonResponse<RealmData>(response)
     return normalizeRealmData(data)
 }
 
