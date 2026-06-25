@@ -2403,6 +2403,13 @@ def leaderboard_api():
     return jsonify(payload)
 
 
+@app.route("/sprites/animations/manifest.json")
+def animation_manifest():
+    from animation_catalog import load_manifest
+
+    return jsonify({"animations": load_manifest()})
+
+
 @app.route("/sprites/<path:filename>")
 def sprites(filename):
     bases = (

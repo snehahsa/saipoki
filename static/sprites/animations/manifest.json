@@ -1,0 +1,154 @@
+{
+  "animations": [
+    {
+      "id": "water1",
+      "folder": "water1",
+      "file": "wa.png",
+      "path": "water1/wa.png",
+      "url": "/sprites/animations/water1/wa.png",
+      "width": 1254,
+      "height": 1254,
+      "frameWidth": 418,
+      "frameHeight": 418,
+      "columns": 3,
+      "rows": 3,
+      "frameCount": 9,
+      "displayScale": 0.076555,
+      "frameMs": 180,
+      "tileId": "anim-water1",
+      "customFrames": true,
+      "frames": {
+        "loop_0": {
+          "x": 0,
+          "y": 0,
+          "w": 418,
+          "h": 418
+        },
+        "loop_1": {
+          "x": 418,
+          "y": 0,
+          "w": 418,
+          "h": 418
+        },
+        "loop_2": {
+          "x": 836,
+          "y": 0,
+          "w": 418,
+          "h": 418
+        },
+        "loop_3": {
+          "x": 0,
+          "y": 418,
+          "w": 418,
+          "h": 418
+        },
+        "loop_4": {
+          "x": 418,
+          "y": 418,
+          "w": 418,
+          "h": 418
+        },
+        "loop_5": {
+          "x": 836,
+          "y": 418,
+          "w": 418,
+          "h": 418
+        },
+        "loop_6": {
+          "x": 0,
+          "y": 836,
+          "w": 418,
+          "h": 418
+        },
+        "loop_7": {
+          "x": 418,
+          "y": 836,
+          "w": 418,
+          "h": 418
+        },
+        "loop_8": {
+          "x": 836,
+          "y": 836,
+          "w": 418,
+          "h": 418
+        }
+      },
+      "gearUseTarget": true
+    },
+    {
+      "id": "water2",
+      "folder": "water2",
+      "file": "ww.png",
+      "path": "water2/ww.png",
+      "url": "/sprites/animations/water2/ww.png",
+      "width": 144,
+      "height": 144,
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "columns": 3,
+      "rows": 3,
+      "frameCount": 9,
+      "displayScale": 0.666667,
+      "frameMs": 180,
+      "tileId": "anim-water2",
+      "customFrames": true,
+      "frames": {
+        "loop_0": {
+          "x": 0,
+          "y": 0,
+          "w": 48,
+          "h": 48
+        },
+        "loop_1": {
+          "x": 48,
+          "y": 0,
+          "w": 48,
+          "h": 48
+        },
+        "loop_2": {
+          "x": 96,
+          "y": 0,
+          "w": 48,
+          "h": 48
+        },
+        "loop_3": {
+          "x": 0,
+          "y": 48,
+          "w": 48,
+          "h": 48
+        },
+        "loop_4": {
+          "x": 48,
+          "y": 48,
+          "w": 48,
+          "h": 48
+        },
+        "loop_5": {
+          "x": 96,
+          "y": 48,
+          "w": 48,
+          "h": 48
+        },
+        "loop_6": {
+          "x": 0,
+          "y": 96,
+          "w": 48,
+          "h": 48
+        },
+        "loop_7": {
+          "x": 48,
+          "y": 96,
+          "w": 48,
+          "h": 48
+        },
+        "loop_8": {
+          "x": 96,
+          "y": 96,
+          "w": 48,
+          "h": 48
+        }
+      },
+      "gearUseTarget": true
+    }
+  ]
+}

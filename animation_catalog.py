@@ -9,7 +9,9 @@ from typing import Optional
 
 ROOT = Path(__file__).resolve().parent
 ANIMATIONS_DIR = ROOT / "gather-clone/frontend/public/sprites/animations"
+STATIC_ANIMATIONS_DIR = ROOT / "static/sprites/animations"
 MANIFEST_PATH = ANIMATIONS_DIR / "manifest.json"
+STATIC_MANIFEST_PATH = STATIC_ANIMATIONS_DIR / "manifest.json"
 PIXI_MANIFEST_PATH = (
     ROOT / "gather-clone/frontend/utils/pixi/spritesheet/anim.manifest.json"
 )
@@ -36,7 +38,19 @@ def display_scale_for_frame(frame_width: int) -> float:
 
 
 def animation_folder(animation_id: str) -> Path:
+    for root in animation_roots():
+        folder = root / animation_id
+        if folder.is_dir():
+            return folder
     return ANIMATIONS_DIR / animation_id
+
+
+def animation_roots() -> list[Path]:
+    roots: list[Path] = []
+    for candidate in (STATIC_ANIMATIONS_DIR, ANIMATIONS_DIR):
+        if candidate.is_dir() and candidate not in roots:
+            roots.append(candidate)
+    return roots or [ANIMATIONS_DIR]
 
 
 def config_json_path(animation_id: str) -> Path:
@@ -369,19 +383,24 @@ def scan_animation_folder(animation_id: str, png: Path) -> dict | None:
 
 
 def scan_animations() -> list[dict]:
-    if not ANIMATIONS_DIR.is_dir():
-        return []
-
     entries: list[dict] = []
-    for folder in sorted(ANIMATIONS_DIR.iterdir()):
-        if not folder.is_dir() or folder.name.startswith("."):
+    seen: set[str] = set()
+
+    for root in animation_roots():
+        if not root.is_dir():
             continue
-        png = find_png_in_folder(folder)
-        if not png:
-            continue
-        entry = scan_animation_folder(folder.name, png)
-        if entry:
-            entries.append(entry)
+        for folder in sorted(root.iterdir()):
+            if not folder.is_dir() or folder.name.startswith("."):
+                continue
+            if folder.name in seen:
+                continue
+            png = find_png_in_folder(folder)
+            if not png:
+                continue
+            entry = scan_animation_folder(folder.name, png)
+            if entry:
+                entries.append(entry)
+                seen.add(folder.name)
 
     return entries
 
@@ -419,26 +438,27 @@ def sync_pixi_manifest(animations: list[dict]) -> None:
 
 def sync_manifest() -> list[dict]:
     animations = scan_animations()
-    ANIMATIONS_DIR.mkdir(parents=True, exist_ok=True)
-    MANIFEST_PATH.write_text(
-        json.dumps({"animations": animations}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    payload = json.dumps({"animations": animations}, indent=2) + "\n"
+    for path in (MANIFEST_PATH, STATIC_MANIFEST_PATH):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(payload, encoding="utf-8")
     sync_pixi_manifest(animations)
     return animations
 
 
 def load_manifest() -> list[dict]:
-    if MANIFEST_PATH.is_file():
+    for path in (STATIC_MANIFEST_PATH, MANIFEST_PATH):
+        if not path.is_file():
+            continue
         try:
-            data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
             animations = data.get("animations")
             if isinstance(animations, list):
                 loaded = [a for a in animations if isinstance(a, dict) and a.get("id")]
                 if loaded:
                     return loaded
         except (json.JSONDecodeError, OSError):
-            pass
+            continue
     return sync_manifest()
 
 

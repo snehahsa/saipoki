@@ -10,6 +10,10 @@ if [ -d gather-clone/frontend/public/sprites ]; then
   rsync -a gather-clone/frontend/public/sprites/ static/sprites/
   rsync -a gather-clone/frontend/public/fonts/ static/fonts/ 2>/dev/null || true
 fi
+# Ensure map animation sheets + manifest exist in static/ (spectate / game init)
+if [ -d static/sprites/animations ]; then
+  python3 -c "from animation_catalog import sync_manifest; found = sync_manifest(); print(f'animation manifest: {len(found)} entries')"
+fi
 if [ -f gather-clone/frontend/utils/defaultmap.json ]; then
   mkdir -p data game-server/data
   cp gather-clone/frontend/utils/defaultmap.json data/defaultmap.json
