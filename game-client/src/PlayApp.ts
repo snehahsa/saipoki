@@ -48,6 +48,7 @@ export class PlayApp extends App {
     private spectatorPinchDistance = 0
     private spectatorPinchScale = 1
     private spectatorWheelTarget: HTMLElement | null = null
+    private enterAsSpectator = false
 
     constructor(
         uid: string,
@@ -68,6 +69,10 @@ export class PlayApp extends App {
         this.currentRoomIndex = spawn.roomIndex
         this.player.presetTilePosition(spawn.x, spawn.y)
         this.setPlayerHolds(holds)
+    }
+
+    public setEnterAsSpectator(value: boolean) {
+        this.enterAsSpectator = value
     }
 
     public getPlayerHolds(): Set<string> {
@@ -394,7 +399,12 @@ export class PlayApp extends App {
         await this.loadAssets()
         await this.loadRoom(this.realmData.spawnpoint.roomIndex)
 
+        if (this.enterAsSpectator) {
+            this.enableSpectatorMode()
+        }
+
         await this.waitForStableCamera()
+        await this.waitForFirstFrame()
         this.cameraReady = true
         canvas.style.visibility = 'visible'
 
@@ -775,6 +785,11 @@ export class PlayApp extends App {
             await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
         }
         this.snapCameraToPlayer()
+    }
+
+    private async waitForFirstFrame() {
+        this.app.renderer.render(this.app.stage)
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     }
 
     public moveCameraToPlayer = () => {

@@ -1,7 +1,7 @@
 import { PlayApp } from '@/utils/pixi/PlayApp'
 import { loadAnimalCatalog } from './spriteSheets'
 import { loadGearCatalog } from './gearCatalog'
-import { loadAnimationCatalog } from '@/utils/pixi/mapAnimations'
+import { preloadRealmTileAssets } from '@/utils/pixi/realmPreload'
 import { RealmData, Room } from '@/utils/pixi/types'
 import { server } from '@/utils/backend/server'
 import signal from '@/utils/signal'
@@ -43,6 +43,14 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
     } catch {
         throw new SyntaxError(`Invalid JSON from ${response.url}`)
     }
+}
+
+async function waitForPaintReady(app: PlayApp) {
+    const pixiApp = app.getApp()
+    pixiApp.renderer.render(pixiApp.stage)
+    await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
 }
 
 async function loadWorldMap(backendUrl: string): Promise<RealmData> {
@@ -106,19 +114,21 @@ export async function startGame(session: GameSession): Promise<{ success: boolea
         return { success: false, error: errorMessage }
     }
 
+    if (session.spectator) {
+        app.setEnterAsSpectator(true)
+    }
+
     try {
         session.onProgress?.('Loading sprites')
         await loadAnimalCatalog()
         await loadGearCatalog()
-        await loadAnimationCatalog()
-        session.onProgress?.('Loading world')
+        await preloadRealmTileAssets(realmData, session.onProgress)
+        session.onProgress?.('Building world')
         await app.init()
-        if (session.spectator) {
-            app.enableSpectatorMode()
-        }
         if (pendingEquippedGear) {
             await app.setEquippedGear(pendingEquippedGear)
         }
+        await waitForPaintReady(app)
     } catch (error) {
         console.error('Failed to initialize game world:', error)
         activeApp.destroy()

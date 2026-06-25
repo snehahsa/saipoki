@@ -3187,6 +3187,8 @@ async function enterGame() {
         menuStatus.classList.remove("error")
     }
 
+    setGameLoading(playSpectatorMode ? "ENTERING REALM" : "OPENING REALM")
+
     try {
         await loadGameClient()
         bindGameEvents()
@@ -3195,6 +3197,7 @@ async function enterGame() {
             joinToastHandler = bindJoinToasts()
         }
     } catch (error) {
+        setGameLoading("", false)
         if (menuStatus) {
             menuStatus.textContent = error.message || "Could not load game."
             menuStatus.classList.add("error")
@@ -4258,6 +4261,7 @@ async function completeSessionBootstrap() {
     applySessionFromAuth(data)
 
     if (playSpectatorMode) {
+        setGameLoading("ENTERING REALM")
         hidePlayLanding()
         document.body.classList.add("spectator-mode")
         dismissBootSplash()
