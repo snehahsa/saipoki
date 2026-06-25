@@ -223,3 +223,7 @@ def init_postgres_schema(conn: Any) -> None:
     backfill_xp_rewards(conn)
     ensure_poketab_schema(conn)
     ensure_poketab_battle_schema(conn)
+
+    from kins_payments import ensure_kins_payments_schema
+
+    ensure_kins_payments_schema(conn)

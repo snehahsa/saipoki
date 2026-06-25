@@ -24,6 +24,10 @@ FISHING_QUESTS: dict[str, dict[str, Any]] = {
         },
         "empty_salvage": "Nothing metal hooked this time — keep trying Salvage by the water.",
         "empty_wrong_mode": "That catch type won't turn up a key — try Salvage near the canal.",
+        "retry_prompt_title": "Try again?",
+        "retry_prompt_message": (
+            "Your first Salvage cast came up empty. Cast again and restart the timer?"
+        ),
         "catch_title": "You found it!",
         "catch_message": (
             "Your line snags something heavy — a rusty PokéHub key glints in the shallows! "
@@ -55,6 +59,8 @@ def fishing_quest_for_client(quest_id: str) -> dict:
         "quest_id": quest.get("quest_id"),
         "catch_title": quest.get("catch_title"),
         "catch_message": quest.get("catch_message"),
+        "retry_prompt_title": quest.get("retry_prompt_title"),
+        "retry_prompt_message": quest.get("retry_prompt_message"),
     }
 
 

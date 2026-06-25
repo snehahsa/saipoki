@@ -26,12 +26,28 @@ KINS_TOKEN_MINT = os.getenv(
 
 SOLANA_RPC_URL = os.getenv(
     "SOLANA_RPC_URL",
-    "https://api.mainnet-beta.solana.com",
+    "https://solana-rpc.publicnode.com",
 ).strip()
+
+SOLANA_RPC_FALLBACKS = (
+    "https://solana-rpc.publicnode.com",
+    "https://api.mainnet-beta.solana.com",
+)
+
+
+def solana_rpc_urls() -> list[str]:
+    primary = SOLANA_RPC_URL
+    extra = os.getenv("SOLANA_RPC_FALLBACKS", "")
+    ordered: list[str] = []
+    for candidate in [primary, *extra.split(","), *SOLANA_RPC_FALLBACKS]:
+        url = (candidate or "").strip()
+        if url and url not in ordered:
+            ordered.append(url)
+    return ordered
 
 CHALLENGE_TTL_SEC = int(os.getenv("WALLET_CHALLENGE_TTL_SEC", "300"))
 SESSION_TTL_SEC = int(os.getenv("WALLET_SESSION_TTL_SEC", str(24 * 3600)))
-MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "0"))
+MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "1000"))
 
 _lock = threading.Lock()
 _challenges: dict[str, dict[str, Any]] = {}
@@ -107,7 +123,7 @@ def verify_solana_signature(wallet_address: str, message: str, signature_b64: st
         return False
 
 
-def wallet_holds_kins_token(wallet_address: str) -> tuple[bool, str]:
+def wallet_kins_balance(wallet_address: str) -> tuple[float, str]:
     payload = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -128,7 +144,7 @@ def wallet_holds_kins_token(wallet_address: str) -> tuple[bool, str]:
         with urllib.request.urlopen(req, timeout=12) as resp:
             body = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-        return False, f"Could not verify $KINS balance ({exc}). Try again."
+        return 0.0, f"Could not verify $KINS balance ({exc}). Try again."
 
     accounts = body.get("result", {}).get("value") or []
     total = 0.0
@@ -140,10 +156,17 @@ def wallet_holds_kins_token(wallet_address: str) -> tuple[bool, str]:
             total += float(amount or 0)
         except (KeyError, TypeError, ValueError):
             continue
+    return total, ""
 
-    if total > MIN_TOKEN_UI_AMOUNT:
+
+def wallet_holds_kins_token(wallet_address: str) -> tuple[bool, str]:
+    total, err = wallet_kins_balance(wallet_address)
+    if err:
+        return False, err
+    if total >= MIN_TOKEN_UI_AMOUNT:
         return True, ""
-    return False, "Wallet must hold $KINS to enter the realm."
+    min_display = int(MIN_TOKEN_UI_AMOUNT) if MIN_TOKEN_UI_AMOUNT == int(MIN_TOKEN_UI_AMOUNT) else MIN_TOKEN_UI_AMOUNT
+    return False, f"Wallet must hold at least {min_display:,} $KINS to enter the realm."
 
 
 def issue_wallet_session(wallet_address: str) -> str:
@@ -215,10 +238,17 @@ def verify_wallet_login(
     if not verify_solana_signature(wallet_address, message, signature_b64):
         return False, "Signature verification failed.", None
 
-    if require_token:
-        ok, err = wallet_holds_kins_token(wallet_address)
-        if not ok:
-            return False, err, None
+    # Token gate (min $KINS hold) — disabled for now; uncomment to re-enable at launch.
+    # if require_token:
+    #     ok, err = wallet_holds_kins_token(wallet_address)
+    #     if not ok:
+    #         return False, err, None
 
     _consume_challenge(challenge_id)
     return True, "", issue_wallet_session(wallet_address)
+
+
+def clear_wallet_sessions() -> None:
+    with _lock:
+        _challenges.clear()
+        _sessions.clear()

@@ -98,7 +98,7 @@ body.play-body {
 #play-landing {
     position: fixed;
     inset: 0;
-    z-index: 20;
+    z-index: 10050;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -246,7 +246,7 @@ body.play-body {
 .play-wallet-modal {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: 10100;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -327,6 +327,29 @@ body.play-body {
 }
 
 /* Game layer */
+body.play-mode #retro-pixel-bg {
+    opacity: 0;
+    transition: opacity 420ms ease;
+}
+
+body.play-mode.play-in-app #retro-pixel-bg {
+    opacity: 1;
+}
+
+body.play-mode.play-in-app .play-bg {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 420ms ease;
+}
+
+body.play-mode .play-bg {
+    z-index: 0;
+}
+
+body.play-mode .screen {
+    z-index: 2;
+}
+
 #play-game {
     position: fixed;
     inset: 0;
@@ -350,6 +373,8 @@ body.play-body {
 }
 
 body.spectator-mode #game-hud,
+body.spectator-mode #game-hud-stack,
+body.spectator-mode .game-hud-deposit,
 body.spectator-mode .game-top-actions,
 body.spectator-mode .game-poketab-btn,
 body.spectator-mode .game-bag-btn,
@@ -384,6 +409,22 @@ body.spectator-mode #game-screen::after {
 
 body.spectator-mode .play-spectate-badge {
     display: block;
+    max-width: min(92vw, 420px);
+    text-align: center;
+    line-height: 1.45;
+}
+
+body.spectator-mode #app-container,
+body.spectator-mode #app-container canvas {
+    touch-action: none;
+}
+
+body.spectator-mode #app-container canvas {
+    cursor: grab;
+}
+
+body.spectator-mode #app-container canvas:active {
+    cursor: grabbing;
 }
 
 .play-exit-spectate {

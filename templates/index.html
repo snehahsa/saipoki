@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="format-detection" content="telephone=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>SaiPoke Realm</title>
+    <title>{% if play_mode %}PokeQuest — Play Now{% else %}SaiPoke Realm{% endif %}</title>
     <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
+    {% if play_mode %}
+    <link rel="preload" href="/static/background/bg.png?v={{ asset_v.bg }}" as="image">
+    {% endif %}
     <style>
         html, body {
             margin: 0;
@@ -83,8 +86,11 @@
         })();
     </script>
     <link rel="stylesheet" href="/static/css/app.css?v={{ asset_v.css }}">
+    {% if play_mode %}
+    <link rel="stylesheet" href="/static/css/play.css?v={{ asset_v.play_css }}">
+    {% endif %}
 </head>
-<body>
+<body{% if play_mode %} class="play-body play-mode"{% endif %}>
 
 <div id="retro-pixel-bg" class="retro-pixel-bg" aria-hidden="true">
     <div class="retro-pixel-stars"></div>
@@ -93,6 +99,72 @@
     <div class="retro-pixel-grass-strip"></div>
 </div>
 
+{% if play_mode %}
+<div class="play-bg" aria-hidden="true">
+    <img
+        class="play-bg__image"
+        src="/static/background/bg.png?v={{ asset_v.bg }}"
+        alt=""
+        width="1920"
+        height="1080"
+        decoding="async"
+    >
+    <div class="play-bg__shade"></div>
+    <div class="play-bg__scan"></div>
+    <div class="play-bg__grain"></div>
+</div>
+
+<section id="play-landing" aria-label="Enter PokeQuest">
+    <div class="play-landing-inner">
+        <img
+            class="play-logo"
+            src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+            alt="PokeQuest"
+            width="280"
+            height="101"
+            decoding="async"
+        >
+        <p class="play-kicker">
+            BATTLE · FLIP ITEMS · CRUSH QUESTS · CLEAR GYMS · RAID BOSSES · STACK $KINS
+        </p>
+        <p class="play-tagline">
+            The isometric MMO built to pay you. Grind the map, buy and sell for $KINS,
+            chain quests with your squad, and own every run you clear.
+        </p>
+        <div class="play-actions">
+            <button type="button" class="play-btn play-btn--primary" id="play-now-btn">Play Now</button>
+            <button type="button" class="play-btn play-btn--ghost" id="spectate-btn">Spectate</button>
+        </div>
+        <p class="play-status" id="play-status" aria-live="polite"></p>
+        <p class="play-wallet-hint">Play Now requires Phantom or Solflare with a signed wallet connection.</p>
+    </div>
+</section>
+
+<div id="play-wallet-modal" class="play-wallet-modal hidden" role="dialog" aria-labelledby="play-wallet-title" aria-modal="true">
+    <div class="play-wallet-panel">
+        <p class="play-wallet-title" id="play-wallet-title">Connect Wallet</p>
+        <p class="play-wallet-copy">
+            Prove ownership with a signed message to enter the realm.
+        </p>
+        <div class="play-wallet-options">
+            <button type="button" class="play-wallet-option" data-wallet="phantom">
+                <span class="play-wallet-icon" aria-hidden="true">👻</span>
+                <span>Phantom</span>
+            </button>
+            <button type="button" class="play-wallet-option" data-wallet="solflare">
+                <span class="play-wallet-icon" aria-hidden="true">🔥</span>
+                <span>Solflare</span>
+            </button>
+        </div>
+        <button type="button" class="play-wallet-close" id="play-wallet-close">Cancel</button>
+    </div>
+</div>
+
+<p class="play-spectate-badge" aria-hidden="true">SPECTATING LIVE REALM · DRAG MAP · SCROLL / PINCH ZOOM</p>
+<button type="button" class="play-exit-spectate" id="exit-spectate-btn">Back</button>
+{% endif %}
+
+{% if not play_mode %}
 <div id="tg-boot-splash" class="tg-boot-splash" aria-live="polite">
     <img
         class="tg-boot-logo"
@@ -104,6 +176,7 @@
     >
     <p class="tg-boot-progress" id="boot-progress-text">Loading...</p>
 </div>
+{% endif %}
 
 <div id="loading-screen" class="screen hidden">
     <div class="panel">
@@ -207,9 +280,24 @@
     </div>
     <div class="panel panel-skin">
         <p class="panel-pixel-title">SETUP YOUR PROFILE</p>
-        <p class="subtitle">Choose your avatar</p>
+        <p class="subtitle" id="skin-setup-subtitle">Enter your trainer name</p>
 
-        <section class="skin-section skin-section-picker" aria-label="Avatar selection">
+        <section class="skin-section skin-section-name" id="skin-setup-name-step" aria-label="Trainer name">
+            <label class="skin-name-field">
+                <span class="skin-name-label">Enter your trainer name</span>
+                <input
+                    type="text"
+                    id="skin-player-name-input"
+                    class="skin-name-input"
+                    maxlength="24"
+                    autocomplete="nickname"
+                    placeholder="Trainer name"
+                >
+            </label>
+            <p class="skin-name-hint">Shown under your character in the world</p>
+        </section>
+
+        <section class="skin-section skin-section-picker hidden" id="skin-setup-skin-step" aria-label="Avatar selection">
             <p class="skin-section-label">Avatar</p>
             <div class="skin-economy-row" aria-live="polite">
                 <span class="skin-economy-label">Balance:</span>
@@ -230,23 +318,10 @@
             </div>
         </section>
 
-        <section class="skin-section skin-section-name" aria-label="Trainer name">
-            <label class="skin-name-field">
-                <span class="skin-name-label">Enter your trainer name</span>
-                <input
-                    type="text"
-                    id="skin-player-name-input"
-                    class="skin-name-input"
-                    maxlength="24"
-                    autocomplete="nickname"
-                    placeholder="Trainer name"
-                >
-            </label>
-            <p class="skin-name-hint">Shown under your character in the world</p>
-        </section>
-
-        <div class="menu-grid" style="margin-top: 18px;">
-            <button class="btn btn-play" id="save-skin-btn" type="button">Buy</button>
+        <div class="menu-grid skin-setup-actions" style="margin-top: 18px;">
+            <button class="btn btn-play" id="skin-name-next-btn" type="button">Next</button>
+            <button class="btn btn-play hidden" id="save-skin-btn" type="button">Buy</button>
+            <button class="btn btn-secondary hidden" id="skin-name-back-btn" type="button">Back</button>
         </div>
         <p class="skin-purchase-hint" id="skin-purchase-hint"></p>
         <p class="status" id="skin-status"></p>
@@ -312,7 +387,27 @@
         <div class="balance-line balance-line--profile" aria-live="polite">
             <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
             <span id="profile-balance">0</span>
+            <span class="profile-balance-label"> gold coins</span>
         </div>
+
+        <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Deposit $KINS">
+            <p class="profile-section-title">Add $KINS Balance</p>
+            <p class="profile-section-note">1 $KINS = 1 gold coin. Sends on-chain to the realm treasury, then credits your balance after verification.</p>
+            <label class="skin-name-field profile-deposit-field">
+                <span class="skin-name-label">Amount in $KINS</span>
+                <input
+                    type="number"
+                    id="profile-deposit-amount"
+                    class="skin-name-input"
+                    min="1"
+                    step="1"
+                    inputmode="numeric"
+                    placeholder="e.g. 1000"
+                >
+            </label>
+            <button class="btn btn-play profile-deposit-btn" id="profile-deposit-btn" type="button">Deposit $KINS</button>
+            <p class="profile-section-note profile-kins-treasury-note" id="profile-kins-treasury-note"></p>
+        </section>
 
         <div class="profile-xp-block" aria-live="polite">
             <p class="profile-level" id="profile-level">Lv.0 · Newcomer</p>
@@ -454,13 +549,28 @@
 </div>
 
 <div id="game-screen" class="screen hidden">
-    <div id="game-hud" class="game-hud">
-        <div class="hud-line hud-line--level">lv: <span id="stat-level" class="hud-v">0 · Newcomer</span></div>
-        <div class="hud-line hud-line--xp">xp: <span id="stat-xp" class="hud-v">0</span></div>
-        <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
-        <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
-        <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-coin poke-coin--sm hud-coin" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
-        <div class="hud-line">coord: <span id="stat-coord" class="hud-v">—, —</span></div>
+    <div class="game-hud-stack" id="game-hud-stack">
+        <div id="game-hud" class="game-hud">
+            <div class="hud-line hud-line--level">lv: <span id="stat-level" class="hud-v">0 · Newcomer</span></div>
+            <div class="hud-line hud-line--xp">xp: <span id="stat-xp" class="hud-v">0</span></div>
+            <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
+            <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
+            <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-coin poke-coin--sm hud-coin" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
+            <div class="hud-line">coord: <span id="stat-coord" class="hud-v">—, —</span></div>
+        </div>
+        <div class="game-hud-deposit hidden" id="game-hud-deposit" aria-label="Add $KINS balance">
+            <button type="button" class="game-hud-deposit-btn" id="game-hud-deposit-toggle">Add Balance</button>
+            <div class="game-hud-deposit-pop hidden" id="game-hud-deposit-pop" role="dialog" aria-label="Deposit $KINS">
+                <p class="game-hud-deposit-title">Deposit $KINS</p>
+                <p class="game-hud-deposit-note">1 $KINS = 1 gold coin · sends on-chain to treasury</p>
+                <label class="game-hud-deposit-field">
+                    <span class="game-hud-deposit-label">Amount</span>
+                    <input type="number" id="game-hud-deposit-amount" class="game-hud-deposit-input" min="1" step="1" inputmode="numeric" placeholder="e.g. 500">
+                </label>
+                <button type="button" class="game-hud-deposit-buy" id="game-hud-deposit-buy">Buy</button>
+                <p class="game-hud-deposit-status" id="game-hud-deposit-status" aria-live="polite"></p>
+            </div>
+        </div>
     </div>
     <div class="game-top-actions">
         <button class="btn btn-leave" id="leave-game-btn" type="button">EXIT</button>
@@ -936,12 +1046,20 @@
         xpLevels: {{ xp_levels|tojson }},
         testMode: {{ test_mode|tojson }},
         testPlayerSlug: {{ test_player_slug|tojson }},
+        playMode: {{ play_mode|tojson }},
+        kinsTokenMint: {{ kins_token_mint|tojson }},
+        kinsTreasury: {{ kins_treasury|tojson }},
+        kinsMinHold: {{ kins_min_hold|tojson }},
         assets: {
             gameJs: "/static/game/game.js?v={{ asset_v.game_js }}"
         }
     };
 </script>
 <script src="/static/js/retro-audio.js?v={{ asset_v.retro_audio_js }}"></script>
+{% if play_mode %}
+<script src="/static/js/play.js?v={{ asset_v.play_js }}"></script>
+{% endif %}
+<script src="/static/js/kins-wallet.js?v={{ asset_v.kins_wallet_js }}"></script>
 <script src="/static/js/poketab.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/poketab_battle.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/app.js?v={{ asset_v.app_js }}"></script>

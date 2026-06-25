@@ -12,6 +12,10 @@ import { buildGearUseTargets, GearUseTarget, resolveGearUse } from './gearTarget
 import { getGearItem } from './gearCatalog'
 
 export class PlayApp extends App {
+    private static readonly TILE_SIZE = 32
+    private static readonly SPECTATOR_ZOOM_PADDING = 0.92
+    private static readonly SPECTATOR_MAX_ZOOM_FACTOR = 3
+
     private scale: number = 1.5
     public player: Player
     public blocked: Set<TilePoint> = new Set()
@@ -35,6 +39,15 @@ export class PlayApp extends App {
     private fishingMode: string = 'fish'
     private cameraReady = false
     private resizeFrame: number | null = null
+    private spectatorMode = false
+    private spectatorPivot = { x: 0, y: 0 }
+    private spectatorFitScale = 0.35
+    private spectatorDragging = false
+    private spectatorDragLast = { x: 0, y: 0 }
+    private spectatorPointers = new Map<number, { x: number; y: number }>()
+    private spectatorPinchDistance = 0
+    private spectatorPinchScale = 1
+    private spectatorWheelTarget: HTMLElement | null = null
 
     constructor(
         uid: string,
@@ -112,6 +125,9 @@ export class PlayApp extends App {
         await this.syncOtherPlayers()
         this.displayInitialChatMessage()
         this.checkNearbyInteractions(this.player.currentTilePosition)
+        if (this.spectatorMode) {
+            this.fitSpectatorCameraToRoom()
+        }
     }
 
     private destroyNpcs = () => {
@@ -222,6 +238,9 @@ export class PlayApp extends App {
             }
             if (flow.grantGear) {
                 signal.emit('grantGear', { item: flow.grantGear, source: `npc:${npc.id}` })
+            }
+            if (flow.takeGear) {
+                signal.emit('takeGear', { item: flow.takeGear, source: `npc:${npc.id}` })
             }
             if (flow.questStep && (!flow.grantHold || canGrantFlowHold(flow, holds, this.holdGrantRules))) {
                 signal.emit('questStep', {
@@ -395,6 +414,27 @@ export class PlayApp extends App {
             || key === 'w' || key === 'a' || key === 's' || key === 'd'
     }
 
+    private isTypingTarget(event: KeyboardEvent) {
+        const target = event.target
+        if (target instanceof HTMLElement) {
+            if (target.isContentEditable) return true
+            const tag = target.tagName
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+            if (target.closest("[contenteditable=''], [contenteditable='true'], [contenteditable='plaintext-only']")) {
+                return true
+            }
+        }
+
+        const active = document.activeElement
+        if (active instanceof HTMLElement) {
+            if (active.isContentEditable) return true
+            const tag = active.tagName
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+        }
+
+        return false
+    }
+
     private setUpKeyboardEvents = () => {
         document.addEventListener('keydown', this.keydown)
         document.addEventListener('keyup', this.keyup)
@@ -407,6 +447,7 @@ export class PlayApp extends App {
 
     private keydown = (event: KeyboardEvent) => {
         if (this.disableInput || this.player.frozen) return
+        if (event.isComposing || this.isTypingTarget(event)) return
 
         const key = this.normalizeMovementKey(event.key)
         if (!this.isMovementKey(key)) return
@@ -418,6 +459,7 @@ export class PlayApp extends App {
     }
 
     private keyup = (event: KeyboardEvent) => {
+        if (event.isComposing || this.isTypingTarget(event)) return
         const key = this.normalizeMovementKey(event.key)
         this.keysDown = this.keysDown.filter((k) => k !== key)
     }
@@ -452,6 +494,7 @@ export class PlayApp extends App {
     }
 
     public enableSpectatorMode() {
+        this.spectatorMode = true
         this.disableInput = true
         this.clearPadInput()
         this.keysDown = []
@@ -459,6 +502,230 @@ export class PlayApp extends App {
         if (this.player?.parent) {
             this.player.parent.visible = false
         }
+        this.fitSpectatorCameraToRoom()
+        this.setupSpectatorCameraControls()
+    }
+
+    private getRoomWorldBounds() {
+        const room = this.realmData.rooms[this.currentRoomIndex]
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+
+        for (const key of Object.keys(room?.tilemap || {})) {
+            const [x, y] = key.split(',').map((part) => Number(part.trim()))
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+            minX = Math.min(minX, x)
+            minY = Math.min(minY, y)
+            maxX = Math.max(maxX, x)
+            maxY = Math.max(maxY, y)
+        }
+
+        if (!Number.isFinite(minX)) {
+            minX = 0
+            minY = 0
+            maxX = 24
+            maxY = 24
+        }
+
+        const tile = PlayApp.TILE_SIZE
+        return {
+            minX: minX * tile,
+            minY: minY * tile,
+            maxX: (maxX + 1) * tile,
+            maxY: (maxY + 1) * tile,
+            width: (maxX - minX + 1) * tile,
+            height: (maxY - minY + 1) * tile,
+            centerX: ((minX + maxX + 1) * tile) / 2,
+            centerY: ((minY + maxY + 1) * tile) / 2,
+        }
+    }
+
+    private getSpectatorScaleLimits() {
+        const minScale = this.spectatorFitScale
+        return {
+            min: minScale,
+            max: minScale * PlayApp.SPECTATOR_MAX_ZOOM_FACTOR,
+        }
+    }
+
+    private clampSpectatorScale(nextScale: number) {
+        const { min, max } = this.getSpectatorScaleLimits()
+        return Math.min(max, Math.max(min, nextScale))
+    }
+
+    private applySpectatorCamera() {
+        this.setScale(this.scale)
+        this.app.stage.pivot.set(this.spectatorPivot.x, this.spectatorPivot.y)
+    }
+
+    private clampSpectatorPivot() {
+        const bounds = this.getRoomWorldBounds()
+        const width = this.app.screen.width
+        const height = this.app.screen.height
+        if (width <= 0 || height <= 0) return
+
+        const visibleW = width / this.scale
+        const visibleH = height / this.scale
+        const slackX = visibleW * 0.15
+        const slackY = visibleH * 0.15
+
+        const minPivotX = bounds.minX - slackX
+        const maxPivotX = bounds.maxX + slackX - visibleW
+        const minPivotY = bounds.minY - slackY
+        const maxPivotY = bounds.maxY + slackY - visibleH
+
+        if (maxPivotX >= minPivotX) {
+            this.spectatorPivot.x = Math.min(maxPivotX, Math.max(minPivotX, this.spectatorPivot.x))
+        } else {
+            this.spectatorPivot.x = (bounds.minX + bounds.maxX - visibleW) / 2
+        }
+
+        if (maxPivotY >= minPivotY) {
+            this.spectatorPivot.y = Math.min(maxPivotY, Math.max(minPivotY, this.spectatorPivot.y))
+        } else {
+            this.spectatorPivot.y = (bounds.minY + bounds.maxY - visibleH) / 2
+        }
+    }
+
+    private fitSpectatorCameraToRoom() {
+        const bounds = this.getRoomWorldBounds()
+        const width = this.app.screen.width
+        const height = this.app.screen.height
+        if (width <= 0 || height <= 0) return
+
+        const fitScale = Math.min(
+            width / Math.max(bounds.width, PlayApp.TILE_SIZE),
+            height / Math.max(bounds.height, PlayApp.TILE_SIZE),
+        ) * PlayApp.SPECTATOR_ZOOM_PADDING
+
+        this.spectatorFitScale = fitScale
+        this.scale = fitScale
+        this.spectatorPivot.x = bounds.centerX - width / 2 / fitScale
+        this.spectatorPivot.y = bounds.centerY - height / 2 / fitScale
+        this.clampSpectatorPivot()
+        this.applySpectatorCamera()
+    }
+
+    private zoomSpectatorAt(screenX: number, screenY: number, factor: number) {
+        const nextScale = this.clampSpectatorScale(this.scale * factor)
+        if (nextScale === this.scale) return
+
+        this.spectatorPivot.x += screenX * (1 / this.scale - 1 / nextScale)
+        this.spectatorPivot.y += screenY * (1 / this.scale - 1 / nextScale)
+        this.scale = nextScale
+        this.clampSpectatorPivot()
+        this.applySpectatorCamera()
+    }
+
+    private setupSpectatorCameraControls() {
+        const stage = this.app.stage
+        stage.on('pointerdown', this.onSpectatorPointerDown)
+        stage.on('pointermove', this.onSpectatorPointerMove)
+        stage.on('pointerup', this.onSpectatorPointerUp)
+        stage.on('pointerupoutside', this.onSpectatorPointerUp)
+        stage.on('pointercancel', this.onSpectatorPointerUp)
+
+        const canvas = this.getApp().canvas
+        this.spectatorWheelTarget = canvas
+        canvas.addEventListener('wheel', this.onSpectatorWheel, { passive: false })
+    }
+
+    private removeSpectatorCameraControls() {
+        const stage = this.app.stage
+        stage.off('pointerdown', this.onSpectatorPointerDown)
+        stage.off('pointermove', this.onSpectatorPointerMove)
+        stage.off('pointerup', this.onSpectatorPointerUp)
+        stage.off('pointerupoutside', this.onSpectatorPointerUp)
+        stage.off('pointercancel', this.onSpectatorPointerUp)
+
+        this.spectatorWheelTarget?.removeEventListener('wheel', this.onSpectatorWheel)
+        this.spectatorWheelTarget = null
+        this.spectatorDragging = false
+        this.spectatorPointers.clear()
+        this.spectatorPinchDistance = 0
+    }
+
+    private onSpectatorPointerDown = (event: PIXI.FederatedPointerEvent) => {
+        if (!this.spectatorMode) return
+
+        this.spectatorPointers.set(event.pointerId, { x: event.global.x, y: event.global.y })
+
+        if (this.spectatorPointers.size === 1) {
+            this.spectatorDragging = true
+            this.spectatorDragLast = { x: event.global.x, y: event.global.y }
+        } else if (this.spectatorPointers.size === 2) {
+            this.spectatorDragging = false
+            const points = [...this.spectatorPointers.values()]
+            const dx = points[1].x - points[0].x
+            const dy = points[1].y - points[0].y
+            this.spectatorPinchDistance = Math.hypot(dx, dy)
+            this.spectatorPinchScale = this.scale
+        }
+    }
+
+    private onSpectatorPointerMove = (event: PIXI.FederatedPointerEvent) => {
+        if (!this.spectatorMode || !this.spectatorPointers.has(event.pointerId)) return
+
+        this.spectatorPointers.set(event.pointerId, { x: event.global.x, y: event.global.y })
+
+        if (this.spectatorPointers.size >= 2) {
+            const points = [...this.spectatorPointers.values()]
+            const dx = points[1].x - points[0].x
+            const dy = points[1].y - points[0].y
+            const distance = Math.hypot(dx, dy)
+            const midpointX = (points[0].x + points[1].x) / 2
+            const midpointY = (points[0].y + points[1].y) / 2
+
+            if (this.spectatorPinchDistance > 0) {
+                const factor = distance / this.spectatorPinchDistance
+                const targetScale = this.clampSpectatorScale(this.spectatorPinchScale * factor)
+                const zoomFactor = targetScale / this.scale
+                if (zoomFactor !== 1) {
+                    this.zoomSpectatorAt(midpointX, midpointY, zoomFactor)
+                }
+            }
+            return
+        }
+
+        if (!this.spectatorDragging) return
+
+        const dx = event.global.x - this.spectatorDragLast.x
+        const dy = event.global.y - this.spectatorDragLast.y
+        this.spectatorDragLast = { x: event.global.x, y: event.global.y }
+        this.spectatorPivot.x -= dx / this.scale
+        this.spectatorPivot.y -= dy / this.scale
+        this.clampSpectatorPivot()
+        this.applySpectatorCamera()
+    }
+
+    private onSpectatorPointerUp = (event: PIXI.FederatedPointerEvent) => {
+        if (!this.spectatorMode) return
+
+        this.spectatorPointers.delete(event.pointerId)
+        if (this.spectatorPointers.size < 2) {
+            this.spectatorPinchDistance = 0
+        }
+        if (this.spectatorPointers.size === 0) {
+            this.spectatorDragging = false
+        } else if (this.spectatorPointers.size === 1) {
+            const remaining = [...this.spectatorPointers.values()][0]
+            this.spectatorDragging = true
+            this.spectatorDragLast = { x: remaining.x, y: remaining.y }
+        }
+    }
+
+    private onSpectatorWheel = (event: WheelEvent) => {
+        if (!this.spectatorMode) return
+        event.preventDefault()
+
+        const canvas = this.getApp().canvas
+        const rect = canvas.getBoundingClientRect()
+        const sx = event.clientX - rect.left
+        const sy = event.clientY - rect.top
+        const factor = event.deltaY > 0 ? 0.9 : 1.1
+        this.zoomSpectatorAt(sx, sy, factor)
     }
 
     private spawnLocalPlayer = async () => {
@@ -486,6 +753,11 @@ export class PlayApp extends App {
     }
 
     private snapCameraToPlayer = (): boolean => {
+        if (this.spectatorMode) {
+            this.applySpectatorCamera()
+            return true
+        }
+
         const width = this.app.screen.width
         const height = this.app.screen.height
         if (width <= 0 || height <= 0) return false
@@ -516,6 +788,11 @@ export class PlayApp extends App {
         }
         this.resizeFrame = requestAnimationFrame(() => {
             this.resizeFrame = null
+            if (this.spectatorMode) {
+                this.clampSpectatorPivot()
+                this.applySpectatorCamera()
+                return
+            }
             this.snapCameraToPlayer()
         })
     }
@@ -799,6 +1076,7 @@ export class PlayApp extends App {
 
     public destroy() {
         this.cameraReady = false
+        this.removeSpectatorCameraControls()
         if (this.resizeFrame !== null) {
             cancelAnimationFrame(this.resizeFrame)
             this.resizeFrame = null

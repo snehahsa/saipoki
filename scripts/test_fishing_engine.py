@@ -46,7 +46,19 @@ def main() -> None:
     _expire_session(conn, "test1", started["session_id"])
     done = complete_fishing_cast(conn, "test1", session_id=started["session_id"])
     assert not done.get("caught"), done
+    assert not done.get("show_retry_prompt"), done
     print("wrong mode: ok")
+
+    started = start_fishing_cast(
+        conn, "test1", quest_key="pokehub_key", mode="salvage", gear_id="fishing_rod"
+    )
+    assert started["ok"], started
+    _expire_session(conn, "test1", started["session_id"])
+    done = complete_fishing_cast(conn, "test1", session_id=started["session_id"])
+    assert not done.get("caught"), done
+    assert done.get("show_retry_prompt") is True, done
+    assert done.get("salvage_casts") == 1, done
+    print("first salvage retry prompt: ok")
 
     for attempt in range(5):
         started = start_fishing_cast(

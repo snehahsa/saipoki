@@ -401,3 +401,16 @@ def grant_gear_to_slots(slots: list[Optional[str]], item_id: str) -> tuple[list[
             normalized[i] = item_id
             return normalized, True
     return normalized, False
+
+
+def remove_gear_from_slots(slots: list[Optional[str]], item_id: str) -> tuple[list[Optional[str]], bool]:
+    """Remove one gear item from quickbar slots. Returns (slots, removed)."""
+    if item_id not in GEAR_ITEM_IDS:
+        return normalize_gear_slots(slots), False
+    normalized = normalize_gear_slots(slots)
+    removed = False
+    for i in range(GEAR_SLOT_COUNT):
+        if normalized[i] == item_id:
+            normalized[i] = None
+            removed = True
+    return normalized, removed

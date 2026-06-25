@@ -10,6 +10,7 @@ export type NpcFlow = {
     messages: string[]
     grantHold?: string
     grantGear?: string
+    takeGear?: string
     fishingQuest?: string
     questStep?: string
     questId?: string

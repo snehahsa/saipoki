@@ -33,6 +33,7 @@ let pinMode = "setup"
 let pinBuffer = ""
 let skinIndex = 0
 let profileSelectedSkin = null
+let skinSetupStep = "name"
 let statsInterval = null
 let menuStatsInterval = null
 let positionHandler = null
@@ -48,6 +49,9 @@ let fishingCastActive = false
 let fishingCastAbort = null
 
 const tg = window.Telegram?.WebApp
+const PLAY_MODE = Boolean(window.APP_CONFIG?.playMode)
+const WALLET_STORAGE_KEY = "pokequest_wallet_session"
+let playSpectatorMode = false
 const TEST_QUERY_RESERVED = new Set(["tgWebAppStartParam", "v", "_"])
 
 function normalizeTestSlug(raw) {
@@ -176,7 +180,11 @@ function applyTrainerStats(stats, meta = {}) {
 }
 
 function isSignedIn() {
-    return TEST_MODE || Boolean(tg?.initData)
+    if (TEST_MODE) return true
+    if (tg?.initData) return true
+    if (PLAY_MODE && sessionStorage.getItem(WALLET_STORAGE_KEY)) return true
+    if (PLAY_MODE && playSpectatorMode) return true
+    return false
 }
 
 function apiAuthBody(extra = {}) {
@@ -184,8 +192,25 @@ function apiAuthBody(extra = {}) {
     if (TEST_MODE) {
         body.testMode = true
         body.testPlayer = TEST_PLAYER_SLUG
-    } else if (tg?.initData) body.initData = tg.initData
+    } else if (tg?.initData) {
+        body.initData = tg.initData
+    } else if (PLAY_MODE) {
+        const walletSession = sessionStorage.getItem(WALLET_STORAGE_KEY)
+        if (walletSession) body.walletSession = walletSession
+        if (playSpectatorMode) body.spectator = true
+    }
     return body
+}
+
+function hidePlayLanding() {
+    document.getElementById("play-landing")?.classList.add("is-hidden")
+    document.body.classList.add("play-in-app")
+}
+
+function showPlayLanding() {
+    document.getElementById("play-landing")?.classList.remove("is-hidden")
+    document.body.classList.remove("play-in-app", "spectator-mode")
+    Object.values(screens).forEach((el) => el?.classList.add("hidden"))
 }
 
 try {
@@ -279,6 +304,7 @@ function stopMenuStats() {
 
 function startGameHud() {
     stopGameHud()
+    syncGameHudDepositUi()
     if (!window.TelegramGame?.onPlayerPosition) return
 
     updateBalanceDisplays()
@@ -321,8 +347,10 @@ function showScreen(name) {
         requestAnimationFrame(() => {
             void active.offsetHeight
             if (name === "skin") {
-                updateBalanceDisplays()
-                updateSkinPreview(sortedSkins[skinIndex])
+                if (skinSetupStep === "picker") {
+                    updateBalanceDisplays()
+                    updateSkinPreview(sortedSkins[skinIndex])
+                }
             }
             if (name === "profile") {
                 renderProfileScreen()
@@ -442,6 +470,10 @@ function bindGameEvents() {
         if (item) grantGear(item, source || "")
     })
 
+    window.TelegramGame.onGameEvent("takeGear", ({ item, source }) => {
+        if (item) removeGear(item, source || "")
+    })
+
     window.TelegramGame.onGameEvent("gearUsed", ({ item, animId }) => {
         if (fishingCastActive || gearMeta(item)?.default_fishing_quest) return
         const label = gearMeta(item)?.label || item || "Gear"
@@ -547,6 +579,61 @@ function initSkinNameInput() {
     input.value = session.display_name || ""
 }
 
+function setSkinSetupStep(step) {
+    skinSetupStep = step === "picker" ? "picker" : "name"
+    const nameStep = document.getElementById("skin-setup-name-step")
+    const skinStep = document.getElementById("skin-setup-skin-step")
+    const nextBtn = document.getElementById("skin-name-next-btn")
+    const saveBtn = document.getElementById("save-skin-btn")
+    const backBtn = document.getElementById("skin-name-back-btn")
+    const subtitle = document.getElementById("skin-setup-subtitle")
+    const status = document.getElementById("skin-status")
+    const hint = document.getElementById("skin-purchase-hint")
+
+    const onNameStep = skinSetupStep === "name"
+    nameStep?.classList.toggle("hidden", !onNameStep)
+    skinStep?.classList.toggle("hidden", onNameStep)
+    nextBtn?.classList.toggle("hidden", !onNameStep)
+    saveBtn?.classList.toggle("hidden", onNameStep)
+    backBtn?.classList.toggle("hidden", onNameStep)
+
+    if (subtitle) {
+        subtitle.textContent = onNameStep ? "Enter your trainer name" : "Choose your avatar"
+    }
+    if (onNameStep) {
+        if (hint) hint.textContent = ""
+        if (status) {
+            status.textContent = ""
+            status.classList.remove("error")
+        }
+        requestAnimationFrame(() => {
+            document.getElementById("skin-player-name-input")?.focus()
+        })
+    } else {
+        updateBalanceDisplays()
+        updateSkinPreview(sortedSkins[skinIndex])
+    }
+}
+
+function openSkinSetupScreen() {
+    initSkinNameInput()
+    setSkinSetupStep("name")
+    showScreen("skin")
+}
+
+function advanceSkinSetupFromName() {
+    const status = document.getElementById("skin-status")
+    const displayName = normalizePlayerName(getSkinNameInputValue())
+    if (!displayName) {
+        if (status) {
+            status.textContent = "Enter a trainer name (1–24 characters)"
+            status.classList.add("error")
+        }
+        return
+    }
+    setSkinSetupStep("picker")
+}
+
 function skinImage(skin) {
     return `/sprites/characters/Character_${skin}.png`
 }
@@ -586,6 +673,123 @@ function formatCoinAmount(n) {
     return Math.max(0, Number(n) || 0).toLocaleString()
 }
 
+function requiresKinsPayments() {
+    return Boolean(session?.requires_kins_payments || session?.wallet_address)
+}
+
+function syncWalletEconomyLabels() {
+    const kins = requiresKinsPayments()
+    const profileLabel = document.querySelector(".profile-balance-label")
+    if (profileLabel) {
+        profileLabel.textContent = kins ? " balance (1 $KINS = 1 coin)" : " gold coins"
+    }
+    const skinBalanceLabel = document.querySelector("#skin-screen .skin-economy-row .skin-economy-label")
+    if (skinBalanceLabel && kins) {
+        skinBalanceLabel.textContent = "In-game balance:"
+    }
+}
+
+function syncGameHudDepositUi() {
+    const wrap = document.getElementById("game-hud-deposit")
+    if (!wrap) return
+    const show = requiresKinsPayments()
+    wrap.classList.toggle("hidden", !show)
+    if (!show) closeGameHudDepositPop()
+}
+
+function closeGameHudDepositPop() {
+    document.getElementById("game-hud-deposit-pop")?.classList.add("hidden")
+    const status = document.getElementById("game-hud-deposit-status")
+    if (status) status.textContent = ""
+}
+
+function toggleGameHudDepositPop() {
+    const pop = document.getElementById("game-hud-deposit-pop")
+    if (!pop) return
+    const opening = pop.classList.contains("hidden")
+    pop.classList.toggle("hidden")
+    if (opening) {
+        document.getElementById("game-hud-deposit-amount")?.focus()
+    } else {
+        closeGameHudDepositPop()
+    }
+}
+
+async function handleGameHudDepositBuy() {
+    const input = document.getElementById("game-hud-deposit-amount")
+    const status = document.getElementById("game-hud-deposit-status")
+    const amount = Math.trunc(Number(input?.value || 0))
+    if (!Number.isFinite(amount) || amount < 1) {
+        if (status) status.textContent = "Enter a valid $KINS amount."
+        return
+    }
+
+    const buyBtn = document.getElementById("game-hud-deposit-buy")
+    if (buyBtn) buyBtn.disabled = true
+    if (status) status.textContent = "Approve $KINS transfer in your wallet..."
+
+    try {
+        const data = await depositKinsBalance(amount)
+        if (Number.isFinite(data.balance)) session.balance = data.balance
+        updateBalanceDisplays()
+        if (input) input.value = ""
+        if (status) {
+            status.textContent = `Deposited ${formatCoinAmount(data.amountKins || amount)} $KINS!`
+        }
+        window.RetroAudio?.sfx?.("confirm")
+    } catch (error) {
+        if (status) status.textContent = error.message || "Deposit failed."
+        window.RetroAudio?.sfx?.("cancel")
+    } finally {
+        if (buyBtn) buyBtn.disabled = false
+    }
+}
+
+function syncProfileKinsDepositUi() {
+    const section = document.getElementById("profile-kins-deposit")
+    const note = document.getElementById("profile-kins-treasury-note")
+    if (!section) return
+    const show = requiresKinsPayments()
+    section.classList.toggle("hidden", !show)
+    syncWalletEconomyLabels()
+    if (note && show) {
+        const treasury = session?.kins_treasury || window.APP_CONFIG?.kinsTreasury || ""
+        note.textContent = treasury
+            ? `Treasury: ${treasury.slice(0, 4)}…${treasury.slice(-4)}`
+            : ""
+    }
+}
+
+async function purchaseSkinWithKins(skin, displayName) {
+    if (!window.KinsWallet?.payKinsIntent) {
+        throw new Error("Wallet payments are not available. Refresh and try again.")
+    }
+    return window.KinsWallet.payKinsIntent(
+        "/api/kins/skin-intent",
+        { skin, displayName },
+        apiAuthBody,
+    )
+}
+
+async function depositKinsBalance(amountKins) {
+    if (!window.KinsWallet?.payKinsIntent) {
+        throw new Error("Wallet payments are not available. Refresh and try again.")
+    }
+    return window.KinsWallet.payKinsIntent(
+        "/api/kins/deposit-intent",
+        { amountKins },
+        apiAuthBody,
+    )
+}
+
+async function saveSkinOrPay(skin, displayName) {
+    const cost = avatarPurchaseCost(skin)
+    if (requiresKinsPayments() && cost > 0) {
+        return purchaseSkinWithKins(skin, displayName)
+    }
+    return saveSkin(skin, displayName)
+}
+
 function updateBalanceDisplays() {
     const balance = session?.balance ?? 0
     for (const id of ["skin-balance", "profile-balance", "menu-balance", "stat-balance"]) {
@@ -606,6 +810,7 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
     const price = avatarListPrice(skin)
     const cost = avatarPurchaseCost(skin)
     const balance = session?.balance ?? 0
+    const kinsPay = requiresKinsPayments() && !isAvatarOwned(skin) && cost > 0
 
     tag.classList.remove("is-owned", "is-expensive", "skin-price-value")
     tag.classList.add("skin-economy-value", "skin-price-value")
@@ -614,14 +819,21 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         tag.classList.add("is-owned")
     } else if (price === 0) {
         tag.textContent = "FREE"
+    } else if (kinsPay) {
+        tag.textContent = `${formatCoinAmount(price)} $KINS`
     } else {
         tag.textContent = formatCoinAmount(price)
         if (cost > balance) tag.classList.add("is-expensive")
     }
 
     if (saveBtn && prefix === "skin") {
-        saveBtn.classList.toggle("is-unaffordable", cost > balance)
-        saveBtn.textContent = cost > balance && cost > 0 ? "Not enough coins" : "Buy"
+        if (kinsPay) {
+            saveBtn.classList.remove("is-unaffordable")
+            saveBtn.textContent = `Buy — ${formatCoinAmount(price)} $KINS`
+        } else {
+            saveBtn.classList.toggle("is-unaffordable", cost > balance)
+            saveBtn.textContent = cost > balance && cost > 0 ? "Not enough coins" : "Buy"
+        }
     }
 
     if (prefix === "profile") {
@@ -629,7 +841,9 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
     }
 
     if (hint && prefix === "skin") {
-        if (!session?.has_skin && STARTING_BALANCE > 0) {
+        if (kinsPay) {
+            hint.textContent = `Sends ${formatCoinAmount(price)} $KINS on-chain to unlock this avatar.`
+        } else if (!session?.has_skin && STARTING_BALANCE > 0 && !requiresKinsPayments()) {
             hint.textContent = `New trainers start with ${formatCoinAmount(STARTING_BALANCE)} coins — pick your look wisely.`
         } else if (cost > balance && cost > 0) {
             hint.textContent = `You need ${formatCoinAmount(cost - balance)} more coins for this avatar.`
@@ -645,6 +859,8 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
             hint.textContent = "This avatar is currently equipped."
         } else if (isAvatarOwned(skin)) {
             hint.textContent = "Tap Equip to wear this owned avatar."
+        } else if (kinsPay) {
+            hint.textContent = `Sends ${formatCoinAmount(price)} $KINS on-chain to unlock this avatar.`
         } else if (cost > balance && cost > 0) {
             hint.textContent = `You need ${formatCoinAmount(cost - balance)} more coins to unlock this avatar.`
         } else if (cost > 0) {
@@ -707,6 +923,7 @@ function updateProfileActionButton(skin) {
     const balance = session?.balance ?? 0
     const owned = isAvatarOwned(skin)
     const equipped = session?.skin === skin
+    const kinsPay = requiresKinsPayments() && !owned && cost > 0
 
     btn.classList.remove("is-unaffordable")
     if (equipped && owned) {
@@ -714,6 +931,9 @@ function updateProfileActionButton(skin) {
         btn.disabled = true
     } else if (owned) {
         btn.textContent = "Equip"
+        btn.disabled = false
+    } else if (kinsPay) {
+        btn.textContent = `Buy — ${formatCoinAmount(cost)} $KINS`
         btn.disabled = false
     } else if (cost > balance) {
         btn.textContent = "Not enough coins"
@@ -740,9 +960,10 @@ function buildProfileSkinButton(skin, { shop = false } = {}) {
     const cost = avatarPurchaseCost(skin)
     const price = avatarListPrice(skin)
     const balance = session?.balance ?? 0
-    const costClass = shop && cost > balance && cost > 0 ? " is-expensive" : ""
+    const kinsPay = requiresKinsPayments() && shop && cost > 0
+    const costClass = shop && !kinsPay && cost > balance && cost > 0 ? " is-expensive" : ""
     const costLabel = shop
-        ? (price === 0 ? "FREE" : formatCoinAmount(price))
+        ? (price === 0 ? "FREE" : kinsPay ? `${formatCoinAmount(price)} $KINS` : formatCoinAmount(price))
         : ""
 
     return `
@@ -751,7 +972,7 @@ function buildProfileSkinButton(skin, { shop = false } = {}) {
             class="profile-skin-item${session?.skin === skin ? " is-equipped" : ""}${profileSelectedSkin === skin ? " selected" : ""}"
             data-skin="${skin}"
             role="listitem"
-            aria-label="Avatar ${skin}${shop ? `, ${costLabel} coins` : ", owned"}"
+            aria-label="Avatar ${skin}${shop ? `, ${costLabel}` : ", owned"}"
         >
             <span class="profile-skin-thumb" style="${profileSkinThumbStyle(skin)}"></span>
             <span class="profile-skin-id">${skin}</span>
@@ -783,6 +1004,7 @@ function renderProfileShopGrid() {
 
 function renderProfileScreen() {
     updateBalanceDisplays()
+    syncProfileKinsDepositUi()
     profileSelectedSkin = session?.skin && SKINS.includes(session.skin)
         ? session.skin
         : (getOwnedSkinsList()[0] || DEFAULT_SKIN)
@@ -1277,6 +1499,74 @@ async function completeFishingCastSession(sessionId) {
     return data
 }
 
+function promptFishingRetry({ title, message }) {
+    return new Promise((resolve) => {
+        const finish = (yes) => {
+            window.removeEventListener("fishing-retry-choice", onChoice)
+            hideSignModal()
+            resolve(yes)
+        }
+        const onChoice = (event) => {
+            finish(Boolean(event.detail?.yes))
+        }
+        window.addEventListener("fishing-retry-choice", onChoice)
+        showSignModal({
+            title: title || "Try again?",
+            message: message || "Cast again and restart the fishing bar?",
+            source: "fishing",
+            options: [
+                { label: "Yes", code: "fishing_retry_yes" },
+                { label: "No", code: "fishing_retry_no" },
+            ],
+            showExit: false,
+        })
+        document.getElementById("sign-modal-close")?.classList.add("hidden")
+    })
+}
+
+async function performFishingCastAttempt(gearId, questKey, quest) {
+    const startResponse = await fetch("/api/fishing/cast/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiAuthBody({
+            quest_key: questKey,
+            mode: activeFishingMode,
+            gear_id: gearId,
+        })),
+    })
+    const startData = await startResponse.json()
+    if (!startResponse.ok || !startData.success) {
+        window.RetroAudio?.sfx?.("cancel")
+        showQuickbarHint(startData.error || "Could not start fishing")
+        return { ok: false }
+    }
+
+    if (startData.quest_progress && session) {
+        session.quest_progress = normalizeQuestProgress(startData.quest_progress)
+        renderQuestBoard()
+    }
+
+    const durationMs = Number(startData.duration_ms) || 60000
+    const label = startData.status_label || "Fishing…"
+    await animateFishingProgress(durationMs, label, fishingCastAbort.signal)
+
+    const result = await completeFishingCastSession(startData.session_id)
+    hideFishingHud()
+
+    if (!result.success) {
+        window.RetroAudio?.sfx?.("cancel")
+        showQuickbarHint(result.error || result.message || "Cast failed")
+        return { ok: false }
+    }
+
+    if (session && result.quest_progress) {
+        session.quest_progress = normalizeQuestProgress(result.quest_progress)
+        renderQuestBoard()
+    }
+
+    return { ok: true, result, quest }
+}
+
 async function runFishingCast(gearId) {
     if (fishingCastActive) return false
 
@@ -1304,59 +1594,48 @@ async function runFishingCast(gearId) {
     fishingCastActive = true
     fishingCastAbort = new AbortController()
     try {
-        const startResponse = await fetch("/api/fishing/cast/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody({
-                quest_key: questKey,
-                mode: activeFishingMode,
-                gear_id: gearId,
-            })),
-        })
-        const startData = await startResponse.json()
-        if (!startResponse.ok || !startData.success) {
-            window.RetroAudio?.sfx?.("cancel")
-            showQuickbarHint(startData.error || "Could not start fishing")
-            return false
+        let lastResult = null
+
+        while (true) {
+            const attempt = await performFishingCastAttempt(gearId, questKey, quest)
+            if (!attempt.ok) return false
+
+            const result = attempt.result
+            lastResult = result
+
+            if (result.caught && result.gear_slots) {
+                session.gear_slots = normalizeGearSlots(result.gear_slots)
+                syncQuickbar()
+                playFishingCatchFanfare()
+                const meta = result.meta || gearMeta(result.reward_gear)
+                if (meta) showGearPickupPopup(meta)
+                showSignModal({
+                    title: result.catch_title || quest.catch_title || "Found it!",
+                    message: result.message || quest.catch_message || "You found something!",
+                    source: "fishing",
+                })
+                return true
+            }
+
+            if (result.show_retry_prompt) {
+                const retry = await promptFishingRetry({
+                    title: result.retry_prompt_title || quest.retry_prompt_title || "Try again?",
+                    message: result.retry_prompt_message
+                        || quest.retry_prompt_message
+                        || result.message
+                        || "Cast again and restart the fishing bar?",
+                })
+                if (retry) continue
+            }
+
+            break
         }
 
-        if (startData.quest_progress && session) {
-            session.quest_progress = normalizeQuestProgress(startData.quest_progress)
-            renderQuestBoard()
+        if (lastResult?.message) {
+            showQuickbarHint(lastResult.message)
+        } else {
+            showQuickbarHint("Nothing this time.")
         }
-        const durationMs = Number(startData.duration_ms) || 60000
-        const label = startData.status_label || "Fishing…"
-        await animateFishingProgress(durationMs, label, fishingCastAbort.signal)
-
-        const result = await completeFishingCastSession(startData.session_id)
-        hideFishingHud()
-
-        if (!result.success) {
-            window.RetroAudio?.sfx?.("cancel")
-            showQuickbarHint(result.error || result.message || "Cast failed")
-            return false
-        }
-
-        if (session && result.quest_progress) {
-            session.quest_progress = normalizeQuestProgress(result.quest_progress)
-            renderQuestBoard()
-        }
-
-        if (result.caught && result.gear_slots) {
-            session.gear_slots = normalizeGearSlots(result.gear_slots)
-            syncQuickbar()
-            playFishingCatchFanfare()
-            const meta = result.meta || gearMeta(result.reward_gear)
-            if (meta) showGearPickupPopup(meta)
-            showSignModal({
-                title: result.catch_title || quest.catch_title || "Found it!",
-                message: result.message || quest.catch_message || "You found something!",
-                source: "fishing",
-            })
-            return true
-        }
-
-        showQuickbarHint(result.message || "Nothing this time.")
         return true
     } catch (error) {
         if (error?.name !== "AbortError") {
@@ -1586,6 +1865,19 @@ function stowQuickbarGear(gearId) {
     showQuickbarHint(`${label} stowed`)
 }
 
+function isTypingInField(target) {
+    const el = target || document.activeElement
+    if (!el || !(el instanceof HTMLElement)) return false
+    if (el.isContentEditable) return true
+    const tag = el.tagName
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true
+    return Boolean(el.closest("[contenteditable=''], [contenteditable='true'], [contenteditable='plaintext-only']"))
+}
+
+function shouldIgnoreGameShortcuts(event) {
+    return Boolean(event?.isComposing || isTypingInField(event?.target))
+}
+
 function bindQuickbar() {
     const quickbar = document.getElementById("game-quickbar")
     if (!quickbar || quickbar.dataset.bound === "1") return
@@ -1656,6 +1948,7 @@ function bindQuickbar() {
 
     document.addEventListener("keydown", (event) => {
         if (!screens.game || screens.game.classList.contains("hidden")) return
+        if (shouldIgnoreGameShortcuts(event)) return
         const key = event.key
         if (key !== "1" && key !== "2" && key !== "3") return
 
@@ -1736,6 +2029,46 @@ async function grantGear(item, source = "") {
         console.warn("Could not grant gear:", error)
         session.gear_slots = priorSlots
         syncQuickbar()
+    }
+}
+
+async function removeGear(item, source = "") {
+    const gearId = String(item || "").trim()
+    if (!gearId || !playerHasGear(gearId)) return
+
+    const priorSlots = normalizeGearSlots(session?.gear_slots)
+    const optimistic = priorSlots.map((slot) => (slot === gearId ? null : slot))
+    session.gear_slots = optimistic
+    syncQuickbar()
+
+    const equipped = getQuickbarSlotItems()[quickbarSelectedSlot]
+    if (equipped === gearId) {
+        quickbarSelectedSlot = -1
+        window.TelegramGame?.setEquippedGear?.(null)
+    }
+    syncPlayerGearToGame()
+
+    try {
+        const response = await fetch("/api/gear/remove", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(apiAuthBody({ item: gearId, source })),
+        })
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+            session.gear_slots = priorSlots
+            syncQuickbar()
+            syncPlayerGearToGame()
+            return
+        }
+        session.gear_slots = normalizeGearSlots(data.gear_slots)
+        syncQuickbar()
+        syncPlayerGearToGame()
+    } catch (error) {
+        console.warn("Could not remove gear:", error)
+        session.gear_slots = priorSlots
+        syncQuickbar()
+        syncPlayerGearToGame()
     }
 }
 
@@ -2178,7 +2511,11 @@ window.ItemGet = {
 async function authenticate() {
     if (!isSignedIn()) {
         dismissBootSplash()
-        showError("Please open this app from Telegram.")
+        showError(
+            PLAY_MODE
+                ? "Connect your wallet to continue."
+                : "Please open this app from Telegram."
+        )
         return null
     }
 
@@ -2187,7 +2524,7 @@ async function authenticate() {
     setBootMessage(
         TEST_MODE
             ? `Loading test trainer${TEST_PLAYER_SLUG ? ` (${TEST_PLAYER_SLUG})` : ""}...`
-            : "Signing you in..."
+            : (PLAY_MODE ? "Loading your trainer..." : "Signing you in...")
     )
 
     const response = await fetch("/api/auth", {
@@ -2213,7 +2550,9 @@ async function authenticate() {
         dismissBootSplash()
         showError(
             data.error
-                || "Authentication failed. Open the app from the PokéCards bot — send /start and tap Open Web App."
+                || (PLAY_MODE
+                    ? "Authentication failed. Connect your wallet and try again."
+                    : "Authentication failed. Open the app from the PokéCards bot — send /start and tap Open Web App.")
         )
         return null
     }
@@ -2320,8 +2659,7 @@ async function completePinEntry() {
             pinVerified = true
             clearPinStatus()
             if (!session.has_skin) {
-                initSkinNameInput()
-                showScreen("skin")
+                openSkinSetupScreen()
             } else {
                 showScreen("menu")
                 startMenuStats()
@@ -2334,8 +2672,7 @@ async function completePinEntry() {
         pinVerified = true
         clearPinStatus()
         if (!session.has_skin) {
-            initSkinNameInput()
-            showScreen("skin")
+            openSkinSetupScreen()
         } else {
             showScreen("menu")
             startMenuStats()
@@ -2814,7 +3151,7 @@ async function handleEnterRealm() {
 
     if (enterRealmBusy) return
 
-    if (!pinUnlocked()) {
+    if (!playSpectatorMode && !pinUnlocked()) {
         if (menuStatus) {
             menuStatus.textContent = session?.has_pin
                 ? "Enter your trainer PIN first."
@@ -2932,6 +3269,7 @@ async function enterGame() {
             holdGrantRules: holdGrantRulesForClient(),
             backendUrl: window.location.origin,
             socketUrl: window.APP_CONFIG.gameSocketUrl || "",
+            spectator: playSpectatorMode,
             onProgress: (message) => setGameLoading(message.toUpperCase()),
         })
     } catch (error) {
@@ -3522,6 +3860,12 @@ async function handleInteractionFlow(code, context = {}) {
 }
 
 function selectSignOption(code, context = {}) {
+    if (code === "fishing_retry_yes" || code === "fishing_retry_no") {
+        window.dispatchEvent(new CustomEvent("fishing-retry-choice", {
+            detail: { yes: code === "fishing_retry_yes" },
+        }))
+        return
+    }
     if (code === "exit") {
         closeSignModal()
         return
@@ -3683,6 +4027,12 @@ function leaveGame() {
     }
     document.getElementById("join-toast-stack")?.replaceChildren()
     window.TelegramGame?.stopGame?.()
+    if (PLAY_MODE && playSpectatorMode) {
+        playSpectatorMode = false
+        document.body.classList.remove("spectator-mode")
+        showPlayLanding()
+        return
+    }
     showScreen("menu")
     startMenuStats()
 }
@@ -3862,13 +4212,8 @@ function bindGameTouchGuard() {
     document.addEventListener("touchmove", blockGameSwipe, { passive: false })
 }
 
-async function init() {
-    setBootMessage("Starting up...")
-
-    await preloadEssentials()
-
-    session = await authenticate()
-    if (!session) return
+function applySessionFromAuth(data) {
+    session = data
     session.quest_progress = normalizeQuestProgress(session.quest_progress)
     session.holds = normalizeHolds(session.holds)
     session.gear_slots = normalizeGearSlots(session.gear_slots)
@@ -3896,34 +4241,85 @@ async function init() {
     populateMenu()
     updateSkinPreview(sortedSkins[skinIndex])
     renderBagGrid()
-
     session.has_pin = Boolean(session.has_pin)
-    pinVerified = TEST_MODE ? true : false
+    if (data.wallet_address) {
+        session.wallet_address = data.wallet_address
+        session.requires_kins_payments = Boolean(data.requires_kins_payments)
+        session.kins_treasury = data.kins_treasury || window.APP_CONFIG?.kinsTreasury || null
+    }
+    syncWalletEconomyLabels()
+    syncGameHudDepositUi()
+}
 
-    if (TEST_MODE) {
-        session.has_skin = true
-        session.skin = session.skin || DEFAULT_SKIN
-        skinIndex = Math.max(0, sortedSkins.indexOf(session.skin))
-        showScreen("menu")
-        startMenuStats()
-    } else if (!session.has_skin) {
+async function completeSessionBootstrap() {
+    const data = await authenticate()
+    if (!data) return false
+
+    applySessionFromAuth(data)
+
+    if (playSpectatorMode) {
+        hidePlayLanding()
+        document.body.classList.add("spectator-mode")
+        dismissBootSplash()
+        window.RetroAudio?.resume()
+        await enterGame()
+        return true
+    }
+
+    hidePlayLanding()
+    pinVerified = false
+
+    if (!session.has_skin) {
         showScreen("welcome")
     } else {
         session.skin = session.skin || sortedSkins[skinIndex]
         routeAfterAuth()
     }
 
-    const startParam = TEST_MODE
-        ? "test"
-        : (tg?.initDataUnsafe?.start_param || "").trim().toLowerCase()
-    if (startParam === "leaderboard" && session.has_skin && pinUnlocked()) {
-        lbActiveCategory = 0
-        openLeaderboard()
-    }
-
     dismissBootSplash()
     window.RetroAudio?.resume()
     window.RetroAudio?.setScene("menu")
+    return true
+}
+
+async function init() {
+    if (!PLAY_MODE) {
+        setBootMessage("Starting up...")
+    }
+
+    await preloadEssentials()
+
+    if (!PLAY_MODE) {
+        session = await authenticate()
+        if (!session) return
+        applySessionFromAuth(session)
+        pinVerified = TEST_MODE ? true : false
+
+        if (TEST_MODE) {
+            session.has_skin = true
+            session.skin = session.skin || DEFAULT_SKIN
+            skinIndex = Math.max(0, sortedSkins.indexOf(session.skin))
+            showScreen("menu")
+            startMenuStats()
+        } else if (!session.has_skin) {
+            showScreen("welcome")
+        } else {
+            session.skin = session.skin || sortedSkins[skinIndex]
+            routeAfterAuth()
+        }
+
+        const startParam = TEST_MODE
+            ? "test"
+            : (tg?.initDataUnsafe?.start_param || "").trim().toLowerCase()
+        if (startParam === "leaderboard" && session.has_skin && pinUnlocked()) {
+            lbActiveCategory = 0
+            openLeaderboard()
+        }
+
+        dismissBootSplash()
+        window.RetroAudio?.resume()
+        window.RetroAudio?.setScene("menu")
+    }
 
     window.PoketabSocial?.init?.({
         apiAuthBody,
@@ -3978,19 +4374,35 @@ async function init() {
             openPinScreen("setup")
             return
         }
-        initSkinNameInput()
-        showScreen("skin")
+        openSkinSetupScreen()
     })
 
     bindItemGetPopup()
     bindSkinControls("skin-prev", "skin-next", (skin) => updateSkinPreview(skin, "skin"))
+
+    document.getElementById("skin-player-name-input")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && skinSetupStep === "name") {
+            event.preventDefault()
+            advanceSkinSetupFromName()
+        }
+    })
+
+    document.getElementById("skin-name-next-btn")?.addEventListener("click", () => {
+        advanceSkinSetupFromName()
+    })
+
+    document.getElementById("skin-name-back-btn")?.addEventListener("click", () => {
+        setSkinSetupStep("name")
+    })
 
     document.getElementById("profile-owned-grid")?.addEventListener("click", handleProfileGridClick)
     document.getElementById("profile-shop-grid")?.addEventListener("click", handleProfileGridClick)
 
     document.getElementById("save-skin-btn").addEventListener("click", async () => {
         const status = document.getElementById("skin-status")
-        status.textContent = "Saving..."
+        status.textContent = requiresKinsPayments() && avatarPurchaseCost(sortedSkins[skinIndex]) > 0
+            ? "Approve $KINS transfer in your wallet..."
+            : "Saving..."
         status.classList.remove("error")
 
         try {
@@ -4001,11 +4413,11 @@ async function init() {
             }
 
             const cost = avatarPurchaseCost(skin)
-            if (cost > (session.balance ?? 0)) {
+            if (!requiresKinsPayments() && cost > (session.balance ?? 0)) {
                 throw new Error(`Need ${formatCoinAmount(cost)} coins — you have ${formatCoinAmount(session.balance)}`)
             }
 
-            const data = await saveSkin(skin, displayName)
+            const data = await saveSkinOrPay(skin, displayName)
             session.skin = skin
             session.display_name = data.display_name || displayName
             session.has_skin = true
@@ -4025,6 +4437,7 @@ async function init() {
     })
     document.getElementById("profile-btn").addEventListener("click", () => {
         renderProfileXp()
+        renderProfileScreen()
         showScreen("profile")
     })
     document.getElementById("quests-btn").addEventListener("click", () => {
@@ -4061,19 +4474,21 @@ async function init() {
 
     document.getElementById("profile-action-btn").addEventListener("click", async () => {
         const status = document.getElementById("profile-status")
-        status.textContent = "Saving..."
+        const skin = profileSelectedSkin || session.skin
+        const cost = avatarPurchaseCost(skin)
+        status.textContent = requiresKinsPayments() && cost > 0
+            ? "Approve $KINS transfer in your wallet..."
+            : "Saving..."
         status.classList.remove("error")
 
         try {
-            const skin = profileSelectedSkin || session.skin
             if (!skin) throw new Error("Select an avatar first")
 
-            const cost = avatarPurchaseCost(skin)
-            if (cost > (session.balance ?? 0)) {
+            if (!requiresKinsPayments() && cost > (session.balance ?? 0)) {
                 throw new Error(`Need ${formatCoinAmount(cost)} coins — you have ${formatCoinAmount(session.balance)}`)
             }
 
-            const data = await saveSkin(skin, session.display_name)
+            const data = await saveSkinOrPay(skin, session.display_name)
             session.skin = skin
             if (data.display_name) session.display_name = data.display_name
             if (Number.isFinite(data.balance)) session.balance = data.balance
@@ -4081,7 +4496,44 @@ async function init() {
             populateMenu()
             renderProfileScreen()
             window.TelegramGame?.switchGameSkin?.(skin)
-            status.textContent = cost > 0 ? `Saved! −${formatCoinAmount(cost)} coins` : "Equipped!"
+            if (requiresKinsPayments() && cost > 0) {
+                status.textContent = `Purchased with ${formatCoinAmount(cost)} $KINS!`
+            } else {
+                status.textContent = cost > 0 ? `Saved! −${formatCoinAmount(cost)} coins` : "Equipped!"
+            }
+        } catch (error) {
+            status.textContent = error.message
+            status.classList.add("error")
+        }
+    })
+
+    document.getElementById("game-hud-deposit-toggle")?.addEventListener("click", () => {
+        toggleGameHudDepositPop()
+    })
+    document.getElementById("game-hud-deposit-buy")?.addEventListener("click", () => {
+        handleGameHudDepositBuy()
+    })
+
+    document.getElementById("profile-deposit-btn")?.addEventListener("click", async () => {
+        const status = document.getElementById("profile-status")
+        const input = document.getElementById("profile-deposit-amount")
+        const amount = Math.trunc(Number(input?.value || 0))
+        if (!Number.isFinite(amount) || amount < 1) {
+            status.textContent = "Enter a valid $KINS amount."
+            status.classList.add("error")
+            return
+        }
+
+        status.textContent = "Approve $KINS transfer in your wallet..."
+        status.classList.remove("error")
+
+        try {
+            const data = await depositKinsBalance(amount)
+            if (Number.isFinite(data.balance)) session.balance = data.balance
+            updateBalanceDisplays()
+            renderProfileScreen()
+            if (input) input.value = ""
+            status.textContent = `Deposited ${formatCoinAmount(data.amountKins || amount)} $KINS!`
         } catch (error) {
             status.textContent = error.message
             status.classList.add("error")
@@ -4099,6 +4551,26 @@ async function init() {
     bindGameTouchGuard()
     bindGameDrawer()
     bindVendingMachine()
+
+    if (PLAY_MODE) {
+        window.SaiPokePlay?.bindLanding?.()
+    }
+}
+
+const playLandingBinder = window.SaiPokePlay?.bindLanding
+window.SaiPokePlay = {
+    hidePlayLanding,
+    showPlayLanding,
+    bootAfterWallet: () => {
+        playSpectatorMode = false
+        document.body.classList.remove("spectator-mode")
+        return completeSessionBootstrap()
+    },
+    bootSpectator: () => {
+        playSpectatorMode = true
+        return completeSessionBootstrap()
+    },
+    bindLanding: playLandingBinder,
 }
 
 init().catch((error) => {

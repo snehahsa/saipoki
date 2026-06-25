@@ -31,6 +31,7 @@ from gear_catalog import (
     gear_item_client_meta,
     grant_gear_to_slots,
     normalize_gear_slots,
+    remove_gear_from_slots,
 )
 from poke_registry import (
     add_card_to_vault,
@@ -47,11 +48,27 @@ from quest_engine import (
 )
 from wallet_auth import (
     KINS_TOKEN_MINT,
+    MIN_TOKEN_UI_AMOUNT,
+    SOLANA_RPC_URL,
     create_wallet_challenge,
     issue_wallet_session,
     verify_wallet_login,
     verify_wallet_session,
     wallet_telegram_id,
+    clear_wallet_sessions,
+)
+from kins_payments import (
+    KINS_TREASURY_WALLET,
+    MAX_DEPOSIT_KINS,
+    MIN_DEPOSIT_KINS,
+    TOKEN_2022_PROGRAM_ID,
+    assert_treasury_payment_ready,
+    confirm_payment,
+    create_payment_intent,
+    get_latest_blockhash,
+    get_mint_decimals,
+    is_wallet_user_id,
+    treasury_kins_ata_exists,
 )
 from avatar_economy import (
     DEFAULT_SKIN as AVATAR_DEFAULT_SKIN,
@@ -693,31 +710,59 @@ def landing_hold_items() -> list:
     return items
 
 
-@app.route("/play")
-def play_page():
-    return render_template(
-        "play.html",
-        game_server_url="",
-        game_socket_url=GAME_SOCKET_URL,
-        skins=SKINS,
-        default_skin=DEFAULT_SKIN,
-        kins_token_mint=KINS_TOKEN_MINT,
-        asset_v={
+def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_player_slug: str = ""):
+    asset_v = {
+        "css": asset_version("static/css/app.css"),
+        "app_js": asset_version("static/js/app.js"),
+        "retro_audio_js": asset_version("static/js/retro-audio.js"),
+        "game_js": asset_version("static/game/game.js"),
+        "world": world_map_version(),
+        "titles": asset_version("static/imgs/titles.png"),
+        "bag_icon": asset_version("static/menuitems/bag.png"),
+        "dex_icon": asset_version("static/menuitems/dex.png"),
+        "phone_icon": asset_version("static/menuitems/phone.png"),
+        "kins_wallet_js": asset_version("static/js/kins-wallet.js"),
+    }
+    if play_mode:
+        asset_v.update({
             "play_css": asset_version("static/css/play.css"),
             "play_js": asset_version("static/js/play.js"),
-            "app_css": asset_version("static/css/app.css"),
-            "retro_audio_js": asset_version("static/js/retro-audio.js"),
-            "game_js": asset_version("static/game/game.js"),
-            "world": world_map_version(),
-            "titles": asset_version("static/imgs/titles.png"),
             "bg": asset_version("static/background/bg.png"),
-            "bag_icon": asset_version("static/menuitems/bag.png"),
-            "phone_icon": asset_version("static/menuitems/phone.png"),
-            "dex_icon": asset_version("static/menuitems/dex.png"),
-        },
+        })
+    return render_template(
+        "index.html",
+        play_mode=play_mode,
+        kins_token_mint=KINS_TOKEN_MINT if play_mode else "",
+        kins_treasury=KINS_TREASURY_WALLET,
+        kins_min_hold=int(MIN_TOKEN_UI_AMOUNT),
+        game_server_url="",
+        game_socket_url=GAME_SOCKET_URL,
+        test_mode=test_mode,
+        test_player_slug=test_player_slug,
+        skins=SKINS,
+        default_skin=DEFAULT_SKIN,
+        asset_v=asset_v,
+        bag_items=bag_items(),
+        pool_items=pool_items(),
+        card_catalog=card_catalog_for_client(),
+        bag_slot_count=BAG_SLOT_COUNT,
+        quests=QUEST_CATALOG,
         hold_catalog=hold_catalog_for_client(),
+        gear_catalog=gear_catalog_for_client(),
+        fishing_catalog=fishing_catalog_for_client(),
+        gear_slot_count=GEAR_SLOT_COUNT,
+        ui_unlocks=ui_unlocks_for_client(),
+        avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
         starting_balance=STARTING_BALANCE,
+        vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
+        vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
+        xp_levels=xp_config_for_client(),
     )
+
+
+@app.route("/play")
+def play_page():
+    return _render_game_app(play_mode=True)
 
 
 @app.route("/api/wallet/challenge", methods=["GET", "POST"])
@@ -746,6 +791,336 @@ def wallet_verify_api():
     )
 
 
+def _auth_wallet_context(data: Optional[dict] = None):
+    payload = data if data is not None else (request.get_json(silent=True) or {})
+    user = resolve_auth_user(payload)
+    if not user or not is_wallet_user_id(str(user["id"])):
+        return None, None, (
+            jsonify({"success": False, "error": "Wallet session required."}),
+            403,
+        )
+    wallet = user.get("wallet") or verify_wallet_session(
+        str(payload.get("walletSession") or "").strip()
+    )
+    if not wallet:
+        return None, None, (
+            jsonify({"success": False, "error": "Wallet session expired. Reconnect."}),
+            401,
+        )
+    return str(user["id"]), wallet, None
+
+
+def _apply_skin_to_user(
+    conn,
+    telegram_id: str,
+    skin: str,
+    display_name: Optional[str],
+    avatar_costs: dict,
+) -> tuple[Optional[dict], Optional[tuple]]:
+    row = conn.execute(
+        "SELECT display_name, skin, balance, owned_skins FROM users WHERE telegram_id = ?",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        return None, (jsonify({"success": False, "error": "User not found"}), 404)
+
+    owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
+    cost = purchase_cost(skin, owned_skins, avatar_costs)
+    balance = int(row["balance"] or 0)
+
+    if cost > 0 and not is_wallet_user_id(telegram_id):
+        if cost > balance:
+            price = skin_list_price(skin, avatar_costs)
+            return None, (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Need {price:,} coins — you have {balance:,}",
+                        "balance": balance,
+                        "cost": cost,
+                        "price": price,
+                    }
+                ),
+                402,
+            )
+        balance -= cost
+
+    if skin not in owned_skins:
+        owned_skins = list(dict.fromkeys([*owned_skins, skin]))
+
+    now = int(time.time())
+    final_name = display_name if display_name is not None else row["display_name"]
+    conn.execute(
+        """
+        UPDATE users
+        SET skin = ?, display_name = ?, balance = ?, owned_skins = ?, updated_at = ?
+        WHERE telegram_id = ?
+        """,
+        (skin, final_name, balance, owned_skins_json(owned_skins), now, telegram_id),
+    )
+    return {
+        "skin": skin,
+        "display_name": final_name,
+        "balance": balance,
+        "owned_skins": owned_skins,
+        "cost_paid": cost,
+    }, None
+
+
+@app.route("/api/kins/config", methods=["GET"])
+def kins_config_api():
+    try:
+        decimals = get_mint_decimals()
+    except (RuntimeError, OSError, ValueError, TypeError):
+        decimals = 6
+    return jsonify(
+        {
+            "success": True,
+            "mint": KINS_TOKEN_MINT,
+            "treasuryWallet": KINS_TREASURY_WALLET,
+            "minHold": int(MIN_TOKEN_UI_AMOUNT),
+            "minDeposit": MIN_DEPOSIT_KINS,
+            "maxDeposit": MAX_DEPOSIT_KINS,
+            "rpcUrl": SOLANA_RPC_URL,
+            "mintDecimals": decimals,
+            "tokenProgram": TOKEN_2022_PROGRAM_ID,
+            "treasuryReady": treasury_kins_ata_exists(),
+        }
+    )
+
+
+@app.route("/api/kins/blockhash", methods=["GET"])
+def kins_blockhash_api():
+    try:
+        block = get_latest_blockhash()
+    except (RuntimeError, OSError, TimeoutError, ValueError, TypeError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+    return jsonify({"success": True, **block})
+
+
+CLEAR_DB_PASSWORD = os.getenv("CLEAR_DB_PASSWORD", "9999")
+
+
+@app.route("/clear", methods=["GET", "POST"])
+def clear_saved_data():
+    """Dev reset: snapshot report + wipe all saved DB rows when password matches."""
+    from db.clear_report import (
+        build_clear_snapshot,
+        render_clear_password_form,
+        render_clear_report_html,
+    )
+    from db.clear_service import clear_all_saved_data
+
+    payload = request.get_json(silent=True) or {}
+    password = (
+        request.args.get("password")
+        or request.form.get("password")
+        or payload.get("password")
+        or ""
+    )
+    wants_json = (
+        request.args.get("format") == "json"
+        or request.is_json
+        or (
+            request.accept_mimetypes.best_match(["application/json", "text/html"])
+            == "application/json"
+            and "text/html" not in (request.headers.get("Accept") or "")
+        )
+    )
+
+    if str(password) != str(CLEAR_DB_PASSWORD):
+        if wants_json and password:
+            return jsonify({"success": False, "error": "Invalid password."}), 403
+        return render_clear_password_form(
+            error="Invalid password." if password else ""
+        ), (403 if password else 401)
+
+    with get_db() as conn:
+        snapshot = build_clear_snapshot(conn)
+        cleared = clear_all_saved_data(conn)
+    clear_wallet_sessions()
+
+    if wants_json:
+        return jsonify(
+            {
+                "success": True,
+                "snapshot": snapshot,
+                "cleared": cleared,
+                "wallet_sessions_cleared": True,
+            }
+        )
+
+    return render_clear_report_html(
+        snapshot,
+        cleared,
+        wallet_sessions_cleared=True,
+    )
+
+
+@app.route("/api/kins/deposit-intent", methods=["POST"])
+def kins_deposit_intent_api():
+    telegram_id, wallet, err = _auth_wallet_context()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    try:
+        amount_kins = int(data.get("amountKins"))
+    except (TypeError, ValueError):
+        amount_kins = 0
+    if amount_kins < MIN_DEPOSIT_KINS or amount_kins > MAX_DEPOSIT_KINS:
+        return jsonify(
+            {
+                "success": False,
+                "error": f"Enter between {MIN_DEPOSIT_KINS:,} and {MAX_DEPOSIT_KINS:,} $KINS.",
+            }
+        ), 400
+
+    try:
+        assert_treasury_payment_ready()
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+    with get_db() as conn:
+        intent = create_payment_intent(
+            conn,
+            telegram_id=telegram_id,
+            wallet_address=wallet,
+            purpose="deposit",
+            amount_kins=amount_kins,
+            payload={"amount_kins": amount_kins},
+        )
+    return jsonify({"success": True, **intent})
+
+
+@app.route("/api/kins/skin-intent", methods=["POST"])
+def kins_skin_intent_api():
+    telegram_id, wallet, err = _auth_wallet_context()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    skin = data.get("skin")
+    if skin not in SKINS:
+        return jsonify({"success": False, "error": "Invalid skin"}), 400
+
+    display_name = None
+    if data.get("displayName") is not None and str(data.get("displayName")).strip():
+        display_name = normalize_player_name(data.get("displayName"))
+        if display_name is None:
+            return jsonify({"success": False, "error": "Enter a name (1–24 characters)"}), 400
+
+    avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT owned_skins, skin FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        ).fetchone()
+        if row is None:
+            return jsonify({"success": False, "error": "User not found"}), 404
+        owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
+        cost = purchase_cost(skin, owned_skins, avatar_costs)
+        if cost <= 0:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "No $KINS payment required for this avatar.",
+                    "requires_payment": False,
+                }
+            ), 400
+
+        try:
+            assert_treasury_payment_ready()
+        except RuntimeError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 503
+
+        intent = create_payment_intent(
+            conn,
+            telegram_id=telegram_id,
+            wallet_address=wallet,
+            purpose="skin_purchase",
+            amount_kins=cost,
+            payload={"skin": skin, "display_name": display_name},
+        )
+    return jsonify({"success": True, **intent, "requiresPayment": True})
+
+
+@app.route("/api/kins/confirm", methods=["POST"])
+def kins_confirm_api():
+    telegram_id, wallet, err = _auth_wallet_context()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    payment_id = str(data.get("paymentId") or "").strip()
+    tx_signature = str(data.get("signature") or "").strip()
+    if not payment_id or not tx_signature:
+        return jsonify({"success": False, "error": "Missing payment proof."}), 400
+
+    avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
+    with get_db() as conn:
+        ok, error, confirmed = confirm_payment(
+            conn,
+            payment_id=payment_id,
+            tx_signature=tx_signature,
+            expected_wallet=wallet,
+        )
+        if not ok or not confirmed:
+            return jsonify({"success": False, "error": error or "Payment not verified."}), 400
+
+        if confirmed["telegram_id"] != telegram_id:
+            return jsonify({"success": False, "error": "Payment does not match your account."}), 403
+
+        purpose = confirmed["purpose"]
+        amount_kins = int(confirmed["amount_kins"])
+        payload = confirmed.get("payload") or {}
+
+        if purpose == "deposit":
+            conn.execute(
+                """
+                UPDATE users
+                SET balance = balance + ?, updated_at = ?
+                WHERE telegram_id = ?
+                """,
+                (amount_kins, int(time.time()), telegram_id),
+            )
+            row = conn.execute(
+                "SELECT balance FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+            ).fetchone()
+            balance = int(row["balance"] or 0) if row else amount_kins
+            return jsonify(
+                {
+                    "success": True,
+                    "purpose": purpose,
+                    "amountKins": amount_kins,
+                    "balance": balance,
+                    "txSignature": confirmed["tx_signature"],
+                }
+            )
+
+        if purpose == "skin_purchase":
+            skin = payload.get("skin")
+            if skin not in SKINS:
+                return jsonify({"success": False, "error": "Invalid skin in payment."}), 400
+            display_name = payload.get("display_name")
+            result, apply_err = _apply_skin_to_user(
+                conn, telegram_id, skin, display_name, avatar_costs
+            )
+            if apply_err:
+                return apply_err
+            return jsonify(
+                {
+                    "success": True,
+                    "purpose": purpose,
+                    "txSignature": confirmed["tx_signature"],
+                    **result,
+                }
+            )
+
+        return jsonify({"success": False, "error": "Unknown payment purpose."}), 400
+
+
 @app.route("/landing")
 def landing_page():
     return render_template(
@@ -770,41 +1145,10 @@ def landing_page():
 @app.route("/")
 def home():
     test_slug = parse_test_slug_from_query_args(request.args)
-    test_mode = test_slug is not None
-    return render_template(
-        "index.html",
-        game_server_url="",
-        game_socket_url=GAME_SOCKET_URL,
-        test_mode=test_mode,
+    return _render_game_app(
+        play_mode=False,
+        test_mode=test_slug is not None,
         test_player_slug=test_slug if test_slug is not None else "",
-        skins=SKINS,
-        default_skin=DEFAULT_SKIN,
-        asset_v={
-            "css": asset_version("static/css/app.css"),
-            "app_js": asset_version("static/js/app.js"),
-            "retro_audio_js": asset_version("static/js/retro-audio.js"),
-            "game_js": asset_version("static/game/game.js"),
-            "world": world_map_version(),
-            "titles": asset_version("static/imgs/titles.png"),
-            "bag_icon": asset_version("static/menuitems/bag.png"),
-            "dex_icon": asset_version("static/menuitems/dex.png"),
-            "phone_icon": asset_version("static/menuitems/phone.png"),
-        },
-        bag_items=bag_items(),
-        pool_items=pool_items(),
-        card_catalog=card_catalog_for_client(),
-        bag_slot_count=BAG_SLOT_COUNT,
-        quests=QUEST_CATALOG,
-        hold_catalog=hold_catalog_for_client(),
-        gear_catalog=gear_catalog_for_client(),
-        fishing_catalog=fishing_catalog_for_client(),
-        gear_slot_count=GEAR_SLOT_COUNT,
-        ui_unlocks=ui_unlocks_for_client(),
-        avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
-        starting_balance=STARTING_BALANCE,
-        vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
-        vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
-        xp_levels=xp_config_for_client(),
     )
 
 
@@ -846,9 +1190,10 @@ def auth():
 
         if row is None:
             is_test = request_is_test_mode(data)
-            is_web_play = telegram_id.startswith("wallet:") or telegram_id.startswith("spectator:")
-            auto_profile = is_test or is_web_play
-            starting_balance = STARTING_BALANCE
+            is_spectator = telegram_id.startswith("spectator:")
+            is_wallet = is_wallet_user_id(telegram_id)
+            auto_profile = is_test or is_spectator
+            starting_balance = 0 if is_wallet else STARTING_BALANCE
             conn.execute(
                 """
                 INSERT INTO users (
@@ -865,7 +1210,7 @@ def auth():
                     json.dumps(TEST_PLAYER_HOLDS) if is_test else "[]",
                     json.dumps(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None]),
                     starting_balance,
-                    owned_skins_json([AVATAR_DEFAULT_SKIN]),
+                    owned_skins_json([AVATAR_DEFAULT_SKIN] if auto_profile else []),
                     "123" if is_test else None,
                     now,
                     now,
@@ -976,6 +1321,8 @@ def auth():
             except Exception as err:
                 app.logger.exception("trainer_stats_row failed for %s: %s", telegram_id, err)
 
+    wallet_address = user.get("wallet") if is_wallet_user_id(telegram_id) else None
+
     return jsonify(
         {
             "success": True,
@@ -1001,6 +1348,10 @@ def auth():
             "has_pin": bool(user_pin),
             "trainer_stats": trainer_stats,
             "level": trainer_stats["level"] if trainer_stats else 0,
+            "wallet_address": wallet_address,
+            "requires_kins_payments": bool(wallet_address),
+            "kins_treasury": KINS_TREASURY_WALLET if wallet_address else None,
+            "kins_min_hold": int(MIN_TOKEN_UI_AMOUNT),
         }
     )
 
@@ -1057,16 +1408,14 @@ def verify_pin():
 @app.route("/api/skin", methods=["POST"])
 def save_skin():
     data = request.get_json(silent=True) or {}
-    init_data = data.get("initData", "")
+    user = resolve_auth_user(data)
+    if not user:
+        return jsonify({"success": False, "error": (
+                "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
+            )}), 401
+
     skin = data.get("skin")
     display_name_raw = data.get("displayName")
-
-    validated = validate_init_data(init_data)
-    if not validated or "user" not in validated:
-        return jsonify({"success": False, "error": (
-                "Invalid Telegram session. Open this app from the PokéCards bot "
-                "(send /start in DM, then tap Open Web App)."
-            )}), 401
 
     if skin not in SKINS:
         return jsonify({"success": False, "error": "Invalid skin"}), 400
@@ -1077,8 +1426,7 @@ def save_skin():
         if display_name is None:
             return jsonify({"success": False, "error": "Enter a name (1–24 characters)"}), 400
 
-    telegram_id = str(validated["user"]["id"])
-    now = int(time.time())
+    telegram_id = str(user["id"])
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
 
     with get_db() as conn:
@@ -1089,58 +1437,26 @@ def save_skin():
         if row is None:
             return jsonify({"success": False, "error": "User not found"}), 404
 
-        balance = int(row["balance"] or 0)
         owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
         cost = purchase_cost(skin, owned_skins, avatar_costs)
 
-        if cost > balance:
-            price = skin_list_price(skin, avatar_costs)
+        if is_wallet_user_id(telegram_id) and cost > 0:
             return jsonify(
                 {
                     "success": False,
-                    "error": f"Need {price:,} coins — you have {balance:,}",
-                    "balance": balance,
+                    "error": f"Send {cost:,} $KINS from your wallet to unlock this avatar.",
+                    "requires_kins_payment": True,
                     "cost": cost,
-                    "price": price,
                 }
             ), 402
 
-        if cost > 0:
-            balance -= cost
+        result, apply_err = _apply_skin_to_user(
+            conn, telegram_id, skin, display_name, avatar_costs
+        )
+        if apply_err:
+            return apply_err
 
-        if skin not in owned_skins:
-            owned_skins = list(dict.fromkeys([*owned_skins, skin]))
-
-        if display_name is not None:
-            conn.execute(
-                """
-                UPDATE users
-                SET skin = ?, display_name = ?, balance = ?, owned_skins = ?, updated_at = ?
-                WHERE telegram_id = ?
-                """,
-                (skin, display_name, balance, owned_skins_json(owned_skins), now, telegram_id),
-            )
-        else:
-            conn.execute(
-                """
-                UPDATE users
-                SET skin = ?, balance = ?, owned_skins = ?, updated_at = ?
-                WHERE telegram_id = ?
-                """,
-                (skin, balance, owned_skins_json(owned_skins), now, telegram_id),
-            )
-            display_name = row["display_name"] or display_name_from_user(validated["user"])
-
-    return jsonify(
-        {
-            "success": True,
-            "skin": skin,
-            "display_name": display_name,
-            "balance": balance,
-            "owned_skins": owned_skins,
-            "cost_paid": cost,
-        }
-    )
+    return jsonify({"success": True, **result})
 
 
 def _auth_user_from_request():
@@ -1784,6 +2100,45 @@ def grant_gear():
     )
 
 
+@app.route("/api/gear/remove", methods=["POST"])
+def remove_gear():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    item = str(data.get("item", "")).strip()
+    if item not in GEAR_ITEM_IDS:
+        return jsonify({"success": False, "error": "Unknown gear item"}), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT gear_slots FROM users WHERE telegram_id = ?", (telegram_id,)
+        ).fetchone()
+        if row is None:
+            return jsonify({"success": False, "error": "User not found"}), 404
+
+        slots = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+        slots, removed = remove_gear_from_slots(slots, item)
+        if not removed:
+            return jsonify({"success": False, "error": "Item not in gear bar"}), 404
+
+        conn.execute(
+            "UPDATE users SET gear_slots = ?, updated_at = ? WHERE telegram_id = ?",
+            (json.dumps(slots), now, telegram_id),
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "item": item,
+            "gear_slots": slots,
+            "removed": True,
+        }
+    )
+
+
 @app.route("/api/fishing/cast/start", methods=["POST"])
 def fishing_cast_start():
     telegram_id, err = _auth_user_from_request()
@@ -1854,6 +2209,10 @@ def fishing_cast_complete():
         "quest_progress": result.get("quest_progress"),
         "quest_steps": result.get("quest_steps") or [],
         "quest_key": result.get("quest_key"),
+        "show_retry_prompt": bool(result.get("show_retry_prompt")),
+        "salvage_casts": result.get("salvage_casts"),
+        "retry_prompt_title": result.get("retry_prompt_title"),
+        "retry_prompt_message": result.get("retry_prompt_message"),
     }
     if result.get("reward_gear"):
         payload["meta"] = gear_item_client_meta(result["reward_gear"])

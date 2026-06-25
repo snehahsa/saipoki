@@ -148,3 +148,7 @@ def init_sqlite_schema(conn: Any) -> None:
 
     ensure_poketab_schema(conn)
     ensure_poketab_battle_schema(conn)
+
+    from kins_payments import ensure_kins_payments_schema
+
+    ensure_kins_payments_schema(conn)

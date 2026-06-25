@@ -226,6 +226,7 @@ def complete_fishing_cast(
     caught = False
     newly_granted = False
     message = str(quest.get("empty_wrong_mode") or "Nothing useful this time.")
+    salvage_casts = int(state.get("salvage_casts") or 0)
 
     if mode == win_mode and not state.get("found") and reward_gear not in slots:
         import random
@@ -235,16 +236,17 @@ def complete_fishing_cast(
             tmax = int(quest.get("trials_max") or 3)
             state["win_trial"] = random.randint(tmin, tmax)
 
-        state["salvage_casts"] = int(state.get("salvage_casts") or 0) + 1
-        if state["salvage_casts"] == state["win_trial"]:
+        state["salvage_casts"] = salvage_casts + 1
+        salvage_casts = state["salvage_casts"]
+        if salvage_casts == state["win_trial"]:
             slots, newly_granted = grant_gear_to_slots(slots, reward_gear)
             if newly_granted or reward_gear in slots:
                 caught = True
                 state["found"] = True
                 message = str(quest.get("catch_message") or "You found something!")
                 _save_gear_slots(conn, telegram_id, slots)
-    elif mode == win_mode:
-        message = str(quest.get("empty_salvage") or "Keep trying…")
+        else:
+            message = str(quest.get("empty_salvage") or "Keep trying…")
 
     fishing[matched_key] = state
     progress = merge_quest_progress_fishing(progress, fishing)
@@ -260,6 +262,12 @@ def complete_fishing_cast(
                 if result.get("newly_completed"):
                     quest_steps.append(str(catch_step))
 
+    show_retry_prompt = (
+        mode == win_mode
+        and not caught
+        and salvage_casts == 1
+    )
+
     return {
         "ok": True,
         "caught": caught,
@@ -271,4 +279,8 @@ def complete_fishing_cast(
         "quest_progress": progress,
         "quest_steps": quest_steps,
         "quest_key": matched_key,
+        "salvage_casts": salvage_casts if mode == win_mode else 0,
+        "show_retry_prompt": show_retry_prompt,
+        "retry_prompt_title": quest.get("retry_prompt_title") if show_retry_prompt else None,
+        "retry_prompt_message": quest.get("retry_prompt_message") if show_retry_prompt else None,
     }

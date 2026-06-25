@@ -1,18 +1,8 @@
 (function () {
-    const cfg = window.PLAY_CONFIG || {}
-    const GAME_JS_URL = cfg.assets?.gameJs || "/static/game/game.js"
-    const DEFAULT_SKIN = cfg.defaultSkin || "009"
     const STORAGE_KEY = "pokequest_wallet_session"
 
-    let session = null
-    let spectatorMode = false
-    let gameClientPromise = null
-    let statsInterval = null
-    let positionHandler = null
     let walletBusy = false
 
-    const landing = document.getElementById("play-landing")
-    const gameRoot = document.getElementById("play-game")
     const statusEl = document.getElementById("play-status")
     const walletModal = document.getElementById("play-wallet-modal")
     const playBtn = document.getElementById("play-now-btn")
@@ -60,171 +50,6 @@
 
     function closeWalletModal() {
         walletModal?.classList.add("hidden")
-    }
-
-    function holdGrantRulesForClient() {
-        const catalog = cfg.holdCatalog || {}
-        const rules = {}
-        Object.entries(catalog).forEach(([holdId, meta]) => {
-            if (meta?.grant_requires) rules[holdId] = meta.grant_requires
-        })
-        return rules
-    }
-
-    function authBody(extra = {}) {
-        const body = { ...extra }
-        const walletSession = sessionStorage.getItem(STORAGE_KEY)
-        if (walletSession) body.walletSession = walletSession
-        if (spectatorMode) body.spectator = true
-        return body
-    }
-
-    async function authenticate() {
-        const response = await fetch("/api/auth", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(authBody()),
-        })
-        const data = await response.json()
-        if (!response.ok || !data.success) {
-            throw new Error(data.error || "Authentication failed.")
-        }
-        return data
-    }
-
-    function gameClientReady() {
-        return Boolean(window.TelegramGame?.startGame)
-    }
-
-    function loadGameClient() {
-        if (gameClientReady()) return Promise.resolve()
-        if (gameClientPromise) return gameClientPromise
-
-        gameClientPromise = new Promise((resolve, reject) => {
-            const script = document.createElement("script")
-            script.src = GAME_JS_URL
-            script.async = true
-            script.onload = () => {
-                if (!gameClientReady()) {
-                    gameClientPromise = null
-                    reject(new Error("Game client failed to load."))
-                    return
-                }
-                resolve()
-            }
-            script.onerror = () => {
-                gameClientPromise = null
-                reject(new Error("Could not load game client."))
-            }
-            document.body.appendChild(script)
-        })
-
-        return gameClientPromise
-    }
-
-    function setGameLoading(message, show = true) {
-        const box = document.getElementById("game-loading")
-        const text = document.getElementById("game-loading-text")
-        if (text && message) text.textContent = message
-        if (box) box.classList.toggle("hidden", !show)
-    }
-
-    function showGameLayer() {
-        landing?.classList.add("is-hidden")
-        gameRoot?.classList.remove("hidden")
-        document.getElementById("game-screen")?.classList.remove("hidden")
-    }
-
-    function showLandingLayer() {
-        landing?.classList.remove("is-hidden")
-        gameRoot?.classList.add("hidden")
-        document.body.classList.remove("spectator-mode")
-        spectatorMode = false
-        setGameLoading("", false)
-    }
-
-    async function fetchWorldStats() {
-        try {
-            const response = await fetch("/health")
-            const data = await response.json()
-            const statPlayers = document.getElementById("stat-players")
-            if (statPlayers) statPlayers.textContent = String(data.players ?? 0)
-        } catch {
-            /* ignore */
-        }
-    }
-
-    function startGameHud() {
-        stopGameHud()
-        if (spectatorMode || !window.TelegramGame?.onPlayerPosition) return
-        fetchWorldStats()
-        statsInterval = setInterval(fetchWorldStats, 3000)
-    }
-
-    function stopGameHud() {
-        if (statsInterval) {
-            clearInterval(statsInterval)
-            statsInterval = null
-        }
-        if (positionHandler) {
-            window.TelegramGame?.offPlayerPosition?.(positionHandler)
-            positionHandler = null
-        }
-    }
-
-    function leaveGame() {
-        stopGameHud()
-        window.TelegramGame?.clearPadInput?.()
-        window.TelegramGame?.stopGame?.()
-        showLandingLayer()
-        setStatus("")
-    }
-
-    async function enterRealm({ spectate = false } = {}) {
-        spectatorMode = spectate
-        document.body.classList.toggle("spectator-mode", spectate)
-
-        setBusy(true)
-        setStatus(spectate ? "Opening spectator view..." : "Connecting wallet session...", "success")
-
-        try {
-            session = await authenticate()
-            await loadGameClient()
-            showGameLayer()
-            setGameLoading("CONNECTING")
-
-            const playSkin = session.skin || DEFAULT_SKIN
-            const playName = (session.display_name || (spectate ? "Spectator" : "Trainer")).trim()
-
-            setGameLoading("LOADING WORLD")
-            const result = await window.TelegramGame.startGame({
-                uid: String(session.telegram_id),
-                username: playName,
-                skin: playSkin,
-                level: Number(session.level) || 1,
-                holds: Array.isArray(session.holds) ? session.holds : [],
-                holdGrantRules: holdGrantRulesForClient(),
-                backendUrl: window.location.origin,
-                socketUrl: cfg.gameSocketUrl || "",
-                spectator: spectate,
-                onProgress: (message) => setGameLoading(String(message || "").toUpperCase()),
-            })
-
-            if (!result?.success) {
-                throw new Error(result?.error || "Could not join the realm.")
-            }
-
-            setGameLoading("", false)
-            startGameHud()
-            window.RetroAudio?.resume?.()
-            window.RetroAudio?.setScene?.("overworld")
-            setStatus("")
-        } catch (error) {
-            leaveGame()
-            setStatus(error.message || "Could not enter the realm.", "error")
-        } finally {
-            setBusy(false)
-        }
     }
 
     async function connectWalletFlow(walletName) {
@@ -279,8 +104,13 @@
             }
 
             sessionStorage.setItem(STORAGE_KEY, verifyData.walletSession)
-            setStatus("Wallet verified. Launching realm...", "success")
-            await enterRealm({ spectate: false })
+            setStatus("Wallet verified. Setting up trainer...", "success")
+
+            const ok = await window.SaiPokePlay?.bootAfterWallet?.()
+            if (!ok) {
+                throw new Error("Could not load your trainer profile.")
+            }
+            setStatus("")
         } catch (error) {
             if (error?.code === 4001 || /reject|denied|cancel/i.test(String(error?.message || ""))) {
                 setStatus("Wallet connection cancelled.", "error")
@@ -292,20 +122,40 @@
         }
     }
 
-    function bindUi() {
+    async function startSpectator() {
+        if (walletBusy) return
+        setBusy(true)
+        setStatus("Opening spectator view...", "success")
+        try {
+            const ok = await window.SaiPokePlay?.bootSpectator?.()
+            if (!ok) throw new Error("Could not open spectator view.")
+            setStatus("")
+        } catch (error) {
+            setStatus(error.message || "Spectator mode failed.", "error")
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    function bindLanding() {
         playBtn?.addEventListener("click", () => {
             if (walletBusy) return
             const existing = sessionStorage.getItem(STORAGE_KEY)
             if (existing) {
-                enterRealm({ spectate: false })
+                setBusy(true)
+                window.SaiPokePlay?.bootAfterWallet?.()
+                    .then((ok) => {
+                        if (!ok) setStatus("Session expired. Connect wallet again.", "error")
+                    })
+                    .catch((error) => setStatus(error.message || "Could not sign in.", "error"))
+                    .finally(() => setBusy(false))
                 return
             }
             openWalletModal()
         })
 
         spectateBtn?.addEventListener("click", () => {
-            if (walletBusy) return
-            enterRealm({ spectate: true })
+            if (!walletBusy) startSpectator()
         })
 
         document.getElementById("play-wallet-close")?.addEventListener("click", closeWalletModal)
@@ -319,9 +169,11 @@
             })
         })
 
-        document.getElementById("leave-game-btn")?.addEventListener("click", leaveGame)
-        document.getElementById("exit-spectate-btn")?.addEventListener("click", leaveGame)
+        document.getElementById("exit-spectate-btn")?.addEventListener("click", () => {
+            document.getElementById("leave-game-btn")?.click()
+        })
     }
 
-    bindUi()
+    window.SaiPokePlay = window.SaiPokePlay || {}
+    window.SaiPokePlay.bindLanding = bindLanding
 })()
