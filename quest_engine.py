@@ -10,8 +10,8 @@ from typing import Any
 from quests_catalog import QUEST_IDS, QUEST_STEP_IDS, QUEST_TRIGGERS, STEP_TO_QUEST
 
 
-def parse_quest_progress(raw) -> dict[str, list[str]]:
-    default = {"completed_steps": [], "removed_quests": []}
+def parse_quest_progress(raw) -> dict[str, Any]:
+    default: dict[str, Any] = {"completed_steps": [], "removed_quests": [], "fishing": {}}
     if not raw:
         return default
     if isinstance(raw, dict):
@@ -36,6 +36,7 @@ def parse_quest_progress(raw) -> dict[str, list[str]]:
         "removed_quests": [
             q for q in (str(x).strip() for x in removed) if q in QUEST_IDS
         ],
+        "fishing": data.get("fishing") if isinstance(data.get("fishing"), dict) else {},
     }
 
 

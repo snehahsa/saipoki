@@ -24,10 +24,24 @@ from sprite_catalog import (
     single_sprite_name,
     sync_single_manifest,
 )
+from animation_catalog import (
+    load_animation_frames,
+    load_manifest as load_animation_manifest,
+    save_animation_frames,
+    sync_manifest as sync_animation_manifest,
+)
 from animal_catalog import (
     load_animal_frames,
     load_manifest as load_animal_manifest,
     save_animal_frames,
+)
+from gear_catalog import (
+    GEAR_ITEMS,
+    gear_catalog_for_client,
+    gear_item_client_meta,
+    load_saved_item_config,
+    resolve_faces,
+    save_item_config,
 )
 
 WORLD_MAP_PATH = ROOT / "gather-clone/frontend/utils/defaultmap.json"
@@ -69,6 +83,69 @@ def api_sprites():
 def api_characters():
     skins = [f"{i:03d}" for i in range(1, 84)]
     return jsonify({"skins": skins, "defaultSkin": "009"})
+
+
+@app.route("/api/animations")
+def api_animations():
+    return jsonify({"animations": load_animation_manifest()})
+
+
+@app.route("/api/animations/<animation_id>/frames", methods=["GET"])
+def api_get_animation_frames(animation_id: str):
+    animations = {a["id"]: a for a in load_animation_manifest()}
+    entry = animations.get(animation_id)
+    if not entry:
+        return jsonify({"error": f"Animation not found: {animation_id}"}), 404
+
+    frame_data = load_animation_frames(animation_id, entry)
+    return jsonify(
+        {
+            "animation": entry,
+            "customFrames": frame_data.get("customFrames", False),
+            "displayScale": frame_data.get("displayScale", entry.get("displayScale")),
+            "frameMs": frame_data.get("frameMs", entry.get("frameMs", 120)),
+            "frameWidth": frame_data.get("frameWidth", entry.get("frameWidth")),
+            "frameHeight": frame_data.get("frameHeight", entry.get("frameHeight")),
+            "frames": frame_data.get("frames", {}),
+            "gearUseTarget": bool(
+                frame_data.get("gearUseTarget") or entry.get("gearUseTarget")
+            ),
+            "sidecar": f"{animation_id}/{animation_id}.json",
+        }
+    )
+
+
+@app.route("/api/animations/<animation_id>/frames", methods=["POST"])
+def api_save_animation_frames(animation_id: str):
+    payload = request.get_json(silent=True) or {}
+    frames = payload.get("frames")
+    if not isinstance(frames, dict):
+        return jsonify({"error": "frames object required"}), 400
+
+    try:
+        saved = save_animation_frames(
+            animation_id,
+            frames,
+            display_scale=payload.get("displayScale"),
+            frame_ms=payload.get("frameMs"),
+            frame_width=payload.get("frameWidth"),
+            frame_height=payload.get("frameHeight"),
+            gear_use_target=payload.get("gearUseTarget"),
+        )
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+
+    animations = load_animation_manifest()
+    entry = next((a for a in animations if a.get("id") == animation_id), None)
+    return jsonify(
+        {
+            "ok": True,
+            "animation": entry,
+            "frames": saved.get("frames", {}),
+            "frameMs": saved.get("frameMs"),
+            "message": "Animation frames saved. Re-enter the realm to see updated sprites.",
+        }
+    )
 
 
 @app.route("/api/animals")
@@ -119,6 +196,38 @@ def api_save_animal_frames(animal_id: str):
             "animal": entry,
             "frames": saved.get("frames", {}),
             "message": "Animal frames saved. Re-enter the realm to see updated sprites.",
+        }
+    )
+
+
+@app.route("/api/gear/items")
+def api_gear_items():
+    return jsonify({"items": list(gear_catalog_for_client().values())})
+
+
+@app.route("/api/gear/items/<item_id>", methods=["GET"])
+def api_get_gear_item(item_id: str):
+    if item_id not in GEAR_ITEMS:
+        return jsonify({"error": f"Gear item not found: {item_id}"}), 404
+    meta = gear_item_client_meta(item_id)
+    meta["faces"] = resolve_faces(item_id, load_saved_item_config(item_id))
+    return jsonify(meta)
+
+
+@app.route("/api/gear/items/<item_id>", methods=["POST"])
+def api_save_gear_item(item_id: str):
+    if item_id not in GEAR_ITEMS:
+        return jsonify({"error": f"Gear item not found: {item_id}"}), 404
+    payload = request.get_json(silent=True) or {}
+    try:
+        save_item_config(item_id, payload)
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+    return jsonify(
+        {
+            "ok": True,
+            "item": gear_item_client_meta(item_id),
+            "message": "Gear attach saved. Re-enter the realm to see updated overlay.",
         }
     )
 

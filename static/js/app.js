@@ -6,6 +6,8 @@ const CARD_CATALOG = window.APP_CONFIG.cardCatalog || {}
 const BAG_SLOT_COUNT = window.APP_CONFIG.bagSlotCount || 8
 const QUEST_CATALOG = window.APP_CONFIG.quests || []
 const HOLD_CATALOG = window.APP_CONFIG.holdCatalog || {}
+const GEAR_CATALOG = window.APP_CONFIG.gearCatalog || {}
+const FISHING_CATALOG = window.APP_CONFIG.fishingCatalog || {}
 const UI_UNLOCKS = window.APP_CONFIG.uiUnlocks || {}
 const AVATAR_COSTS = window.APP_CONFIG.avatarCosts || {}
 const STARTING_BALANCE = Number(window.APP_CONFIG.startingBalance) || 5000
@@ -34,6 +36,16 @@ let profileSelectedSkin = null
 let statsInterval = null
 let menuStatsInterval = null
 let positionHandler = null
+
+const QUICKBAR_SLOT_COUNT = window.APP_CONFIG.gearSlotCount || 3
+let quickbarSelectedSlot = -1
+let quickbarHintTimer = null
+let activeFishingMode = localStorage.getItem("saipoke_fishing_mode") || "fish"
+let gearModeMenuSlot = -1
+let gearModeMenuPinned = false
+let suppressQuickbarSlotUntil = 0
+let fishingCastActive = false
+let fishingCastAbort = null
 
 const tg = window.Telegram?.WebApp
 const TEST_QUERY_RESERVED = new Set(["tgWebAppStartParam", "v", "_"])
@@ -424,6 +436,20 @@ function bindGameEvents() {
     })
     window.TelegramGame.onGameEvent("grantHold", ({ item, source }) => {
         if (item) grantHold(item, source || "")
+    })
+
+    window.TelegramGame.onGameEvent("grantGear", ({ item, source }) => {
+        if (item) grantGear(item, source || "")
+    })
+
+    window.TelegramGame.onGameEvent("gearUsed", ({ item, animId }) => {
+        if (fishingCastActive || gearMeta(item)?.default_fishing_quest) return
+        const label = gearMeta(item)?.label || item || "Gear"
+        showQuickbarHint(`${label} — splash!`)
+        keepGearModeMenuOpen()
+        if (animId) {
+            console.debug("gear used on animation", animId)
+        }
     })
     window.TelegramGame.onGameEvent("poketab", (payload) => {
         window.PoketabSocial?.handleRealtime?.(payload)
@@ -1019,7 +1045,8 @@ function showError(message) {
 function normalizeQuestProgress(raw) {
     const completed = Array.isArray(raw?.completed_steps) ? raw.completed_steps : []
     const removed = Array.isArray(raw?.removed_quests) ? raw.removed_quests : []
-    return { completed_steps: completed, removed_quests: removed }
+    const fishing = raw?.fishing && typeof raw.fishing === "object" ? raw.fishing : {}
+    return { completed_steps: completed, removed_quests: removed, fishing }
 }
 
 function normalizeHolds(raw) {
@@ -1141,6 +1168,574 @@ function syncGameDrawerPanes() {
 
     if (activeId) {
         updateGameDrawerTitle(activeId)
+    }
+}
+
+function normalizeGearSlots(raw) {
+    const slots = Array.from({ length: QUICKBAR_SLOT_COUNT }, () => null)
+    if (!Array.isArray(raw)) return slots
+    for (let i = 0; i < QUICKBAR_SLOT_COUNT; i++) {
+        const item = raw[i]
+        slots[i] = item && GEAR_CATALOG[item] ? item : null
+    }
+    return slots
+}
+
+function gearMeta(itemId) {
+    return GEAR_CATALOG[itemId] || null
+}
+
+function playerHasGear(itemId) {
+    return normalizeGearSlots(session?.gear_slots).includes(itemId)
+}
+
+function getQuickbarSlotItems() {
+    return normalizeGearSlots(session?.gear_slots)
+}
+
+function quickbarGearIcon(gearId) {
+    return gearMeta(gearId)?.icon || ""
+}
+
+function showQuickbarHint(text) {
+    const hint = document.getElementById("game-quickbar-hint")
+    if (!hint) return
+    if (quickbarHintTimer) {
+        clearTimeout(quickbarHintTimer)
+        quickbarHintTimer = null
+    }
+    hint.textContent = text || ""
+    hint.classList.toggle("is-visible", Boolean(text))
+    if (text) {
+        quickbarHintTimer = setTimeout(() => {
+            hint.classList.remove("is-visible")
+            hint.textContent = ""
+            quickbarHintTimer = null
+        }, 2200)
+    }
+}
+
+function fishingQuestMeta(questKey) {
+    return FISHING_CATALOG[questKey] || null
+}
+
+function resolveFishingQuestForGear(gearId) {
+    return gearMeta(gearId)?.default_fishing_quest || null
+}
+
+function showFishingHud(label, progressPct = 0) {
+    const hud = document.getElementById("game-fishing-hud")
+    const labelEl = document.getElementById("game-fishing-label")
+    const fill = document.getElementById("game-fishing-bar-fill")
+    if (labelEl) labelEl.textContent = label || "Fishing…"
+    if (fill) fill.style.width = `${Math.max(0, Math.min(100, progressPct))}%`
+    hud?.classList.remove("hidden")
+}
+
+function hideFishingHud() {
+    document.getElementById("game-fishing-hud")?.classList.add("hidden")
+    const fill = document.getElementById("game-fishing-bar-fill")
+    if (fill) fill.style.width = "0%"
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function playFishingCatchFanfare() {
+    window.RetroAudio?.resume?.()
+    window.RetroAudio?.sfx?.("encounter")
+    document.body.classList.add("encounter-flash")
+    setTimeout(() => document.body.classList.remove("encounter-flash"), 520)
+}
+
+async function animateFishingProgress(durationMs, label, signal) {
+    const started = performance.now()
+    showFishingHud(label, 0)
+    while (true) {
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+        const elapsed = performance.now() - started
+        const pct = Math.min(100, (elapsed / durationMs) * 100)
+        showFishingHud(label, pct)
+        if (elapsed >= durationMs) break
+        await sleep(50)
+    }
+    showFishingHud(label, 100)
+}
+
+async function completeFishingCastSession(sessionId) {
+    const response = await fetch("/api/fishing/cast/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiAuthBody({ session_id: sessionId })),
+    })
+    const data = await response.json()
+    if (response.status === 425 && data.error === "Cast still in progress") {
+        await sleep(Number(data.wait_ms) || 500)
+        return completeFishingCastSession(sessionId)
+    }
+    return data
+}
+
+async function runFishingCast(gearId) {
+    if (fishingCastActive) return false
+
+    const questKey = resolveFishingQuestForGear(gearId)
+    if (!questKey) return false
+
+    const quest = fishingQuestMeta(questKey)
+    if (!quest) return false
+
+    const rewardGear = quest.reward_gear
+    if (rewardGear && playerHasGear(rewardGear)) {
+        showQuickbarHint("You already found what you were looking for.")
+        return false
+    }
+
+    window.RetroAudio?.resume?.()
+    window.TelegramGame?.setFishingMode?.(activeFishingMode)
+    const clientResult = window.TelegramGame?.tryUseGear?.()
+    if (!clientResult?.success) {
+        window.RetroAudio?.sfx?.("cancel")
+        showQuickbarHint(clientResult?.message || "Can't use that here")
+        return false
+    }
+
+    fishingCastActive = true
+    fishingCastAbort = new AbortController()
+    try {
+        const startResponse = await fetch("/api/fishing/cast/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(apiAuthBody({
+                quest_key: questKey,
+                mode: activeFishingMode,
+                gear_id: gearId,
+            })),
+        })
+        const startData = await startResponse.json()
+        if (!startResponse.ok || !startData.success) {
+            window.RetroAudio?.sfx?.("cancel")
+            showQuickbarHint(startData.error || "Could not start fishing")
+            return false
+        }
+
+        if (startData.quest_progress && session) {
+            session.quest_progress = normalizeQuestProgress(startData.quest_progress)
+            renderQuestBoard()
+        }
+        const durationMs = Number(startData.duration_ms) || 60000
+        const label = startData.status_label || "Fishing…"
+        await animateFishingProgress(durationMs, label, fishingCastAbort.signal)
+
+        const result = await completeFishingCastSession(startData.session_id)
+        hideFishingHud()
+
+        if (!result.success) {
+            window.RetroAudio?.sfx?.("cancel")
+            showQuickbarHint(result.error || result.message || "Cast failed")
+            return false
+        }
+
+        if (session && result.quest_progress) {
+            session.quest_progress = normalizeQuestProgress(result.quest_progress)
+            renderQuestBoard()
+        }
+
+        if (result.caught && result.gear_slots) {
+            session.gear_slots = normalizeGearSlots(result.gear_slots)
+            syncQuickbar()
+            playFishingCatchFanfare()
+            const meta = result.meta || gearMeta(result.reward_gear)
+            if (meta) showGearPickupPopup(meta)
+            showSignModal({
+                title: result.catch_title || quest.catch_title || "Found it!",
+                message: result.message || quest.catch_message || "You found something!",
+                source: "fishing",
+            })
+            return true
+        }
+
+        showQuickbarHint(result.message || "Nothing this time.")
+        return true
+    } catch (error) {
+        if (error?.name !== "AbortError") {
+            console.warn("Fishing cast failed:", error)
+            showQuickbarHint("Fishing interrupted.")
+        }
+        return false
+    } finally {
+        fishingCastActive = false
+        fishingCastAbort = null
+        hideFishingHud()
+    }
+}
+
+async function useQuickbarGear(gearId) {
+    if (!gearId || !playerHasGear(gearId)) return false
+
+    if (resolveFishingQuestForGear(gearId)) {
+        return runFishingCast(gearId)
+    }
+
+    window.RetroAudio?.resume?.()
+    const result = window.TelegramGame?.tryUseGear?.()
+    if (!result) return false
+
+    if (result.success) {
+        window.RetroAudio?.sfx?.("confirm")
+        showQuickbarHint(result.message)
+        return true
+    }
+
+    window.RetroAudio?.sfx?.("cancel")
+    showQuickbarHint(result.message || "Can't use that here")
+    return false
+}
+
+function isGearModeMenuOpen() {
+    const menu = document.getElementById("game-gear-mode-menu")
+    return Boolean(menu && !menu.classList.contains("hidden") && gearModeMenuPinned)
+}
+
+function markGearModeMenuInteraction() {
+    suppressQuickbarSlotUntil = performance.now() + 700
+}
+
+function keepGearModeMenuOpen() {
+    const gearId = quickbarSelectedSlot >= 0 ? getQuickbarSlotItems()[quickbarSelectedSlot] : null
+    if (gearId !== "fishing_rod" || !fishingModesForGear(gearId)) return
+    const menu = document.getElementById("game-gear-mode-menu")
+    if (!menu) return
+    gearModeMenuPinned = true
+    gearModeMenuSlot = quickbarSelectedSlot
+    menu.classList.remove("hidden")
+    if (!menu.querySelector("[data-fishing-cast]")) {
+        showGearModeMenu(quickbarSelectedSlot, gearId)
+        return
+    }
+    positionGearModeMenu(quickbarSelectedSlot)
+    updateGearModeMenuActiveState()
+}
+
+function syncEquippedGearVisual() {
+    const slots = getQuickbarSlotItems()
+    const equipped = quickbarSelectedSlot >= 0 ? slots[quickbarSelectedSlot] : null
+    window.TelegramGame?.setEquippedGear?.(equipped || null)
+    if (!equipped) {
+        hideGearModeMenu()
+        return
+    }
+    if (equipped === "fishing_rod" && fishingModesForGear(equipped)) {
+        if (isGearModeMenuOpen() && gearModeMenuSlot === quickbarSelectedSlot) {
+            updateGearModeMenuActiveState()
+            positionGearModeMenu(quickbarSelectedSlot)
+        }
+    } else if (isGearModeMenuOpen()) {
+        hideGearModeMenu()
+    }
+}
+
+function updateGearModeMenuActiveState() {
+    document.querySelectorAll(".game-gear-mode-btn[data-fishing-mode]").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.fishingMode === activeFishingMode)
+    })
+}
+
+function syncQuickbar() {
+    const slots = document.querySelectorAll(".game-quickslot")
+    if (!slots.length) return
+
+    const items = getQuickbarSlotItems()
+    if (quickbarSelectedSlot >= 0 && !items[quickbarSelectedSlot]) {
+        quickbarSelectedSlot = -1
+    }
+
+    slots.forEach((slotEl, index) => {
+        const gearId = items[index]
+        const meta = gearId ? gearMeta(gearId) : null
+        const iconEl = slotEl.querySelector(".game-quickslot-icon")
+        const label = meta?.label || (gearId ? gearId : "empty")
+
+        slotEl.classList.toggle("is-filled", Boolean(gearId))
+        slotEl.classList.toggle("is-selected", quickbarSelectedSlot === index)
+        slotEl.disabled = !gearId
+        slotEl.setAttribute(
+            "aria-label",
+            gearId
+                ? `Gear slot ${index + 1}, ${label}${quickbarSelectedSlot === index ? ", equipped" : ""}`
+                : `Gear slot ${index + 1}, empty`
+        )
+
+        if (iconEl) {
+            const icon = quickbarGearIcon(gearId)
+            if (icon) {
+                iconEl.src = icon
+                iconEl.alt = label
+                iconEl.classList.remove("hidden")
+            } else {
+                iconEl.removeAttribute("src")
+                iconEl.alt = ""
+                iconEl.classList.add("hidden")
+            }
+        }
+    })
+
+    syncEquippedGearVisual()
+    syncPlayerGearToGame()
+}
+
+function flashQuickbarSlot(index) {
+    const slotEl = document.querySelector(`.game-quickslot[data-slot="${index}"]`)
+    if (!slotEl) return
+    slotEl.classList.add("is-use-flash")
+    setTimeout(() => slotEl.classList.remove("is-use-flash"), 220)
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+}
+
+function fishingModesForGear(gearId) {
+    const modes = gearMeta(gearId)?.fishing_modes
+    return Array.isArray(modes) && modes.length ? modes : null
+}
+
+function syncPlayerGearToGame() {
+    const ids = getQuickbarSlotItems().filter(Boolean)
+    window.TelegramGame?.setPlayerGear?.(ids)
+}
+
+function hideGearModeMenu() {
+    gearModeMenuSlot = -1
+    gearModeMenuPinned = false
+    const menu = document.getElementById("game-gear-mode-menu")
+    if (menu) {
+        menu.classList.add("hidden")
+        menu.innerHTML = ""
+    }
+}
+
+function positionGearModeMenu(slotIndex) {
+    const menu = document.getElementById("game-gear-mode-menu")
+    const anchor = document.querySelector(".game-quickbar-anchor")
+    const slotEl = document.querySelector(`.game-quickslot[data-slot="${slotIndex}"]`)
+    if (!menu || !anchor || !slotEl) return
+
+    const anchorRect = anchor.getBoundingClientRect()
+    const slotRect = slotEl.getBoundingClientRect()
+    const centerX = slotRect.left + slotRect.width / 2 - anchorRect.left
+    menu.style.left = `${centerX}px`
+    menu.style.transform = "translateX(-50%)"
+}
+
+function showGearModeMenu(slotIndex, gearId) {
+    const modes = fishingModesForGear(gearId)
+    if (!modes) {
+        hideGearModeMenu()
+        return
+    }
+
+    const menu = document.getElementById("game-gear-mode-menu")
+    if (!menu) return
+
+    const menuOpen = isGearModeMenuOpen() && gearModeMenuSlot === slotIndex
+    if (menuOpen && menu.querySelector("[data-fishing-cast]")) {
+        updateGearModeMenuActiveState()
+        return
+    }
+
+    gearModeMenuSlot = slotIndex
+    gearModeMenuPinned = true
+    menu.innerHTML = `
+        <p class="game-gear-mode-title">CATCH TYPE</p>
+        ${modes.map((mode) => `
+            <button type="button" class="game-gear-mode-btn ${mode.id === activeFishingMode ? "is-active" : ""}" data-fishing-mode="${mode.id}">
+                ${escapeHtml(mode.label || mode.id)}
+                <small>${escapeHtml(mode.hint || "")}</small>
+            </button>
+        `).join("")}
+        <button type="button" class="game-gear-mode-btn is-cast" data-fishing-cast="1">CAST</button>
+    `
+    menu.classList.remove("hidden")
+    positionGearModeMenu(slotIndex)
+    window.TelegramGame?.setFishingMode?.(activeFishingMode)
+}
+
+function selectFishingMode(modeId) {
+    if (!modeId) return
+    activeFishingMode = modeId
+    localStorage.setItem("saipoke_fishing_mode", modeId)
+    window.TelegramGame?.setFishingMode?.(modeId)
+    document.querySelectorAll(".game-gear-mode-btn[data-fishing-mode]").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.fishingMode === modeId)
+    })
+    const label = (fishingModesForGear("fishing_rod") || []).find((m) => m.id === modeId)?.label || modeId
+    showQuickbarHint(`Mode: ${label}`)
+}
+
+function stowQuickbarGear(gearId) {
+    quickbarSelectedSlot = -1
+    hideGearModeMenu()
+    syncQuickbar()
+    const label = gearMeta(gearId)?.label || gearId
+    showQuickbarHint(`${label} stowed`)
+}
+
+function bindQuickbar() {
+    const quickbar = document.getElementById("game-quickbar")
+    if (!quickbar || quickbar.dataset.bound === "1") return
+    quickbar.dataset.bound = "1"
+
+    const handleGearModeMenuPointer = (event) => {
+        markGearModeMenuInteraction()
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+
+        const modeBtn = event.target.closest("[data-fishing-mode]")
+        if (modeBtn) {
+            selectFishingMode(modeBtn.dataset.fishingMode)
+            keepGearModeMenuOpen()
+            return
+        }
+        if (event.target.closest("[data-fishing-cast]")) {
+            const gearId = getQuickbarSlotItems()[quickbarSelectedSlot]
+            window.TelegramGame?.setFishingMode?.(activeFishingMode)
+            hideGearModeMenu()
+            if (gearId) {
+                void useQuickbarGear(gearId)
+            }
+        }
+    }
+
+    const menu = document.getElementById("game-gear-mode-menu")
+    menu?.addEventListener("pointerdown", handleGearModeMenuPointer, true)
+    menu?.addEventListener("click", (event) => {
+        markGearModeMenuInteraction()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+    }, true)
+
+    quickbar.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("#game-gear-mode-menu")) return
+        if (performance.now() < suppressQuickbarSlotUntil) return
+
+        const slotEl = event.target.closest(".game-quickslot")
+        if (!slotEl || slotEl.disabled) return
+
+        const index = Number(slotEl.dataset.slot)
+        if (!Number.isFinite(index)) return
+
+        const items = getQuickbarSlotItems()
+        const gearId = items[index]
+        if (!gearId) return
+
+        window.RetroAudio?.resume?.()
+        window.RetroAudio?.sfx?.("select")
+
+        if (quickbarSelectedSlot === index) {
+            stowQuickbarGear(gearId)
+            return
+        }
+
+        quickbarSelectedSlot = index
+        syncQuickbar()
+        const label = gearMeta(gearId)?.label || gearId
+        if (fishingModesForGear(gearId)) {
+            showGearModeMenu(index, gearId)
+            showQuickbarHint(`Equip: ${label} · pick catch type · CAST by water`)
+        } else {
+            showQuickbarHint(`Equip: ${label} · tap again to stow`)
+        }
+    })
+
+    document.addEventListener("keydown", (event) => {
+        if (!screens.game || screens.game.classList.contains("hidden")) return
+        const key = event.key
+        if (key !== "1" && key !== "2" && key !== "3") return
+
+        const index = Number(key) - 1
+        const items = getQuickbarSlotItems()
+        const gearId = items[index]
+        if (!gearId) return
+
+        event.preventDefault()
+        if (quickbarSelectedSlot === index) {
+            stowQuickbarGear(gearId)
+        } else {
+            quickbarSelectedSlot = index
+            syncQuickbar()
+            const label = gearMeta(gearId)?.label || gearId
+            if (fishingModesForGear(gearId)) {
+                showGearModeMenu(index, gearId)
+                showQuickbarHint(`Equip: ${label} · pick catch type · CAST by water`)
+            } else {
+                showQuickbarHint(`Equip: ${label} · tap again to stow`)
+            }
+        }
+    })
+}
+
+function showGearPickupPopup(meta) {
+    showItemGetPopup(itemGetSpecFromMeta(meta))
+}
+
+function completeGearQuestFromMeta(meta) {
+    if (!meta?.quest_step) return
+    completeQuestStep(meta.quest_step, meta.quest_id || null)
+}
+
+async function grantGear(item, source = "") {
+    const gearId = String(item || "").trim()
+    if (!gearId || !GEAR_CATALOG[gearId]) return
+    if (playerHasGear(gearId)) return
+
+    const meta = gearMeta(gearId) || { id: gearId, label: gearId }
+    const priorSlots = normalizeGearSlots(session?.gear_slots)
+
+    const optimistic = [...priorSlots]
+    const emptyIndex = optimistic.findIndex((slot) => !slot)
+    if (emptyIndex === -1) {
+        showQuickbarHint("Gear bar full")
+        return
+    }
+    optimistic[emptyIndex] = gearId
+    session.gear_slots = optimistic
+    syncQuickbar()
+
+    try {
+        const response = await fetch("/api/gear/grant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(apiAuthBody({ item: gearId, source })),
+        })
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+            console.warn("Could not grant gear:", data.error || gearId)
+            session.gear_slots = priorSlots
+            syncQuickbar()
+            showQuickbarHint(data.error || "Gear bar full")
+            return
+        }
+
+        session.gear_slots = normalizeGearSlots(data.gear_slots)
+        syncQuickbar()
+        syncPlayerGearToGame()
+
+        const resolvedMeta = data.meta || meta
+        if (data.newly_granted) {
+            showGearPickupPopup(resolvedMeta)
+            completeGearQuestFromMeta(resolvedMeta)
+        }
+    } catch (error) {
+        console.warn("Could not grant gear:", error)
+        session.gear_slots = priorSlots
+        syncQuickbar()
     }
 }
 
@@ -2288,7 +2883,13 @@ async function enterGame() {
         if (!response.ok || !fresh.success) {
             throw new Error(fresh.error || "Session expired. Reopen the app.")
         }
-        session = { ...session, ...fresh, quest_progress: normalizeQuestProgress(fresh.quest_progress), holds: normalizeHolds(fresh.holds) }
+        session = {
+            ...session,
+            ...fresh,
+            quest_progress: normalizeQuestProgress(fresh.quest_progress),
+            holds: normalizeHolds(fresh.holds),
+            gear_slots: normalizeGearSlots(fresh.gear_slots),
+        }
     } catch (error) {
         setGameLoading("", false)
         stopGameHud()
@@ -2306,6 +2907,7 @@ async function enterGame() {
 
     setGameLoading("LOADING WORLD")
     syncHoldUi()
+    syncQuickbar()
 
     const playSkin = session.skin || sortedSkins[skinIndex] || DEFAULT_SKIN
     const playName = (session.display_name || "Trainer").trim() || "Trainer"
@@ -2356,6 +2958,9 @@ async function enterGame() {
     window.RetroAudio?.resume()
     window.RetroAudio?.setScene("overworld")
     window.PoketabSocial?.startBadgePolling?.()
+    syncEquippedGearVisual()
+    syncPlayerGearToGame()
+    window.TelegramGame?.setFishingMode?.(activeFishingMode)
 }
 
 let activeMessageSetId = null
@@ -3063,6 +3668,11 @@ function leaveGame() {
     stopGameHud()
     clearPadInput()
     closeGameDrawer()
+    quickbarSelectedSlot = -1
+    hideGearModeMenu()
+    showQuickbarHint("")
+    syncQuickbar()
+    window.TelegramGame?.setEquippedGear?.(null)
     window.PoketabSocial?.close?.()
     window.PoketabSocial?.stopBadgePolling?.()
     hideSignModal()
@@ -3118,7 +3728,7 @@ function clearPadInput() {
 }
 
 function bindNoSelectOnButtons() {
-    const noSelectZones = "#game-screen, #game-screen *, .btn, .icon-btn, .btn-leave, .game-quests-btn, .game-joystick, .game-bag-btn, .game-poketab-btn, .game-drawer-tab, button"
+    const noSelectZones = "#game-screen, #game-screen *, .btn, .icon-btn, .btn-leave, .game-quests-btn, .game-joystick, .game-quickslot, .game-bag-btn, .game-poketab-btn, .game-drawer-tab, button"
 
     const block = (e) => {
         if (e.target.closest(noSelectZones)) e.preventDefault()
@@ -3129,7 +3739,7 @@ function bindNoSelectOnButtons() {
 }
 
 function bindButtonPressAnimation() {
-    const pressables = ".btn, .icon-btn, .btn-leave, .game-quests-btn, .game-bag-btn, .game-poketab-btn, .game-drawer-tab, .game-drawer-close"
+    const pressables = ".btn, .icon-btn, .btn-leave, .game-quests-btn, .game-quickslot, .game-bag-btn, .game-poketab-btn, .game-drawer-tab, .game-drawer-close"
 
     document.addEventListener("pointerdown", (e) => {
         const btn = e.target.closest(pressables)
@@ -3261,6 +3871,7 @@ async function init() {
     if (!session) return
     session.quest_progress = normalizeQuestProgress(session.quest_progress)
     session.holds = normalizeHolds(session.holds)
+    session.gear_slots = normalizeGearSlots(session.gear_slots)
     session.vault = normalizeVault(session.vault)
     session.balance = Number(session.balance) || 0
     session.vending_spins = Number(session.vending_spins) || 0
@@ -3272,6 +3883,7 @@ async function init() {
     }
     refreshSortedSkins()
     syncHoldUi()
+    syncQuickbar()
     updateBalanceDisplays()
     renderProfileXp()
 
@@ -3483,6 +4095,7 @@ async function init() {
     bindNoSelectOnButtons()
     bindButtonPressAnimation()
     bindPadControls()
+    bindQuickbar()
     bindGameTouchGuard()
     bindGameDrawer()
     bindVendingMachine()

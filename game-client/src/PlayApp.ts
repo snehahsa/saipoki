@@ -1,6 +1,6 @@
 import { App } from '@/utils/pixi/App'
 import { Player } from '@/utils/pixi/Player/Player'
-import { Point, RealmData, TilePoint } from '@/utils/pixi/types'
+import { Direction, Point, RealmData, TilePoint } from '@/utils/pixi/types'
 import * as PIXI from 'pixi.js'
 import { server } from '@/utils/backend/server'
 import { defaultSkin } from '@/utils/pixi/Player/skins'
@@ -8,6 +8,8 @@ import signal from '@/utils/signal'
 import { Npc, NpcConfig, NPC_PATROL_RESUME_DELAY_MS } from './Npc'
 import { buildInteractables, findActiveInteraction, InteractableEntry } from './interactions'
 import { canGrantFlowHold, NpcFlowRequires } from './flows'
+import { buildGearUseTargets, GearUseTarget, resolveGearUse } from './gearTargets'
+import { getGearItem } from './gearCatalog'
 
 export class PlayApp extends App {
     private scale: number = 1.5
@@ -27,6 +29,10 @@ export class PlayApp extends App {
     private kicked: boolean = false
     private playerHolds: Set<string> = new Set()
     private holdGrantRules: Record<string, NpcFlowRequires> = {}
+    private gearUseTargets: GearUseTarget[] = []
+    private equippedGearId: string | null = null
+    private playerGear: Set<string> = new Set()
+    private fishingMode: string = 'fish'
     private cameraReady = false
     private resizeFrame: number | null = null
 
@@ -53,6 +59,22 @@ export class PlayApp extends App {
 
     public getPlayerHolds(): Set<string> {
         return this.playerHolds
+    }
+
+    public setPlayerGear(gearIds: string[]) {
+        this.playerGear = new Set(gearIds.filter(Boolean))
+    }
+
+    public getPlayerGear(): Set<string> {
+        return this.playerGear
+    }
+
+    public setFishingMode(mode: string) {
+        if (mode) this.fishingMode = mode
+    }
+
+    public getFishingMode(): string {
+        return this.fishingMode
     }
 
     public getHoldGrantRules(): Record<string, NpcFlowRequires> {
@@ -82,6 +104,9 @@ export class PlayApp extends App {
         await super.loadRoom(index)
         this.setUpBlockedTiles()
         this.rebuildInteractables()
+        this.gearUseTargets = await buildGearUseTargets(
+            this.realmData.rooms[this.currentRoomIndex]
+        )
         await this.spawnNpcs()
         await this.spawnLocalPlayer()
         await this.syncOtherPlayers()
@@ -195,6 +220,9 @@ export class PlayApp extends App {
             if (flow.grantHold && canGrantFlowHold(flow, holds, this.holdGrantRules)) {
                 signal.emit('grantHold', { item: flow.grantHold, source: `npc:${npc.id}` })
             }
+            if (flow.grantGear) {
+                signal.emit('grantGear', { item: flow.grantGear, source: `npc:${npc.id}` })
+            }
             if (flow.questStep && (!flow.grantHold || canGrantFlowHold(flow, holds, this.holdGrantRules))) {
                 signal.emit('questStep', {
                     step_id: flow.questStep,
@@ -207,6 +235,9 @@ export class PlayApp extends App {
         const onComplete = npc.getOnComplete()
         if (onComplete?.grantHold) {
             signal.emit('grantHold', { item: onComplete.grantHold, source: `npc:${npc.id}` })
+        }
+        if (onComplete?.grantGear) {
+            signal.emit('grantGear', { item: onComplete.grantGear, source: `npc:${npc.id}` })
         }
         if (onComplete?.questStep) {
             signal.emit('questStep', {
@@ -420,6 +451,16 @@ export class PlayApp extends App {
         this.padState = { up: false, down: false, left: false, right: false }
     }
 
+    public enableSpectatorMode() {
+        this.disableInput = true
+        this.clearPadInput()
+        this.keysDown = []
+        this.player.frozen = true
+        if (this.player?.parent) {
+            this.player.parent.visible = false
+        }
+    }
+
     private spawnLocalPlayer = async () => {
         if (this.teleportLocation) {
             this.player.setPosition(this.teleportLocation.x, this.teleportLocation.y)
@@ -429,6 +470,10 @@ export class PlayApp extends App {
         }
 
         await this.player.init()
+
+        if (this.equippedGearId) {
+            await this.player.setEquippedGear(this.equippedGearId)
+        }
 
         this.layers.object.addChild(this.player.parent)
         this.sortObjectsByY()
@@ -683,6 +728,73 @@ export class PlayApp extends App {
         this.destroyPlayers()
         server.disconnect()
         this.removeSignalListeners()
+    }
+
+    public setEquippedGear = async (gearId: string | null) => {
+        this.equippedGearId = gearId
+        await this.player.setEquippedGear(gearId)
+        this.sortObjectsByY()
+    }
+
+    public tryUseGear = (): { success: boolean; message: string; animId?: string } => {
+        const gearId = this.equippedGearId
+        if (!gearId) {
+            return { success: false, message: 'No gear equipped' }
+        }
+
+        const item = getGearItem(gearId)
+        if (!item) {
+            return { success: false, message: 'Unknown gear' }
+        }
+
+        const direction = this.player.getDirection()
+        const useFacings: Direction[] = item.useFacings?.length
+            ? (item.useFacings as Direction[])
+            : [((item.requiresFacing || item.sprite?.direction || 'left') as Direction)]
+
+        if (!this.gearUseTargets.length) {
+            return { success: false, message: 'Nothing to use gear on in this area' }
+        }
+
+        const resolved = resolveGearUse(
+            this.player.currentTilePosition,
+            direction,
+            this.gearUseTargets,
+            useFacings
+        )
+        if (!resolved) {
+            const label = useFacings.join(' or ')
+            return {
+                success: false,
+                message: `Stand next to water and face ${label}`,
+            }
+        }
+
+        if (resolved.needsFace) {
+            this.player.faceToward(resolved.faceTile)
+        }
+
+        const mode = this.fishingMode
+        const modeLabels: Record<string, string> = {
+            fish: 'River Fish',
+            pokemon: 'Water Pokémon',
+            salvage: 'Salvage',
+        }
+        const modeLabel = modeLabels[mode] || mode
+
+        signal.emit('gearUsed', {
+            item: gearId,
+            animId: resolved.target.animId,
+            mode,
+            x: this.player.currentTilePosition.x,
+            y: this.player.currentTilePosition.y,
+        })
+
+        return {
+            success: true,
+            message: `Casting for ${modeLabel}…`,
+            animId: resolved.target.animId,
+        }
     }
 
     public destroy() {

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="description" content="PokeQuest — isometric MMO. Battle, trade, quest, earn $KINS.">
+    <title>PokeQuest — Play Now</title>
+    <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="/static/background/bg.png?v={{ asset_v.bg }}" as="image">
+    <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
+    <link rel="stylesheet" href="/static/css/play.css?v={{ asset_v.play_css }}">
+    <link rel="stylesheet" href="/static/css/app.css?v={{ asset_v.app_css }}">
+    <style>
+        html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    </style>
+</head>
+<body class="play-body">
+
+<div class="play-bg" aria-hidden="true">
+    <img
+        class="play-bg__image"
+        src="/static/background/bg.png?v={{ asset_v.bg }}"
+        alt=""
+        width="1920"
+        height="1080"
+        decoding="async"
+    >
+    <div class="play-bg__shade"></div>
+    <div class="play-bg__scan"></div>
+    <div class="play-bg__grain"></div>
+</div>
+
+<section id="play-landing" aria-label="Enter PokeQuest">
+    <div class="play-landing-inner">
+        <img
+            class="play-logo"
+            src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+            alt="PokeQuest"
+            width="280"
+            height="101"
+            decoding="async"
+        >
+
+        <p class="play-kicker">
+            BATTLE · FLIP ITEMS · CRUSH QUESTS · CLEAR GYMS · RAID BOSSES · STACK $KINS
+        </p>
+
+        <p class="play-tagline">
+            The isometric MMO built to pay you. Grind the map, buy and sell for $KINS,
+            chain quests with your squad, and own every run you clear.
+        </p>
+
+        <div class="play-actions">
+            <button type="button" class="play-btn play-btn--primary" id="play-now-btn">
+                Play Now
+            </button>
+            <button type="button" class="play-btn play-btn--ghost" id="spectate-btn">
+                Spectate
+            </button>
+        </div>
+
+        <p class="play-status" id="play-status" aria-live="polite"></p>
+        <p class="play-wallet-hint">
+            Play Now requires Phantom or Solflare and $KINS in your wallet.
+        </p>
+    </div>
+</section>
+
+<div id="play-wallet-modal" class="play-wallet-modal hidden" role="dialog" aria-labelledby="play-wallet-title" aria-modal="true">
+    <div class="play-wallet-panel">
+        <p class="play-wallet-title" id="play-wallet-title">Connect Wallet</p>
+        <p class="play-wallet-copy">
+            Prove ownership with a signed message. Your wallet must hold $KINS to enter.
+        </p>
+        <div class="play-wallet-options">
+            <button type="button" class="play-wallet-option" data-wallet="phantom">
+                <span class="play-wallet-icon" aria-hidden="true">👻</span>
+                <span>Phantom</span>
+            </button>
+            <button type="button" class="play-wallet-option" data-wallet="solflare">
+                <span class="play-wallet-icon" aria-hidden="true">🔥</span>
+                <span>Solflare</span>
+            </button>
+        </div>
+        <button type="button" class="play-wallet-close" id="play-wallet-close">Cancel</button>
+    </div>
+</div>
+
+<div id="play-game" class="hidden">
+    <div id="game-screen" class="screen">
+        <div id="game-hud" class="game-hud hidden">
+            <div class="hud-line hud-line--level">lv: <span id="stat-level" class="hud-v">0</span></div>
+            <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
+            <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
+        </div>
+        <div class="game-top-actions">
+            <button class="btn btn-leave" id="leave-game-btn" type="button">EXIT</button>
+        </div>
+        <div id="app-container"></div>
+        <div id="game-loading" class="game-loading hidden">
+            <div class="game-loading-box">
+                <p class="game-loading-text" id="game-loading-text">LOADING</p>
+            </div>
+        </div>
+        <div id="join-toast-stack" class="join-toast-stack" aria-live="polite"></div>
+        <div id="game-pad" class="game-pad">
+            <div id="game-joystick" class="game-joystick" role="group" aria-label="Move character">
+                <div id="game-joystick-base" class="game-joystick-base">
+                    <div class="game-joystick-ring" aria-hidden="true"></div>
+                    <div id="game-joystick-stick" class="game-joystick-stick" aria-hidden="true"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p class="play-spectate-badge" aria-hidden="true">SPECTATING LIVE REALM</p>
+<button type="button" class="play-exit-spectate" id="exit-spectate-btn">Back</button>
+
+<script>
+    window.PLAY_CONFIG = {
+        gameSocketUrl: {{ game_socket_url|tojson }},
+        defaultSkin: {{ default_skin|tojson }},
+        skins: {{ skins|tojson }},
+        holdCatalog: {{ hold_catalog|tojson }},
+        kinsTokenMint: {{ kins_token_mint|tojson }},
+        assets: {
+            gameJs: "/static/game/game.js?v={{ asset_v.game_js }}"
+        }
+    };
+</script>
+<script src="/static/js/retro-audio.js?v={{ asset_v.retro_audio_js }}"></script>
+<script src="/static/js/play.js?v={{ asset_v.play_js }}"></script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 import urllib.error
 import urllib.request
@@ -21,6 +22,16 @@ from flow_catalog import (
     hold_item_client_meta,
     ui_unlocks_for_client,
 )
+from fishing_catalog import fishing_catalog_for_client
+from fishing_engine import complete_fishing_cast, fishing_progress_public, fishing_state_for_user, start_fishing_cast
+from gear_catalog import (
+    GEAR_ITEM_IDS,
+    GEAR_SLOT_COUNT,
+    gear_catalog_for_client,
+    gear_item_client_meta,
+    grant_gear_to_slots,
+    normalize_gear_slots,
+)
 from poke_registry import (
     add_card_to_vault,
     card_client_item,
@@ -33,6 +44,14 @@ from quest_engine import (
     backfill_quest_triggers,
     complete_quest_step as engine_complete_quest_step,
     parse_quest_progress,
+)
+from wallet_auth import (
+    KINS_TOKEN_MINT,
+    create_wallet_challenge,
+    issue_wallet_session,
+    verify_wallet_login,
+    verify_wallet_session,
+    wallet_telegram_id,
 )
 from avatar_economy import (
     DEFAULT_SKIN as AVATAR_DEFAULT_SKIN,
@@ -66,6 +85,7 @@ from poketab_battle import (
     cancel_invite,
     count_battle_alerts,
     ensure_schema as ensure_poketab_battle_schema,
+    forfeit_active_battle_for_offline,
     get_status as poketab_battle_status,
     notify_battle_quests,
     perform_action as poketab_battle_action,
@@ -93,7 +113,8 @@ TEST_PLAYER_USER = {
     "last_name": "Trainer",
     "username": "test_trainer",
 }
-TEST_PLAYER_HOLDS = ["bag", "card_vault", "poketab"]
+TEST_PLAYER_HOLDS = ["bag", "card_vault"]
+TEST_PLAYER_GEAR_SLOTS = [None, None, None]
 TEST_QUERY_RESERVED = frozenset({"tgWebAppStartParam", "v", "_"})
 def resolve_game_server_internal() -> str:
     """Game server URL for Flask → game proxy (Railway private or public)."""
@@ -296,31 +317,52 @@ def test_telegram_id_for_slug(slug: str) -> str:
 
 
 def ensure_test_player_profile(conn, telegram_id: str) -> None:
-    """Persist holds for URL test trainers (cards come from the vending machine)."""
+    """Persist holds and gear for URL test trainers."""
     row = conn.execute(
-        "SELECT holds FROM users WHERE telegram_id = ?",
+        "SELECT holds, gear_slots FROM users WHERE telegram_id = ?",
         (telegram_id,),
     ).fetchone()
     if not row:
         return
 
-    holds = list(parse_holds(row["holds"] if "holds" in row.keys() else None))
-    holds_changed = False
-    for hold_id in TEST_PLAYER_HOLDS:
-        if hold_id not in holds:
-            holds.append(hold_id)
-            holds_changed = True
+    now = int(time.time())
+    holds = list(TEST_PLAYER_HOLDS)
+    holds_changed = parse_holds(row["holds"] if "holds" in row.keys() else None) != holds
 
-    if not holds_changed:
+    slots = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+    gear_changed = slots != normalize_gear_slots(TEST_PLAYER_GEAR_SLOTS)
+    if gear_changed:
+        slots = normalize_gear_slots(TEST_PLAYER_GEAR_SLOTS)
+
+    if not holds_changed and not gear_changed:
         return
 
     conn.execute(
         """
-        UPDATE users SET holds = ?, updated_at = ?
+        UPDATE users SET holds = ?, gear_slots = ?, updated_at = ?
         WHERE telegram_id = ?
         """,
-        (json.dumps(holds), int(time.time()), telegram_id),
+        (json.dumps(holds), json.dumps(slots), now, telegram_id),
     )
+
+
+def ensure_starter_gear(conn, telegram_id: str, slots: list) -> list:
+    """Give fishing rod in slot 1 when a player has no gear yet (dev starter)."""
+    normalized = normalize_gear_slots(slots)
+    if any(normalized):
+        return normalized
+    updated, granted = grant_gear_to_slots(normalized, "fishing_rod")
+    if not granted:
+        return normalized
+    now = int(time.time())
+    conn.execute(
+        """
+        UPDATE users SET gear_slots = ?, updated_at = ?
+        WHERE telegram_id = ?
+        """,
+        (json.dumps(updated), now, telegram_id),
+    )
+    return updated
 
 
 def build_test_user(slug: Optional[str] = None) -> dict:
@@ -366,6 +408,50 @@ def resolve_test_user(data: Optional[dict] = None) -> Optional[dict]:
     if slug is None:
         slug = ""
     return build_test_user(str(slug))
+
+
+def resolve_wallet_user(data: Optional[dict] = None) -> Optional[dict]:
+    payload = data or {}
+    token = (payload.get("walletSession") or "").strip()
+    if not token:
+        return None
+    wallet = verify_wallet_session(token)
+    if not wallet:
+        return None
+    short = f"{wallet[:4]}…{wallet[-4:]}"
+    return {
+        "id": wallet_telegram_id(wallet),
+        "username": "",
+        "first_name": short,
+        "last_name": "",
+        "wallet": wallet,
+    }
+
+
+def resolve_spectator_user() -> dict:
+    uid = f"spectator:{secrets.token_hex(8)}"
+    return {
+        "id": uid,
+        "username": "",
+        "first_name": "Spectator",
+        "last_name": "",
+    }
+
+
+def resolve_auth_user(data: Optional[dict] = None) -> Optional[dict]:
+    payload = data or {}
+    wallet_user = resolve_wallet_user(payload)
+    if wallet_user:
+        return wallet_user
+    if payload.get("spectator"):
+        return resolve_spectator_user()
+    if request_is_test_mode(payload):
+        return resolve_test_user(payload) or build_test_user("")
+    init_data = payload.get("initData", "")
+    validated = validate_init_data(init_data)
+    if validated and "user" in validated:
+        return validated["user"]
+    return None
 
 
 def request_is_test_mode(data: Optional[dict] = None) -> bool:
@@ -472,6 +558,14 @@ def parse_holds(raw) -> list:
 
 def holds_for_user(holds: list) -> list:
     return parse_holds(holds)
+
+
+def parse_gear_slots(raw) -> list:
+    return normalize_gear_slots(raw)
+
+
+def gear_slots_for_user(raw) -> list:
+    return parse_gear_slots(raw)
 
 
 def valid_card_ids() -> frozenset[str]:
@@ -599,6 +693,59 @@ def landing_hold_items() -> list:
     return items
 
 
+@app.route("/play")
+def play_page():
+    return render_template(
+        "play.html",
+        game_server_url="",
+        game_socket_url=GAME_SOCKET_URL,
+        skins=SKINS,
+        default_skin=DEFAULT_SKIN,
+        kins_token_mint=KINS_TOKEN_MINT,
+        asset_v={
+            "play_css": asset_version("static/css/play.css"),
+            "play_js": asset_version("static/js/play.js"),
+            "app_css": asset_version("static/css/app.css"),
+            "retro_audio_js": asset_version("static/js/retro-audio.js"),
+            "game_js": asset_version("static/game/game.js"),
+            "world": world_map_version(),
+            "titles": asset_version("static/imgs/titles.png"),
+            "bg": asset_version("static/background/bg.png"),
+            "bag_icon": asset_version("static/menuitems/bag.png"),
+            "phone_icon": asset_version("static/menuitems/phone.png"),
+            "dex_icon": asset_version("static/menuitems/dex.png"),
+        },
+        hold_catalog=hold_catalog_for_client(),
+        starting_balance=STARTING_BALANCE,
+    )
+
+
+@app.route("/api/wallet/challenge", methods=["GET", "POST"])
+def wallet_challenge_api():
+    return jsonify(create_wallet_challenge())
+
+
+@app.route("/api/wallet/verify", methods=["POST"])
+def wallet_verify_api():
+    data = request.get_json(silent=True) or {}
+    ok, error, session_token = verify_wallet_login(
+        str(data.get("walletAddress") or ""),
+        str(data.get("challengeId") or ""),
+        str(data.get("signature") or ""),
+        require_token=True,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": error}), 400
+    wallet = verify_wallet_session(session_token or "")
+    return jsonify(
+        {
+            "success": True,
+            "walletSession": session_token,
+            "walletAddress": wallet,
+        }
+    )
+
+
 @app.route("/landing")
 def landing_page():
     return render_template(
@@ -649,6 +796,9 @@ def home():
         bag_slot_count=BAG_SLOT_COUNT,
         quests=QUEST_CATALOG,
         hold_catalog=hold_catalog_for_client(),
+        gear_catalog=gear_catalog_for_client(),
+        fishing_catalog=fishing_catalog_for_client(),
+        gear_slot_count=GEAR_SLOT_COUNT,
         ui_unlocks=ui_unlocks_for_client(),
         avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
         starting_balance=STARTING_BALANCE,
@@ -679,19 +829,11 @@ def world_map():
 @app.route("/api/auth", methods=["POST"])
 def auth():
     data = request.get_json(silent=True) or {}
-
-    if request_is_test_mode(data):
-        validated = {"user": resolve_test_user(data) or build_test_user("")}
-    else:
-        init_data = data.get("initData", "")
-        validated = validate_init_data(init_data)
-        if not validated or "user" not in validated:
-            return jsonify({"success": False, "error": (
-                    "Invalid Telegram session. Open this app from the PokéCards bot "
-                    "(send /start in DM, then tap Open Web App)."
-                )}), 401
-
-    user = validated["user"]
+    user = resolve_auth_user(data)
+    if not user:
+        return jsonify({"success": False, "error": (
+                "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
+            )}), 401
     telegram_id = str(user["id"])
     display_name = display_name_from_user(user)
     username = user.get("username") or ""
@@ -704,21 +846,24 @@ def auth():
 
         if row is None:
             is_test = request_is_test_mode(data)
+            is_web_play = telegram_id.startswith("wallet:") or telegram_id.startswith("spectator:")
+            auto_profile = is_test or is_web_play
             starting_balance = STARTING_BALANCE
             conn.execute(
                 """
                 INSERT INTO users (
                     telegram_id, username, display_name, skin, badges, quest_progress,
-                    holds, vault, balance, owned_skins, pin, created_at, updated_at
+                    holds, gear_slots, vault, balance, owned_skins, pin, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, '[]', '{"completed_steps":[],"removed_quests":[]}', ?, '[]', ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, '[]', '{"completed_steps":[],"removed_quests":[]}', ?, ?, '[]', ?, ?, ?, ?, ?)
                 """,
                 (
                     telegram_id,
                     username,
                     display_name,
-                    AVATAR_DEFAULT_SKIN if is_test else None,
+                    AVATAR_DEFAULT_SKIN if auto_profile else None,
                     json.dumps(TEST_PLAYER_HOLDS) if is_test else "[]",
+                    json.dumps(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None]),
                     starting_balance,
                     owned_skins_json([AVATAR_DEFAULT_SKIN]),
                     "123" if is_test else None,
@@ -726,9 +871,10 @@ def auth():
                     now,
                 ),
             )
-            skin = AVATAR_DEFAULT_SKIN if is_test else None
+            skin = AVATAR_DEFAULT_SKIN if auto_profile else None
             badges = []
             holds = TEST_PLAYER_HOLDS if is_test else []
+            gear_slots = list(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None])
             vault = []
             balance = starting_balance
             vending_spins = 0
@@ -770,6 +916,9 @@ def auth():
                 row["quest_progress"] if "quest_progress" in row.keys() else None
             )
             holds = parse_holds(row["holds"] if "holds" in row.keys() else None)
+            gear_slots = parse_gear_slots(
+                row["gear_slots"] if "gear_slots" in row.keys() else None
+            )
             vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
             balance = int(row["balance"] if "balance" in row.keys() else 0)
             vending_spins = int(row["vending_spins"] if "vending_spins" in row.keys() else 0)
@@ -798,12 +947,15 @@ def auth():
         if request_is_test_mode(data):
             ensure_test_player_profile(conn, telegram_id)
             row_test = conn.execute(
-                "SELECT vault, holds FROM users WHERE telegram_id = ?",
+                "SELECT vault, holds, gear_slots FROM users WHERE telegram_id = ?",
                 (telegram_id,),
             ).fetchone()
             if row_test:
                 vault = vault_for_user(row_test["vault"] if "vault" in row_test.keys() else None)
                 holds = parse_holds(row_test["holds"] if "holds" in row_test.keys() else None)
+                gear_slots = parse_gear_slots(
+                    row_test["gear_slots"] if "gear_slots" in row_test.keys() else None
+                )
 
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
 
@@ -834,6 +986,7 @@ def auth():
             "has_skin": skin is not None,
             "badges": badges,
             "holds": holds,
+            "gear_slots": gear_slots,
             "vault": vault_card_ids(vault),
             "vault_detail": vault,
             "quest_progress": quest_progress,
@@ -992,18 +1145,12 @@ def save_skin():
 
 def _auth_user_from_request():
     data = request.get_json(silent=True) or {}
-    if request_is_test_mode(data):
-        user = resolve_test_user(data) or build_test_user("")
-        return str(user["id"]), None
-
-    init_data = data.get("initData", "")
-    validated = validate_init_data(init_data)
-    if not validated or "user" not in validated:
+    user = resolve_auth_user(data)
+    if not user:
         return None, (jsonify({"success": False, "error": (
-                "Invalid Telegram session. Open this app from the PokéCards bot "
-                "(send /start in DM, then tap Open Web App)."
+                "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
             )}), 401)
-    return str(validated["user"]["id"]), None
+    return str(user["id"]), None
 
 
 POKETAB_NOTIFY_SECRET = os.getenv("POKETAB_NOTIFY_SECRET", "poketab-local-dev")
@@ -1048,6 +1195,51 @@ def _notify_poketab_player(target_uid: str, event: str, data: Optional[dict] = N
             return bool(payload.get("delivered"))
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, TimeoutError):
         return False
+
+
+def _notify_battle_peer(result: dict) -> None:
+    notify_uid = str(result.get("notify_uid") or "")
+    notify_battle = result.get("notify_battle")
+    if not notify_uid and result.get("battle"):
+        notify_uid = str(result["battle"].get("opponent", {}).get("id", ""))
+    if not notify_uid:
+        return
+    payload: dict = {
+        "game_id": (notify_battle or result.get("battle") or {}).get("game_id"),
+        "ended": bool(result.get("ended")),
+    }
+    if notify_battle:
+        payload["battle"] = notify_battle
+    _notify_poketab_player(notify_uid, "battle_update", payload)
+
+
+@app.route("/internal/battle-player-offline", methods=["POST"])
+def internal_battle_player_offline():
+    data = request.get_json(silent=True) or {}
+    if data.get("secret") != POKETAB_NOTIFY_SECRET:
+        return jsonify({"ok": False, "error": "Forbidden"}), 403
+    uid = str(data.get("uid") or "").strip()
+    if not uid:
+        return jsonify({"ok": False, "error": "Missing uid"}), 400
+    catalog = card_catalog_for_client()
+    quest_player_ids: list[int] = []
+    with get_db() as conn:
+        result = forfeit_active_battle_for_offline(conn, uid, catalog)
+        quest_player_ids = result.pop("quest_player_ids", []) or []
+    notify_battle = result.pop("notify_battle", None)
+    notify_uid = str(result.pop("notify_uid", "") or "")
+    if result.get("forfeited") and notify_uid and notify_battle:
+        _notify_poketab_player(
+            notify_uid,
+            "battle_update",
+            {
+                "game_id": notify_battle.get("game_id"),
+                "ended": True,
+                "battle": notify_battle,
+            },
+        )
+    notify_battle_quests(quest_player_ids)
+    return jsonify({"ok": True, **result})
 
 
 @app.route("/api/poketab/summary", methods=["POST"])
@@ -1391,9 +1583,8 @@ def poketab_battle_action_api():
     with get_db() as conn:
         result = poketab_battle_action(conn, telegram_id, catalog, data)
         quest_player_ids = result.pop("quest_player_ids", []) or []
-        other_id = None
         if result.get("ok") and result.get("battle"):
-            other_id = str(result["battle"].get("opponent", {}).get("id", ""))
+            _notify_battle_peer(result)
         if result.get("ok") and result.get("ended"):
             row = conn.execute(
                 """
@@ -1410,12 +1601,6 @@ def poketab_battle_action_api():
     notify_battle_quests(quest_player_ids)
     if not result.get("ok"):
         return jsonify({"success": False, "error": result.get("error", "Action failed")}), 400
-    if other_id and other_id != telegram_id:
-        _notify_poketab_player(
-            other_id,
-            "battle_update",
-            {"game_id": data.get("game_id"), "ended": result.get("ended")},
-        )
     return jsonify({"success": True, **result})
 
 
@@ -1557,6 +1742,122 @@ def grant_hold():
             "meta": hold_item_client_meta(item),
         }
     )
+
+
+@app.route("/api/gear/grant", methods=["POST"])
+def grant_gear():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    item = str(data.get("item", "")).strip()
+    if item not in GEAR_ITEM_IDS:
+        return jsonify({"success": False, "error": "Unknown gear item"}), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT gear_slots FROM users WHERE telegram_id = ?", (telegram_id,)
+        ).fetchone()
+        if row is None:
+            return jsonify({"success": False, "error": "User not found"}), 404
+
+        slots = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+        slots, newly_granted = grant_gear_to_slots(slots, item)
+        if not newly_granted and item not in slots:
+            return jsonify({"success": False, "error": "Gear bar full"}), 409
+
+        conn.execute(
+            "UPDATE users SET gear_slots = ?, updated_at = ? WHERE telegram_id = ?",
+            (json.dumps(slots), now, telegram_id),
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "item": item,
+            "gear_slots": slots,
+            "newly_granted": newly_granted,
+            "meta": gear_item_client_meta(item),
+        }
+    )
+
+
+@app.route("/api/fishing/cast/start", methods=["POST"])
+def fishing_cast_start():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    quest_key = str(data.get("quest_key") or data.get("fishing_quest_id") or "").strip()
+    mode = str(data.get("mode") or "").strip()
+    gear_id = str(data.get("gear_id") or "fishing_rod").strip()
+
+    if not quest_key:
+        return jsonify({"success": False, "error": "quest_key required"}), 400
+
+    with get_db() as conn:
+        result = start_fishing_cast(
+            conn,
+            telegram_id,
+            quest_key=quest_key,
+            mode=mode,
+            gear_id=gear_id,
+        )
+
+    if not result.get("ok"):
+        return jsonify({"success": False, "error": result.get("error", "Cast failed")}), 400
+
+    return jsonify(
+        {
+            "success": True,
+            "session_id": result["session_id"],
+            "duration_ms": result["duration_ms"],
+            "status_label": result["status_label"],
+            "wrong_mode": bool(result.get("wrong_mode")),
+            "quest_key": result.get("quest_key"),
+            "quest_progress": result.get("quest_progress"),
+        }
+    )
+
+
+@app.route("/api/fishing/cast/complete", methods=["POST"])
+def fishing_cast_complete():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    session_id = str(data.get("session_id") or "").strip()
+    if not session_id:
+        return jsonify({"success": False, "error": "session_id required"}), 400
+
+    with get_db() as conn:
+        result = complete_fishing_cast(conn, telegram_id, session_id=session_id)
+
+    if not result.get("ok"):
+        status = 400
+        if result.get("error") == "Cast still in progress":
+            status = 425
+        return jsonify({"success": False, **result}), status
+
+    payload = {
+        "success": True,
+        "caught": bool(result.get("caught")),
+        "message": result.get("message"),
+        "catch_title": result.get("catch_title"),
+        "reward_gear": result.get("reward_gear"),
+        "newly_granted": bool(result.get("newly_granted")),
+        "gear_slots": result.get("gear_slots"),
+        "quest_progress": result.get("quest_progress"),
+        "quest_steps": result.get("quest_steps") or [],
+        "quest_key": result.get("quest_key"),
+    }
+    if result.get("reward_gear"):
+        payload["meta"] = gear_item_client_meta(result["reward_gear"])
+    return jsonify(payload)
 
 
 @app.route("/api/vending/spin", methods=["POST"])

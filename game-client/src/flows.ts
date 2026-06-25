@@ -1,23 +1,32 @@
 export type NpcFlowRequires = {
     holds?: string[]
     notHolds?: string[]
+    gear?: string[]
+    notGear?: string[]
 }
 
 export type NpcFlow = {
     requires?: NpcFlowRequires
     messages: string[]
     grantHold?: string
+    grantGear?: string
+    fishingQuest?: string
     questStep?: string
     questId?: string
 }
 
 export type NpcOnComplete = {
     grantHold?: string
+    grantGear?: string
     questStep?: string
     questId?: string
 }
 
-export function flowRequirementsMet(requires: NpcFlowRequires | undefined, holds: Set<string>): boolean {
+export function flowRequirementsMet(
+    requires: NpcFlowRequires | undefined,
+    holds: Set<string>,
+    gear: Set<string> = new Set()
+): boolean {
     if (!requires) return true
 
     if (requires.holds?.some((item) => !holds.has(item))) {
@@ -28,12 +37,25 @@ export function flowRequirementsMet(requires: NpcFlowRequires | undefined, holds
         return false
     }
 
+    if (requires.gear?.some((item) => !gear.has(item))) {
+        return false
+    }
+
+    if (requires.notGear?.some((item) => gear.has(item))) {
+        return false
+    }
+
     return true
 }
 
 function flowRequirementScore(requires: NpcFlowRequires | undefined): number {
     if (!requires) return 0
-    return (requires.holds?.length || 0) + (requires.notHolds?.length || 0)
+    return (
+        (requires.holds?.length || 0) +
+        (requires.notHolds?.length || 0) +
+        (requires.gear?.length || 0) +
+        (requires.notGear?.length || 0)
+    )
 }
 
 export function mergeFlowRequires(
@@ -66,19 +88,26 @@ export function canGrantFlowHold(
 export function matchNpcFlow(
     flows: NpcFlow[] | undefined,
     holds: Set<string>,
-    holdGrantRules: Record<string, NpcFlowRequires> = {}
+    holdGrantRules: Record<string, NpcFlowRequires> = {},
+    gear: Set<string> = new Set()
 ): NpcFlow | null {
     if (!flows?.length) return null
 
     const matching = flows.filter((flow) => {
         if (!flow.messages?.length) return false
-        if (!flowRequirementsMet(flow.requires, holds)) return false
+        if (!flowRequirementsMet(flow.requires, holds, gear)) return false
         if (flow.grantHold && !canGrantFlowHold(flow, holds, holdGrantRules)) return false
         return true
     })
     if (!matching.length) return null
 
-    matching.sort((a, b) => flowRequirementScore(b.requires) - flowRequirementScore(a.requires))
+    matching.sort((a, b) => {
+        const scoreDiff = flowRequirementScore(b.requires) - flowRequirementScore(a.requires)
+        if (scoreDiff !== 0) return scoreDiff
+        const grantA = a.grantGear || a.grantHold ? 1 : 0
+        const grantB = b.grantGear || b.grantHold ? 1 : 0
+        return grantB - grantA
+    })
     return matching[0]
 }
 
@@ -86,9 +115,10 @@ export function resolveNpcMessages(
     defaultMessages: string[] | undefined,
     flows: NpcFlow[] | undefined,
     holds: Set<string>,
-    holdGrantRules: Record<string, NpcFlowRequires> = {}
+    holdGrantRules: Record<string, NpcFlowRequires> = {},
+    gear: Set<string> = new Set()
 ): { messages: string[]; flow: NpcFlow | null } {
-    const flow = matchNpcFlow(flows, holds, holdGrantRules)
+    const flow = matchNpcFlow(flows, holds, holdGrantRules, gear)
     if (flow?.messages?.length) {
         return { messages: flow.messages.filter(Boolean), flow }
     }

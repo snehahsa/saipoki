@@ -245,6 +245,91 @@ def _active_game_for_user(conn: sqlite3.Connection, user_id: str) -> Optional[di
     return state
 
 
+def _game_last_activity_ts(row: sqlite3.Row) -> float:
+    try:
+        state = json.loads(row["state_json"])
+        p1 = state.get("player1") or {}
+        p2 = state.get("player2") or {}
+        return max(
+            float(p1.get("last_move_time") or row["creation_time"]),
+            float(p2.get("last_move_time") or row["creation_time"]),
+            float(row["creation_time"]),
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return float(row["creation_time"])
+
+
+def _settled_game_for_status(
+    conn: sqlite3.Connection,
+    user_id: str,
+    *,
+    max_age_seconds: int = 180,
+) -> Optional[dict]:
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    row = conn.execute(
+        """
+        SELECT * FROM battle_games
+        WHERE winner IS NOT NULL
+          AND (player1_id = ? OR player2_id = ?)
+        ORDER BY creation_time DESC
+        LIMIT 1
+        """,
+        (uid, uid),
+    ).fetchone()
+    if not row:
+        return None
+    if (time.time() - _game_last_activity_ts(row)) > max_age_seconds:
+        return None
+    state = json.loads(row["state_json"])
+    state["_id"] = row["id"]
+    state["bet"] = row["bet"]
+    state["winner"] = row["winner"]
+    state["creation_time"] = row["creation_time"]
+    return state
+
+
+def _opponent_battle_view(
+    game: Game,
+    user_id: str,
+    catalog: dict,
+    log: list[str],
+) -> dict[str, Any]:
+    other_uid = str(
+        game.player2.id if int(user_id) == game.player1.id else game.player1.id
+    )
+    return {
+        "notify_uid": other_uid,
+        "notify_battle": _serialize_game(game, other_uid, catalog, log),
+    }
+
+
+def forfeit_active_battle_for_offline(
+    conn: sqlite3.Connection,
+    user_id: str,
+    catalog: dict,
+) -> dict[str, Any]:
+    active_doc = _active_game_for_user(conn, user_id)
+    if not active_doc:
+        return {"ok": True, "forfeited": False}
+    game = Game.from_mongo(active_doc)
+    if game.winner is not None:
+        return {"ok": True, "forfeited": False}
+    offline_int = int(user_id)
+    winner, loser = game.game_over_coz_flee(offline_int)
+    game.winner = winner.id
+    log = [f"📴 {loser.name} left — {winner.name} wins!"]
+    result = _settle_battle(conn, game, winner, loser, log, win_type="flee")
+    return {
+        "ok": True,
+        "forfeited": True,
+        "quest_player_ids": result.get("quest_player_ids") or [],
+        **_opponent_battle_view(game, user_id, catalog, result["log"]),
+    }
+
+
 def _pending_invite_for_user(
     conn: sqlite3.Connection,
     user_id: str,
@@ -1214,6 +1299,11 @@ def get_status(
             )
         else:
             battle = _serialize_game(game, user_id, catalog, [])
+    elif not battle:
+        settled_doc = _settled_game_for_status(conn, user_id)
+        if settled_doc:
+            game = Game.from_mongo(settled_doc)
+            battle = _serialize_game(game, user_id, catalog, [])
 
     balance = _user_balance(conn, user_id)
     return {
@@ -1254,12 +1344,14 @@ def perform_action(
 
     timeout_result = _resolve_timeout_if_due(conn, game)
     if timeout_result:
+        log = timeout_result["log"]
         return {
             "ok": True,
             "ended": True,
             "win_type": "timeout",
             "quest_player_ids": timeout_result.get("quest_player_ids") or [],
-            "battle": _serialize_game(game, user_id, catalog, timeout_result["log"]),
+            "battle": _serialize_game(game, user_id, catalog, log),
+            **_opponent_battle_view(game, user_id, catalog, log),
         }
 
     viewer_int = int(user_id)
@@ -1291,12 +1383,14 @@ def perform_action(
         winner, loser = game.game_over_coz_flee(viewer_int)
         game.winner = winner.id
         result = _settle_battle(conn, game, winner, loser, [], win_type="flee")
+        log = result["log"]
         return {
             "ok": True,
             "ended": True,
             "win_type": "flee",
             "quest_player_ids": result.get("quest_player_ids") or [],
-            "battle": _serialize_game(game, user_id, catalog, result["log"]),
+            "battle": _serialize_game(game, user_id, catalog, log),
+            **_opponent_battle_view(game, user_id, catalog, log),
         }
 
     if action == "attack":
@@ -1350,6 +1444,7 @@ def perform_action(
                 "win_type": "clear",
                 "quest_player_ids": result.get("quest_player_ids") or [],
                 "battle": _serialize_game(game, user_id, catalog, log),
+                **_opponent_battle_view(game, user_id, catalog, log),
             }
         _save_game(conn, game)
         return {"ok": True, "battle": _serialize_game(game, user_id, catalog, log)}
@@ -1359,12 +1454,14 @@ def perform_action(
         winner, loser = outcome
         game.winner = winner.id
         result = _settle_battle(conn, game, winner, loser, log, win_type="clear")
+        end_log = result["log"]
         return {
             "ok": True,
             "ended": True,
             "win_type": "clear",
             "quest_player_ids": result.get("quest_player_ids") or [],
-            "battle": _serialize_game(game, user_id, catalog, result["log"]),
+            "battle": _serialize_game(game, user_id, catalog, end_log),
+            **_opponent_battle_view(game, user_id, catalog, end_log),
         }
 
     return {"ok": True, "battle": _serialize_game(game, user_id, catalog, log)}

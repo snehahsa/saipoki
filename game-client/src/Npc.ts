@@ -87,11 +87,13 @@ export class Npc {
 
     private resolveDialogueMessages() {
         const holds = this.playApp.getPlayerHolds()
+        const gear = this.playApp.getPlayerGear()
         const resolved = resolveNpcMessages(
             this.config.messages,
             this.config.flows,
             holds,
-            this.playApp.getHoldGrantRules()
+            this.playApp.getHoldGrantRules(),
+            gear
         )
         this.dialogueMessages = resolved.messages
         this.activeFlow = resolved.flow

@@ -12,7 +12,7 @@ SINGLE_DIR = ROOT / "gather-clone/frontend/public/sprites/spritesheets/single"
 SCIFI_DIR = ROOT / "gather-clone/frontend/public/sprites/scifi"
 MANIFEST_PATH = SHEET_DIR / "single.manifest.json"
 SCIFI_MANIFEST_PATH = SHEET_DIR / "scifi.manifest.json"
-SHEET_NAMES = ("ground", "grasslands", "village", "city", "single", "scifi")
+SHEET_NAMES = ("ground", "grasslands", "village", "city", "single", "scifi", "anim")
 FOLDER_SHEETS: dict[str, dict] = {
     "scifi": {"dir": SCIFI_DIR, "default_layer": "floor"},
 }
@@ -291,9 +291,69 @@ def sync_single_manifest() -> dict:
     return single
 
 
+def parse_anim_sheet() -> dict:
+    from animation_catalog import (
+        load_animation_frames,
+        load_manifest as load_animation_manifest,
+    )
+
+    animations = load_animation_manifest()
+    sprites = []
+    max_w = 1
+    max_h = 1
+    for entry in animations:
+        frame_data = load_animation_frames(entry["id"], entry)
+        frames = frame_data.get("frames") or entry.get("frames") or {}
+        loop0 = frames.get("loop_0")
+        if not loop0:
+            fw = entry.get("frameWidth") or max(1, entry.get("width", 1) // 3)
+            fh = entry.get("frameHeight") or entry.get("height", 1)
+            loop0 = {"x": 0, "y": 0, "w": fw, "h": fh}
+
+        sheet_w = entry.get("width", loop0["w"])
+        sheet_h = entry.get("height", loop0["h"])
+        max_w = max(max_w, loop0["w"])
+        max_h = max(max_h, loop0["h"])
+        sprite_path = entry.get("path") or f"{entry['id']}/{entry['file']}"
+        colliders = default_colliders(loop0["w"], loop0["h"])
+        sprites.append(
+            {
+                "id": f"anim-{entry['id']}",
+                "name": entry["id"],
+                "sheet": "anim",
+                "x": loop0["x"],
+                "y": loop0["y"],
+                "srcX": loop0["x"],
+                "srcY": loop0["y"],
+                "width": loop0["w"],
+                "height": loop0["h"],
+                "imageWidth": sheet_w,
+                "imageHeight": sheet_h,
+                "layer": "object",
+                "url": entry.get("url") or f"/sprites/animations/{sprite_path}",
+                "animated": True,
+                "frameMs": entry.get("frameMs", 120),
+                "defaultScale": entry.get("displayScale", 1),
+                "colliders": colliders,
+            }
+        )
+    return {
+        "name": "anim",
+        "type": "anim",
+        "url": None,
+        "width": max_w,
+        "height": max_h,
+        "sprites": sprites,
+    }
+
+
 def build_catalog() -> dict:
+    from animation_catalog import sync_manifest as sync_animation_manifest
+
+    sync_animation_manifest()
     single = sync_single_manifest()
-    atlas_sheets = [parse_sheet(name) for name in SHEET_NAMES if name not in ("single", "scifi")]
+    anim = parse_anim_sheet()
+    atlas_sheets = [parse_sheet(name) for name in SHEET_NAMES if name not in ("single", "scifi", "anim")]
     folder_sheets = []
     for sheet_name, cfg in FOLDER_SHEETS.items():
         sheet = parse_image_folder(
@@ -305,7 +365,7 @@ def build_catalog() -> dict:
         sync_folder_manifest(sheet, manifest_path)
         folder_sheets.append(sheet)
 
-    sheets = atlas_sheets + [single] + folder_sheets
+    sheets = atlas_sheets + [single] + folder_sheets + [anim]
 
     all_sprites = []
     for sheet in sheets:

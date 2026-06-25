@@ -7,6 +7,8 @@ import { server } from '@/utils/backend/server'
 import { defaultSkin, skins } from '@/utils/pixi/Player/skins'
 import signal from '@/utils/signal'
 import { directionToward, shouldTurnToFace } from './npcNotice'
+import { getGearAttachForFacing, getGearItem, isGearVisibleForFacing, loadGearTexture } from './gearCatalog'
+import { placeGearToolOnCharacter, resolveGearAttachRect } from './gearOverlay'
 import {
     LABEL_SCALE_LEVEL,
     LABEL_SCALE_NAME,
@@ -72,6 +74,8 @@ export class Player {
     private initialized: boolean = false
     private strikes: number = 0
     private currentPrivateArea: string | null = null
+    private toolSprite: PIXI.Sprite | null = null
+    private equippedGearId: string | null = null
 
     constructor(
         skin: string,
@@ -214,6 +218,9 @@ export class Player {
         await this.loadAnimations()
         this.addUsername()
         this.initialized = true
+        if (this.equippedGearId) {
+            await this.updateGearOverlay()
+        }
     }
 
     /** Set tile position before the sprite is on stage (no camera/interaction side effects). */
@@ -437,6 +444,74 @@ export class Player {
         this.animationState = state
         this.animatedSprite.textures = this.sheet.animations[state]
         this.animatedSprite.play()
+
+        if (state.includes('left')) this.direction = 'left'
+        else if (state.includes('right')) this.direction = 'right'
+        else if (state.includes('up')) this.direction = 'up'
+        else if (state.includes('down')) this.direction = 'down'
+
+        void this.updateGearOverlay()
+    }
+
+    public async setEquippedGear(gearId: string | null) {
+        this.equippedGearId = gearId
+        await this.updateGearOverlay()
+    }
+
+    private ensureToolSpriteOnStage() {
+        if (!this.toolSprite || !this.animatedSprite) return
+        if (this.toolSprite.parent === this.parent) return
+        const bodyIndex = this.parent.getChildIndex(this.animatedSprite)
+        this.parent.addChildAt(this.toolSprite, bodyIndex + 1)
+    }
+
+    private async updateGearOverlay() {
+        if (!this.animatedSprite) return
+
+        const item = getGearItem(this.equippedGearId)
+        if (!item) {
+            if (this.toolSprite) this.toolSprite.visible = false
+            return
+        }
+
+        if (!isGearVisibleForFacing(item, this.direction)) {
+            if (this.toolSprite) this.toolSprite.visible = false
+            return
+        }
+
+        const spriteMeta = getGearAttachForFacing(item, this.direction)
+        if (!spriteMeta) {
+            if (this.toolSprite) this.toolSprite.visible = false
+            return
+        }
+
+        const texture = await loadGearTexture(item.id)
+        if (!texture) {
+            if (this.toolSprite) this.toolSprite.visible = false
+            return
+        }
+
+        if (!this.toolSprite) {
+            this.toolSprite = new PIXI.Sprite(texture)
+        } else {
+            this.toolSprite.texture = texture
+        }
+
+        this.ensureToolSpriteOnStage()
+
+        const frame = {
+            w: spriteMeta.w ?? texture.width,
+            h: spriteMeta.h ?? texture.height,
+        }
+        const rect = resolveGearAttachRect(this.direction, spriteMeta, frame)
+        placeGearToolOnCharacter(
+            this.toolSprite,
+            this.animatedSprite,
+            texture.width,
+            texture.height,
+            rect
+        )
+        this.toolSprite.visible = true
     }
 
     public keydown = (event: KeyboardEvent) => {

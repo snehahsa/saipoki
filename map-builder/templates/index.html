@@ -63,6 +63,8 @@
                         <button type="button" class="tool-btn" data-tool="npc" title="NPC patrols">🚶 NPCs</button>
                         <button type="button" class="tool-btn" data-tool="avatars" title="Avatar shop prices">🪙 Avatars</button>
                         <button type="button" class="tool-btn" data-tool="animals" title="Animal sprite frames">🐄 Animals</button>
+                        <button type="button" class="tool-btn" data-tool="animations" title="Map animation sprites">🎞 Anim</button>
+                        <button type="button" class="tool-btn" data-tool="gear-items" title="Gear item attach points">🎣 Items</button>
                     </div>
                     <div id="portal-preview-banner" class="portal-preview-banner hidden">
                         <span id="portal-preview-label">Portal preview</span>
@@ -246,6 +248,18 @@
                     <div id="animal-list" class="animal-list"></div>
                 </div>
 
+                <div id="animation-props" class="item-props hidden">
+                    <div class="panel-subhead">Map animations</div>
+                    <p class="prop-meta">One folder per animation · <code>folder/sheet.png</code> + <code>folder/folder.json</code></p>
+                    <div id="animation-list" class="animal-list"></div>
+                </div>
+
+                <div id="gear-items-props" class="item-props hidden">
+                    <div class="panel-subhead">Gear items</div>
+                    <p class="prop-meta">Attach position per player view · eligible facings control when gear can be used on click.</p>
+                    <div id="gear-item-list" class="animal-list"></div>
+                </div>
+
                 <div id="npc-props" class="item-props hidden">
                     <div class="panel-subhead">NPC patrol</div>
                     <label class="field">
@@ -307,11 +321,23 @@
                     <option value="card_vault"></option>
                     <option value="poketab"></option>
                 </datalist>
+                <datalist id="gear-item-ids">
+                    <option value="fishing_rod"></option>
+                    <option value="hub_key"></option>
+                </datalist>
+                <datalist id="fishing-quest-ids">
+                    <option value="pokehub_key"></option>
+                </datalist>
                 <datalist id="quest-step-ids">
                     <option value="collect_trainer_bag"></option>
                     <option value="meet_dr_ray"></option>
                     <option value="collect_card_vault"></option>
+                    <option value="meet_pokehub_manager"></option>
+                    <option value="manager_lost_key"></option>
+                    <option value="fish_for_hub_key"></option>
+                    <option value="collect_hub_key"></option>
                     <option value="collect_poketab"></option>
+                    <option value="meet_cristy"></option>
                 </datalist>
 
                 <div id="toast" class="toast hidden"></div>
@@ -342,13 +368,37 @@
                     <aside class="animal-frame-sidebar">
                         <div class="panel-subhead">Direction</div>
                         <div id="animal-frame-directions" class="animal-frame-directions"></div>
-                        <div class="panel-subhead">Walk frames</div>
+                        <div class="panel-subhead" id="animal-frame-slots-label">Walk frames</div>
                         <div id="animal-frame-slots" class="animal-frame-slots"></div>
+                        <div id="animal-frame-fixed-wrap" class="hidden">
+                            <div class="panel-subhead">Fixed frame size</div>
+                            <label class="field field-inline">
+                                <span>Width</span>
+                                <input type="number" id="anim-frame-w" min="1" step="1">
+                            </label>
+                            <label class="field field-inline">
+                                <span>Height</span>
+                                <input type="number" id="anim-frame-h" min="1" step="1">
+                            </label>
+                            <div class="animal-frame-fixed-actions">
+                                <button type="button" class="btn btn-ghost btn-sm" id="btn-anim-clear-frames">Clear all</button>
+                                <button type="button" class="btn btn-primary btn-sm" id="btn-anim-apply-size">Apply to all 9</button>
+                            </div>
+                        </div>
                         <label class="field field-inline">
                             <span>Display scale</span>
                             <input type="number" id="animal-frame-scale" min="0.01" max="4" step="0.001">
                         </label>
-                        <p class="prop-meta">Idle uses frame 1 · scale targets ~48px on the tile grid</p>
+                        <label class="field field-inline hidden" id="anim-gear-use-wrap">
+                            <span>Gear target</span>
+                            <input type="checkbox" id="anim-gear-use-target" title="Players can use fishing rod etc. when overlapping this animation">
+                        </label>
+                        <p class="prop-meta hidden" id="anim-gear-use-help">Yes = players can use gear (fishing rod) when standing next to this animation, facing it.</p>
+                        <label class="field field-inline hidden" id="animal-frame-ms-wrap">
+                            <span>Frame ms</span>
+                            <input type="number" id="animal-frame-ms" min="16" max="2000" step="10" value="180">
+                        </label>
+                        <p class="prop-meta" id="animal-frame-help">Idle uses frame 1 · scale targets ~48px on the tile grid</p>
                     </aside>
                     <div class="animal-frame-canvas-wrap">
                         <canvas id="animal-frame-canvas"></canvas>
@@ -356,8 +406,59 @@
                 </div>
             </div>
         </div>
+        <div id="gear-attach-modal" class="animal-frame-modal hidden" aria-hidden="true">
+            <div class="animal-frame-shell">
+                <header class="animal-frame-header">
+                    <div>
+                        <h2 id="gear-attach-title">Gear attach</h2>
+                        <p class="animal-frame-subtitle">Pick a player view · drag item to attach · corner handle to scale · check eligible for use-on-click</p>
+                    </div>
+                    <div class="animal-frame-header-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-gear-attach-save">Save attach</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-gear-attach-close">Close</button>
+                    </div>
+                </header>
+                <div class="animal-frame-body gear-attach-body">
+                    <aside class="animal-frame-sidebar">
+                        <div class="panel-subhead">Attach values</div>
+                        <p class="prop-meta" id="gear-attach-active-view">Editing: left</p>
+                        <label class="audit-toggle gear-eligible-toggle">
+                            <input type="checkbox" id="gear-face-eligible">
+                            Use eligible on this view
+                        </label>
+                        <p class="prop-meta">Position/size relative to 48×48 character (saved as rect).</p>
+                        <label class="field field-inline">
+                            <span>X</span>
+                            <input type="number" id="gear-rect-x" step="0.5" value="0">
+                        </label>
+                        <label class="field field-inline">
+                            <span>Y</span>
+                            <input type="number" id="gear-rect-y" step="0.5" value="0">
+                        </label>
+                        <label class="field field-inline">
+                            <span>Width</span>
+                            <input type="number" id="gear-rect-w" min="0.5" step="0.5" value="20">
+                        </label>
+                        <label class="field field-inline">
+                            <span>Height</span>
+                            <input type="number" id="gear-rect-h" min="0.5" step="0.5" value="14">
+                        </label>
+                        <p class="prop-meta">Drag item on canvas · yellow handle resizes. In-game uses this exact box.</p>
+                        <p class="prop-meta">Config loads every time a player equips or uses this gear.</p>
+                    </aside>
+                    <div class="animal-frame-canvas-wrap">
+                        <canvas id="gear-attach-canvas"></canvas>
+                    </div>
+                    <aside class="gear-attach-views-panel">
+                        <div class="panel-subhead">Character views</div>
+                        <p class="prop-meta">All idle frames · click to edit attach · toggle use eligible</p>
+                        <div id="gear-attach-views-grid" class="gear-attach-views-grid"></div>
+                    </aside>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/builder.js?v=21"></script>
+    <script src="/static/builder.js?v=32"></script>
 </body>
 </html>

@@ -35,9 +35,11 @@
     let refreshSummary = () => Promise.resolve()
 
     let alertPollTimer = null
+    let battlePollTimer = null
     let turnTimer = null
     let statusCache = null
     let activeInviteId = null
+    let dismissedEndedGameId = null
     let battleLog = []
     let pendingAutoSelect = null
     let bagMenuOpen = false
@@ -193,12 +195,41 @@
         const battle = data?.battle
         const autoOpen = forceOpen || (isPoketabOpen() && (isBattleViewActive() || isInArena()))
 
-        if (battle && battle.phase !== "ended") {
+        if (battle?.phase === "ended") {
+            if (battle.game_id && battle.game_id === dismissedEndedGameId) {
+                if (isInArena()) closeArena()
+                return
+            }
+            if (battle.log?.length) {
+                battleLog = [...battleLog, ...battle.log].slice(-20)
+            }
             if (autoOpen || isInArena()) {
                 openArena(battle)
             }
             return
         }
+
+        if (battle && battle.phase !== "ended") {
+            dismissedEndedGameId = null
+            if (autoOpen || isInArena()) {
+                openArena(battle)
+            }
+            return
+        }
+
+        if (isInArena() && statusCache?.battle && statusCache.battle.phase !== "ended") {
+            refreshStatus(true)
+        }
+    }
+
+    function applyRealtimeBattle(data) {
+        if (!data?.battle) return false
+        statusCache = { ...(statusCache || {}), battle: data.battle }
+        if (data.battle.log?.length) {
+            battleLog = [...battleLog, ...data.battle.log].slice(-20)
+        }
+        syncBattleFromStatus(statusCache, { forceOpen: true })
+        return true
     }
 
     function outgoingSentMap() {
@@ -459,14 +490,29 @@
         }
     }
 
-    function setTallMonitor(on) {
-        document.querySelector(".poketab-monitor-glass")?.classList.toggle(
-            "poketab-monitor-glass--battle",
-            Boolean(on),
-        )
+    function stopBattlePoll() {
+        if (battlePollTimer) {
+            clearInterval(battlePollTimer)
+            battlePollTimer = null
+        }
+    }
+
+    function startBattlePoll() {
+        stopBattlePoll()
+        battlePollTimer = window.setInterval(() => {
+            if (!isInArena()) {
+                stopBattlePoll()
+                return
+            }
+            const phase = statusCache?.battle?.phase
+            if (phase && phase !== "ended") {
+                refreshStatus(true)
+            }
+        }, 1500)
     }
 
     function stopPoll() {
+        stopBattlePoll()
         if (turnTimer) {
             clearInterval(turnTimer)
             turnTimer = null
@@ -488,6 +534,7 @@
 
     function startPoll() {
         startAlertPoll()
+        startBattlePoll()
     }
 
     function openArena(battle) {
@@ -495,12 +542,9 @@
         document.getElementById("poketab-battle-lobby")?.classList.add("hidden")
         const overlay = document.getElementById("poketab-battle-overlay")
         const monitorInner = document.querySelector(".poketab-monitor-inner")
-        const monitorGlass = document.querySelector(".poketab-monitor-glass")
         overlay?.classList.remove("hidden")
         overlay?.setAttribute("aria-hidden", "false")
         monitorInner?.classList.add("poketab-monitor-inner--battle")
-        monitorGlass?.classList.add("poketab-monitor-glass--battle")
-        setTallMonitor(true)
         document.getElementById("poketab-screen-label").textContent = "BATTLE MODE"
         setView("battle")
         renderArena(battle)
@@ -510,10 +554,12 @@
     function closeArena() {
         stopPoll()
         const overlay = document.getElementById("poketab-battle-overlay")
+        if (statusCache?.battle?.phase === "ended" && statusCache.battle.game_id) {
+            dismissedEndedGameId = statusCache.battle.game_id
+        }
         overlay?.classList.add("hidden")
         overlay?.setAttribute("aria-hidden", "true")
         document.querySelector(".poketab-monitor-inner")?.classList.remove("poketab-monitor-inner--battle")
-        setTallMonitor(isBattleViewActive())
         battleLog = []
         bagMenuOpen = false
         revivePickOptions = null
@@ -739,7 +785,6 @@
         if (resumeBattleView()) return
         document.getElementById("poketab-battle-lobby")?.classList.remove("hidden")
         closeArena()
-        setTallMonitor(true)
         setView("battle")
         updateBalanceDisplay(getBalance())
         loadOpponents()
@@ -754,15 +799,22 @@
             refreshStatus()
             refreshSummary()
         } else if (ev === "battle_update" || ev === "battle_start") {
-            refreshStatus().then(() => {
+            const data = payload.data || {}
+            if (applyRealtimeBattle(data)) {
+                if (data.ended) {
+                    onBalanceUpdate()
+                    refreshSummary()
+                }
+            }
+            refreshStatus(true).then(() => {
                 syncBattleFromStatus(statusCache || {}, { forceOpen: true })
                 if (ev === "battle_start" && !statusCache?.battle) {
-                    window.setTimeout(() => refreshStatus().then(() => {
+                    window.setTimeout(() => refreshStatus(true).then(() => {
                         syncBattleFromStatus(statusCache || {}, { forceOpen: true })
                     }), 500)
                 }
             })
-            refreshSummary()
+            if (!data.battle) refreshSummary()
         }
     }
 

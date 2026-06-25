@@ -1,0 +1,180 @@
+{
+  "items": [
+    {
+      "id": "fishing_rod",
+      "label": "Pro Fishing Rod",
+      "description": "Manager's pro rod \u2014 equip from the GEAR bar. Choose Salvage by canal water, then cast.",
+      "icon": "/sprites/spritesheets/items/fish.png",
+      "slot_type": "quickbar",
+      "sprite": {
+        "file": "fish.png",
+        "x": 313,
+        "y": 383,
+        "w": 669,
+        "h": 470,
+        "direction": "left",
+        "offsetX": -2,
+        "offsetY": -6,
+        "scale": 0.09,
+        "anchorX": 0.5,
+        "anchorY": 0.85
+      },
+      "faces": {
+        "down": {
+          "rect": {
+            "x": -28.265,
+            "y": -44.355,
+            "w": 60.21,
+            "h": 42.3
+          },
+          "eligible": false
+        },
+        "left": {
+          "rect": {
+            "x": -15.917,
+            "y": 12.5,
+            "w": 36.795,
+            "h": 25.85
+          },
+          "eligible": true
+        },
+        "right": {
+          "rect": {
+            "x": -21.545,
+            "y": -44.355,
+            "w": 60.21,
+            "h": 42.3
+          },
+          "eligible": false
+        },
+        "up": {
+          "rect": {
+            "x": -28.265,
+            "y": -44.355,
+            "w": 60.21,
+            "h": 42.3
+          },
+          "eligible": false
+        }
+      },
+      "useFacings": [
+        "left"
+      ],
+      "requiresFacing": null,
+      "pickup_popup": {
+        "headline": "GEAR SLOT!",
+        "title": "Pro Fishing Rod",
+        "message": "Equip it from the GEAR bar, pick Salvage, and fish the canal outside the Pok\u00e9Hub.",
+        "icon": "/sprites/spritesheets/items/fish.png",
+        "theme": "gear",
+        "tag": "GEAR EQUIPPED"
+      },
+      "charFramePx": 48,
+      "primaryRect": {
+        "x": -15.917,
+        "y": 12.5,
+        "w": 36.795,
+        "h": 25.85
+      },
+      "quest_step": "manager_lost_key",
+      "quest_id": "week1_vault_trail",
+      "fishing_modes": [
+        {
+          "id": "fish",
+          "label": "River Fish",
+          "hint": "Common freshwater catches \u2014 free haul"
+        },
+        {
+          "id": "pokemon",
+          "label": "Water Pok\u00e9mon",
+          "hint": "Lure aquatic Pok\u00e9mon from the shallows"
+        },
+        {
+          "id": "salvage",
+          "label": "Salvage",
+          "hint": "Hook scrap metal and hidden junk"
+        }
+      ],
+      "default_fishing_quest": "pokehub_key"
+    },
+    {
+      "id": "hub_key",
+      "label": "Master Key",
+      "description": "The Manager's lost master key \u2014 return it to him at the Pok\u00e9Hub for your Pok\u00e9Tab.",
+      "icon": "/sprites/spritesheets/items/key.png",
+      "slot_type": "quickbar",
+      "sprite": {
+        "file": "key.png",
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 48,
+        "direction": "left",
+        "offsetX": 0,
+        "offsetY": 0,
+        "scale": 0.35,
+        "anchorX": 0.5,
+        "anchorY": 0.5
+      },
+      "faces": {
+        "down": {
+          "rect": {
+            "x": -4.56,
+            "y": -10.8,
+            "w": 16.8,
+            "h": 16.8
+          },
+          "eligible": false
+        },
+        "left": {
+          "rect": {
+            "x": -12.24,
+            "y": -10.8,
+            "w": 16.8,
+            "h": 16.8
+          },
+          "eligible": false
+        },
+        "right": {
+          "rect": {
+            "x": 2.16,
+            "y": -10.8,
+            "w": 16.8,
+            "h": 16.8
+          },
+          "eligible": false
+        },
+        "up": {
+          "rect": {
+            "x": -4.56,
+            "y": -10.8,
+            "w": 16.8,
+            "h": 16.8
+          },
+          "eligible": false
+        }
+      },
+      "useFacings": [],
+      "requiresFacing": null,
+      "pickup_popup": {
+        "headline": "KEY FOUND!",
+        "title": "Master Key",
+        "message": "A rusty master key from the canal \u2014 bring it back to the Manager.",
+        "icon": "/sprites/spritesheets/items/key.png",
+        "theme": "gear",
+        "tag": "QUEST ITEM"
+      },
+      "charFramePx": 48,
+      "primaryRect": {
+        "x": -12.24,
+        "y": -10.8,
+        "w": 16.8,
+        "h": 16.8
+      },
+      "quest_step": "collect_hub_key",
+      "quest_id": "week1_vault_trail",
+      "fishing_modes": [],
+      "default_fishing_quest": null
+    }
+  ]
+}

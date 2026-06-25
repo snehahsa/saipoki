@@ -8,7 +8,7 @@ QUEST_CATALOG = [
         "blurb": (
             "Dr. Ray charted your first week in the realm — meet the professor, "
             "grab your trainer bag, claim your vault, prove your wallet, catch your first Pokémon, "
-            "collect your PokéTab, battle, and debut on the market."
+            "help the PokéHub Manager recover his lost key, collect your PokéTab, battle, and debut on the market."
         ),
         "prize": "Revenue share slice + Starter Vault badge",
         "unlock_after": None,
@@ -39,9 +39,34 @@ QUEST_CATALOG = [
                 "hint": "Draw your first card from the vending machine (1,000 $POKE) into your vault",
             },
             {
+                "id": "meet_pokehub_manager",
+                "name": "Meet the PokéHub Manager",
+                "hint": "Take the portal to the PokéHub and talk to the Manager on the ground floor",
+            },
+            {
+                "id": "manager_lost_key",
+                "name": "The Manager's Lost Key",
+                "hint": "Hear the Manager's story — he'll lend you his Pro Fishing Rod",
+            },
+            {
+                "id": "fish_for_hub_key",
+                "name": "Fish for the Lost Key",
+                "hint": "Equip the rod, choose Salvage, and cast by the canal water outside the PokéHub",
+            },
+            {
+                "id": "collect_hub_key",
+                "name": "Hook the PokéHub Key",
+                "hint": "Keep Salvage fishing by the canal until you snag the Manager's key",
+            },
+            {
                 "id": "collect_poketab",
                 "name": "Collect Your PokéTab",
-                "hint": "Visit the PokéHub Manager and claim your PokéTab",
+                "hint": "Return the key to the Manager — he'll give you his PokéTab",
+            },
+            {
+                "id": "meet_cristy",
+                "name": "Meet Cristy (optional)",
+                "hint": "Find Cristy patrolling near the Nova City waterfront for fishing tips",
             },
             {
                 "id": "battle_game",

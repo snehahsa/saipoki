@@ -14,6 +14,20 @@ import { loadWorldMapFromDisk } from './worldMap'
 import { kickPlayer } from './helpers'
 
 const joiningInProgress = new Set<string>()
+const POKETAB_NOTIFY_SECRET = process.env.POKETAB_NOTIFY_SECRET || 'poketab-local-dev'
+const FLASK_INTERNAL_URL = (
+    process.env.FLASK_INTERNAL_URL
+    || process.env.GAME_FLASK_INTERNAL
+    || 'http://127.0.0.1:5000'
+).replace(/\/$/, '')
+
+function notifyBattlePlayerOffline(uid: string) {
+    fetch(`${FLASK_INTERNAL_URL}/internal/battle-player-offline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: POKETAB_NOTIFY_SECRET, uid }),
+    }).catch(() => {})
+}
 
 function removeExtraSpaces(text: string): string {
     return text.replace(/\s+/g, ' ').trim()
@@ -126,6 +140,7 @@ export function sockets(io: Server) {
             const success = sessionManager.logOutBySocketId(socket.id)
             if (success) {
                 emitToSocketIds(socketIds, 'playerLeftRoom', uid)
+                notifyBattlePlayerOffline(uid)
             }
         })
 

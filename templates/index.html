@@ -611,6 +611,41 @@
                 <div id="game-joystick-stick" class="game-joystick-stick" aria-hidden="true"></div>
             </div>
         </div>
+        <div id="game-quickbar" class="game-quickbar" role="toolbar" aria-label="Quick gear slots">
+            <div class="game-quickbar-anchor">
+                <div id="game-gear-mode-menu" class="game-gear-mode-menu hidden" role="menu" aria-label="Fishing catch type"></div>
+                <div class="game-quickbar-box">
+                    <p class="game-quickbar-label" aria-hidden="true">GEAR</p>
+                    <div class="game-quickbar-slots">
+                <button type="button" class="game-quickslot" data-slot="0" aria-label="Quick slot 1, empty">
+                    <span class="game-quickslot-key" aria-hidden="true">1</span>
+                    <span class="game-quickslot-frame" aria-hidden="true"></span>
+                    <img class="game-quickslot-icon hidden" alt="" width="28" height="28" decoding="async">
+                    <span class="game-quickslot-empty" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="game-quickslot" data-slot="1" aria-label="Quick slot 2, empty">
+                    <span class="game-quickslot-key" aria-hidden="true">2</span>
+                    <span class="game-quickslot-frame" aria-hidden="true"></span>
+                    <img class="game-quickslot-icon hidden" alt="" width="28" height="28" decoding="async">
+                    <span class="game-quickslot-empty" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="game-quickslot" data-slot="2" aria-label="Quick slot 3, empty">
+                    <span class="game-quickslot-key" aria-hidden="true">3</span>
+                    <span class="game-quickslot-frame" aria-hidden="true"></span>
+                    <img class="game-quickslot-icon hidden" alt="" width="28" height="28" decoding="async">
+                    <span class="game-quickslot-empty" aria-hidden="true"></span>
+                </button>
+                    </div>
+                </div>
+            </div>
+            <p id="game-quickbar-hint" class="game-quickbar-hint" aria-live="polite"></p>
+            <div id="game-fishing-hud" class="game-fishing-hud hidden" aria-live="polite">
+                <p id="game-fishing-label" class="game-fishing-label"></p>
+                <div class="game-fishing-bar-track" aria-hidden="true">
+                    <div id="game-fishing-bar-fill" class="game-fishing-bar-fill"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -890,6 +925,9 @@
         bagSlotCount: {{ bag_slot_count|tojson }},
         quests: {{ quests|tojson }},
         holdCatalog: {{ hold_catalog|tojson }},
+        gearCatalog: {{ gear_catalog|tojson }},
+        fishingCatalog: {{ fishing_catalog|tojson }},
+        gearSlotCount: {{ gear_slot_count|tojson }},
         uiUnlocks: {{ ui_unlocks|tojson }},
         avatarCosts: {{ avatar_costs|tojson }},
         startingBalance: {{ starting_balance|tojson }},

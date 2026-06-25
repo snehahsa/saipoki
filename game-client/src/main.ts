@@ -1,5 +1,7 @@
 import { PlayApp } from '@/utils/pixi/PlayApp'
 import { loadAnimalCatalog } from './spriteSheets'
+import { loadGearCatalog } from './gearCatalog'
+import { loadAnimationCatalog } from '@/utils/pixi/mapAnimations'
 import { RealmData, Room } from '@/utils/pixi/types'
 import { server } from '@/utils/backend/server'
 import signal from '@/utils/signal'
@@ -14,9 +16,11 @@ export type GameSession = {
     holds?: string[]
     holdGrantRules?: Record<string, { holds?: string[]; notHolds?: string[] }>
     onProgress?: (message: string) => void
+    spectator?: boolean
 }
 
 let activeApp: PlayApp | null = null
+let pendingEquippedGear: string | null = null
 
 function normalizeRealmData(data: RealmData): RealmData {
     const DEFAULT_ROOM_NAME = 'SaiPoke Realm'
@@ -105,8 +109,16 @@ export async function startGame(session: GameSession): Promise<{ success: boolea
     try {
         session.onProgress?.('Loading sprites')
         await loadAnimalCatalog()
+        await loadGearCatalog()
+        await loadAnimationCatalog()
         session.onProgress?.('Loading world')
         await app.init()
+        if (session.spectator) {
+            app.enableSpectatorMode()
+        }
+        if (pendingEquippedGear) {
+            await app.setEquippedGear(pendingEquippedGear)
+        }
     } catch (error) {
         console.error('Failed to initialize game world:', error)
         activeApp.destroy()
@@ -180,6 +192,25 @@ export function setPlayerHolds(holds: string[]) {
     activeApp?.setPlayerHolds(holds)
 }
 
+export function setPlayerGear(gearIds: string[]) {
+    activeApp?.setPlayerGear(gearIds.filter(Boolean))
+}
+
+export function setFishingMode(mode: string) {
+    activeApp?.setFishingMode(mode)
+}
+
+export async function setEquippedGear(gearId: string | null) {
+    pendingEquippedGear = gearId
+    if (activeApp) {
+        await activeApp.setEquippedGear(gearId)
+    }
+}
+
+export function tryUseGear() {
+    return activeApp?.tryUseGear() ?? { success: false, message: 'Game not running' }
+}
+
 export async function teleportToMapId(mapId: string, x: number, y: number) {
     return (await activeApp?.teleportToMapId(mapId, x, y)) ?? false
 }
@@ -200,6 +231,10 @@ declare global {
             finishNpcDialogue: typeof finishNpcDialogue
             onSignModalClosed: typeof onSignModalClosed
             setPlayerHolds: typeof setPlayerHolds
+            setPlayerGear: typeof setPlayerGear
+            setFishingMode: typeof setFishingMode
+            setEquippedGear: typeof setEquippedGear
+            tryUseGear: typeof tryUseGear
             teleportToMapId: typeof teleportToMapId
         }
     }
@@ -219,5 +254,9 @@ window.TelegramGame = {
     finishNpcDialogue,
     onSignModalClosed,
     setPlayerHolds,
+    setPlayerGear,
+    setFishingMode,
+    setEquippedGear,
+    tryUseGear,
     teleportToMapId,
 }

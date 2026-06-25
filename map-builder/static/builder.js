@@ -87,6 +87,20 @@ const state = {
     roomMeta: {},
     characterSkins: [],
     animalSkins: [],
+    animationSkins: [],
+    gearItems: [],
+    gearAttachEditor: {
+        open: false,
+        itemId: null,
+        item: null,
+        direction: "left",
+        faces: {},
+        charImage: null,
+        itemImage: null,
+        charSkin: "009",
+        drag: null,
+        canvasLayout: null,
+    },
     avatarCosts: {},
     rooms: [],
     portalPreview: null,
@@ -94,11 +108,15 @@ const state = {
     portalPick: null,
     animalFrameEditor: {
         open: false,
+        editorKind: "animal",
         animal: null,
         frames: {},
         direction: "down",
         slot: 0,
         displayScale: 1,
+        frameMs: 180,
+        fixedFrameW: 48,
+        fixedFrameH: 48,
         customFrames: false,
         image: null,
         drag: null,
@@ -1048,7 +1066,18 @@ function getSheetImage(sheetName) {
     return state.sheetImages[sheetName]
 }
 
+function isAnimSprite(sprite) {
+    return Boolean(sprite?.animated || sprite?.id?.startsWith("anim-"))
+}
+
+function animIntrinsicScale(sprite) {
+    return isAnimSprite(sprite) ? (sprite.defaultScale ?? 1) : 1
+}
+
 function spriteAnchor(sprite) {
+    if (isAnimSprite(sprite)) {
+        return { x: 0, y: 1 }
+    }
     return {
         x: sprite.anchorX ?? 0,
         y: sprite.anchorY ?? (1 - TILE / sprite.height),
@@ -1083,23 +1112,52 @@ function scaledColliderWorldTiles(anchorX, anchorY, sprite, scale) {
     return tiles
 }
 
+function spriteSourceRect(sprite) {
+    if (!sprite) {
+        return { sx: 0, sy: 0, sw: TILE, sh: TILE }
+    }
+    if (sprite.url) {
+        return {
+            sx: sprite.srcX ?? sprite.x ?? 0,
+            sy: sprite.srcY ?? sprite.y ?? 0,
+            sw: sprite.width,
+            sh: sprite.height,
+        }
+    }
+    return {
+        sx: sprite.x,
+        sy: sprite.y,
+        sw: sprite.width,
+        sh: sprite.height,
+    }
+}
+
 function drawSpriteOnCtx(targetCtx, sprite, tx, ty, placementVal) {
     const img = sprite.url ? state.spriteImages[sprite.id] : getSheetImage(sprite.sheet)
     if (!img) return
     const placement = normalizePlacement(placementVal)
-    const scale = placement?.scale ?? 1
+    const placeScale = placement?.scale ?? 1
+    const drawScale = placeScale * animIntrinsicScale(sprite)
     const px = tx * TILE
     const py = ty * TILE
+    const { sx, sy, sw, sh } = spriteSourceRect(sprite)
+    const dw = sw * drawScale
+    const dh = sh * drawScale
     const anchor = spriteAnchor(sprite)
-    const dw = sprite.width * scale
-    const dh = sprite.height * scale
-    const dx = px - dw * anchor.x
-    const dy = py - dh * anchor.y
-    const sx = sprite.url ? 0 : sprite.x
-    const sy = sprite.url ? 0 : sprite.y
+
+    let dx
+    let dy
+    if (isAnimSprite(sprite)) {
+        dx = px
+        dy = py + TILE - dh
+    } else {
+        dx = px - dw * anchor.x
+        dy = py - dh * anchor.y
+    }
+
     targetCtx.drawImage(
         img,
-        sx, sy, sprite.width, sprite.height,
+        sx, sy, sw, sh,
         dx, dy, dw, dh
     )
 }
@@ -1160,9 +1218,10 @@ function getBounds() {
             const sprite = getSpriteById(id)
             if (!sprite) continue
             const scale = normalizePlacement(raw)?.scale ?? 1
+            const drawScale = scale * animIntrinsicScale(sprite)
             const anchor = spriteAnchor(sprite)
-            const topRows = Math.ceil((sprite.height * scale * anchor.y) / TILE)
-            const rightCols = Math.ceil((sprite.width * scale * (1 - anchor.x)) / TILE)
+            const topRows = Math.ceil((sprite.height * drawScale * anchor.y) / TILE)
+            const rightCols = Math.ceil((sprite.width * drawScale * (1 - anchor.x)) / TILE)
             minY = Math.min(minY, y - topRows)
             maxX = Math.max(maxX, x + rightCols - 1)
         }
@@ -1245,11 +1304,19 @@ function draw() {
             const { x, y } = parseKey(key)
             const sprite = getSpriteById(id)
             const scale = normalizePlacement(raw)?.scale ?? 1
+            const drawScale = scale * animIntrinsicScale(sprite)
             const anchor = spriteAnchor(sprite)
-            const dw = (sprite?.width || TILE) * scale
-            const dh = (sprite?.height || TILE) * scale
-            const dx = x * TILE - dw * anchor.x
-            const dy = y * TILE - dh * anchor.y
+            const dw = (sprite?.width || TILE) * drawScale
+            const dh = (sprite?.height || TILE) * drawScale
+            let dx
+            let dy
+            if (isAnimSprite(sprite)) {
+                dx = x * TILE
+                dy = y * TILE + TILE - dh
+            } else {
+                dx = x * TILE - dw * anchor.x
+                dy = y * TILE - dh * anchor.y
+            }
             ctx.strokeStyle = "#5b9cff"
             ctx.lineWidth = 2 / state.zoom
             ctx.setLineDash([4 / state.zoom, 3 / state.zoom])
@@ -1351,7 +1418,9 @@ function drawNpcPaths(targetCtx) {
 function placeTile(x, y, layer, spriteId, scale = state.paintScale) {
     const key = tileKey(x, y)
     if (!state.tilemap[key]) state.tilemap[key] = {}
-    state.tilemap[key][layer] = compactPlacement({ id: spriteId, scale: scale ?? 1 })
+    const sprite = getSpriteById(spriteId)
+    const placementScale = isAnimSprite(sprite) ? 1 : (scale ?? 1)
+    state.tilemap[key][layer] = compactPlacement({ id: spriteId, scale: placementScale })
     state.selectedPlacement = { key, layer }
     updatePlacementEditor()
 }
@@ -1387,7 +1456,7 @@ function pickTile(x, y) {
                 state.selectedSheet = sprite.sheet
                 state.selectedSprite = sprite
                 state.selectedPlacement = { key, layer }
-                state.paintScale = normalizePlacement(raw)?.scale ?? sprite.defaultScale ?? 1
+                state.paintScale = normalizePlacement(raw)?.scale ?? (isAnimSprite(sprite) ? 1 : sprite.defaultScale ?? 1)
                 syncLayerTabs()
                 renderSheetTabs()
                 if (sheetChanged) {
@@ -1486,15 +1555,22 @@ function createSpritePreviewEl(sprite, maxSize = 52) {
     el.className = "sprite-preview"
 
     if (sprite.url) {
-        const scale = spritePreviewScale(sprite, maxSize)
-        const w = Math.max(1, Math.round(sprite.width * scale))
-        const h = Math.max(1, Math.round(sprite.height * scale))
+        const { sx, sy, sw, sh } = spriteSourceRect(sprite)
+        const intrinsic = animIntrinsicScale(sprite)
+        const displayW = sw * intrinsic
+        const displayH = sh * intrinsic
+        const scale = spritePreviewScale({ width: displayW, height: displayH }, maxSize)
+        const w = Math.max(1, Math.round(displayW * scale))
+        const h = Math.max(1, Math.round(displayH * scale))
+        const imgW = sprite.imageWidth ?? sw
+        const imgH = sprite.imageHeight ?? sh
         el.style.width = `${w}px`
         el.style.height = `${h}px`
         el.style.backgroundImage = `url(${sprite.url})`
-        el.style.backgroundSize = "contain"
+        el.style.backgroundSize = `${imgW * scale * intrinsic}px ${imgH * scale * intrinsic}px`
+        el.style.backgroundPosition = `-${sx * scale * intrinsic}px -${sy * scale * intrinsic}px`
         el.style.backgroundRepeat = "no-repeat"
-        el.style.backgroundPosition = "center"
+        el.style.imageRendering = "pixelated"
         return el
     }
 
@@ -1554,7 +1630,7 @@ function selectSprite(sprite) {
     state.selectedSprite = sprite
     state.selectedLayer = sprite.layer || "floor"
     state.selectedPlacement = null
-    state.paintScale = sprite.defaultScale ?? 1
+    state.paintScale = isAnimSprite(sprite) ? 1 : (sprite.defaultScale ?? 1)
     state.tool = state.tool === "boundaries" ? "boundaries"
         : state.tool === "message" ? "message"
         : state.tool === "npc" ? "npc"
@@ -1797,6 +1873,17 @@ async function loadAnimals() {
     }
 }
 
+async function loadAnimations() {
+    try {
+        const res = await fetch("/api/animations")
+        const data = await res.json()
+        state.animationSkins = data.animations || []
+        if (state.tool === "animations") renderAnimationList()
+    } catch {
+        state.animationSkins = []
+    }
+}
+
 function selectNpcSkin(skin) {
     const npc = getSelectedNpc()
     if (!npc) return
@@ -1805,6 +1892,619 @@ function selectNpcSkin(skin) {
     document.getElementById("npc-skin").value = skin
     renderNpcSkinGrid(skin)
     draw()
+}
+
+async function loadAnimations() {
+    try {
+        const res = await fetch("/api/animations")
+        const data = await res.json()
+        state.animationSkins = data.animations || []
+        if (state.tool === "animations") renderAnimationList()
+    } catch {
+        state.animationSkins = []
+    }
+}
+
+async function loadGearItems() {
+    try {
+        const res = await fetch("/api/gear/items")
+        const data = await res.json()
+        state.gearItems = data.items || []
+        if (state.tool === "gear-items") renderGearItemList()
+    } catch {
+        state.gearItems = []
+    }
+}
+
+const GEAR_FACINGS = ["down", "left", "right", "up"]
+/** Idle frame per direction (walk_*_1) — matches PlayerSpriteSheetData.ts */
+const GEAR_CHAR_IDLE = {
+    down: { x: 48, y: 0, w: 48, h: 48 },
+    left: { x: 48, y: 48, w: 48, h: 48 },
+    right: { x: 48, y: 96, w: 48, h: 48 },
+    up: { x: 48, y: 144, w: 48, h: 48 },
+}
+const GEAR_ATTACH_ZOOM = 5
+const GEAR_VIEW_THUMB_ZOOM = 2.2
+/** Character frame size in game pixels — keep in sync with game-client/src/gearOverlay.ts */
+const GEAR_CHAR_FRAME_PX = 48
+
+function gearHandOffset(direction, bodyW, offsetX) {
+    if (direction === "right") return bodyW * 0.22 + offsetX
+    if (direction === "left") return -bodyW * 0.08 + offsetX
+    return bodyW * 0.08 + offsetX
+}
+
+/** Layout in character-local pixels (matches in-game tool overlay). */
+function computeGearOverlayLayout(direction, attach, frame) {
+    const bodyW = GEAR_CHAR_FRAME_PX
+    const bodyH = GEAR_CHAR_FRAME_PX
+    const scale = attach.scale ?? 0.09
+    const toolW = frame.w * scale
+    const toolH = frame.h * scale
+    const anchorX = attach.anchorX ?? 0.5
+    const anchorY = attach.anchorY ?? 0.85
+    const offsetX = attach.offsetX ?? 0
+    const offsetY = attach.offsetY ?? 0
+    const handX = gearHandOffset(direction, bodyW, offsetX)
+    const handY = -bodyH * 0.05 + offsetY
+    return {
+        bodyW,
+        bodyH,
+        toolW,
+        toolH,
+        handX,
+        handY,
+        x: handX - toolW * anchorX,
+        y: handY - toolH * anchorY,
+    }
+}
+
+function gearItemThumbStyle(item) {
+    const icon = item?.icon || ""
+    if (!icon) return ""
+    return [
+        "background-image:url(" + icon + ")",
+        "background-size:contain",
+        "background-position:center",
+        "background-repeat:no-repeat",
+        "width:40px",
+        "height:40px",
+    ].join(";")
+}
+
+function defaultGearFacesFromItem(item) {
+    const frame = gearItemFrame(item)
+    const useFacings = item?.useFacings || ["left", "right"]
+    const faces = {}
+    for (const facing of GEAR_FACINGS) {
+        const saved = item?.faces?.[facing] || {}
+        const legacy = {
+            offsetX: saved.offsetX ?? item?.sprite?.offsetX ?? 0,
+            offsetY: saved.offsetY ?? item?.sprite?.offsetY ?? 0,
+            scale: saved.scale ?? item?.sprite?.scale ?? 0.09,
+            anchorX: saved.anchorX ?? item?.sprite?.anchorX ?? 0.5,
+            anchorY: saved.anchorY ?? item?.sprite?.anchorY ?? 0.85,
+        }
+        const rect = normalizeGearRect(saved.rect) || rectFromLegacyAttach(facing, legacy, frame)
+        faces[facing] = {
+            eligible: saved.eligible !== undefined ? Boolean(saved.eligible) : useFacings.includes(facing),
+            rect,
+        }
+    }
+    return faces
+}
+
+function normalizeGearRect(raw) {
+    if (!raw || !raw.w || !raw.h) return null
+    return {
+        x: Number(raw.x) || 0,
+        y: Number(raw.y) || 0,
+        w: Math.max(0.5, Number(raw.w) || 1),
+        h: Math.max(0.5, Number(raw.h) || 1),
+    }
+}
+
+function rectFromLegacyAttach(direction, attach, frame) {
+    const overlay = computeGearOverlayLayout(direction, attach, frame)
+    return {
+        x: overlay.x,
+        y: overlay.y,
+        w: overlay.toolW,
+        h: overlay.toolH,
+    }
+}
+
+function renderGearItemList() {
+    const list = document.getElementById("gear-item-list")
+    if (!list) return
+
+    if (!state.gearItems.length) {
+        list.innerHTML = `<p class="prop-meta">No gear items defined yet.</p>`
+        return
+    }
+
+    const selected = state.gearAttachEditor.itemId
+    list.innerHTML = state.gearItems.map((item) => `
+        <div class="animal-list-item ${item.id === selected ? "selected" : ""}">
+            <div class="animal-list-thumb" style="${gearItemThumbStyle(item)}"></div>
+            <div class="animal-list-meta">
+                <strong>${escapeHtml(item.label || item.id)}</strong>
+                <span class="prop-meta">${escapeHtml(item.id)} · ${(item.useFacings || []).join(", ") || "no facings"}</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" data-edit-gear-item="${escapeAttr(item.id)}">Edit attach</button>
+        </div>
+    `).join("")
+}
+
+function currentGearFace() {
+    const editor = state.gearAttachEditor
+    const face = editor.faces[editor.direction]
+    if (face?.rect) return face
+    return {
+        eligible: false,
+        rect: { x: 0, y: 0, w: 20, h: 14 },
+    }
+}
+
+function syncGearFaceInputsFromState() {
+    const editor = state.gearAttachEditor
+    const face = currentGearFace()
+    const rect = face.rect
+    document.getElementById("gear-attach-active-view").textContent = `Editing: ${editor.direction}`
+    document.getElementById("gear-face-eligible").checked = Boolean(face.eligible)
+    document.getElementById("gear-rect-x").value = rect.x
+    document.getElementById("gear-rect-y").value = rect.y
+    document.getElementById("gear-rect-w").value = rect.w
+    document.getElementById("gear-rect-h").value = rect.h
+}
+
+function readGearFaceInputsToState() {
+    const editor = state.gearAttachEditor
+    const face = currentGearFace()
+    face.eligible = document.getElementById("gear-face-eligible").checked
+    face.rect = {
+        x: Number(document.getElementById("gear-rect-x").value || 0),
+        y: Number(document.getElementById("gear-rect-y").value || 0),
+        w: Math.max(0.5, Number(document.getElementById("gear-rect-w").value || 1)),
+        h: Math.max(0.5, Number(document.getElementById("gear-rect-h").value || 1)),
+    }
+    editor.faces[editor.direction] = face
+}
+
+function renderGearAttachSidebar() {
+    syncGearFaceInputsFromState()
+}
+
+function gearViewThumbStyle(direction) {
+    const rect = GEAR_CHAR_IDLE[direction]
+    if (!rect) return ""
+    const z = GEAR_VIEW_THUMB_ZOOM
+    return [
+        `background-image:url(/sprites/characters/Character_${state.gearAttachEditor.charSkin || "009"}.png)`,
+        `background-size:${192 * z}px ${192 * z}px`,
+        `background-position:-${rect.x * z}px -${rect.y * z}px`,
+        `width:${Math.round(rect.w * z)}px`,
+        `height:${Math.round(rect.h * z)}px`,
+    ].join(";")
+}
+
+function renderGearAttachViewsGrid() {
+    const grid = document.getElementById("gear-attach-views-grid")
+    const editor = state.gearAttachEditor
+    if (!grid) return
+
+    grid.innerHTML = GEAR_FACINGS.map((direction) => {
+        const face = editor.faces[direction] || {}
+        const selected = direction === editor.direction
+        return `
+            <div class="gear-view-card ${selected ? "selected" : ""} ${face.eligible ? "eligible" : ""}" data-gear-view="${direction}">
+                <button type="button" class="gear-view-thumb-btn" data-gear-direction="${direction}" title="Edit ${direction} attach">
+                    <span class="gear-view-thumb" style="${gearViewThumbStyle(direction)}"></span>
+                    <span class="gear-view-label">${direction}</span>
+                </button>
+                <label class="gear-view-eligible">
+                    <input type="checkbox" data-gear-eligible="${direction}" ${face.eligible ? "checked" : ""}>
+                    Use eligible
+                </label>
+            </div>
+        `
+    }).join("")
+}
+
+async function loadGearAttachImages(item) {
+    const sprite = item?.sprite || {}
+    const file = sprite.file || "fish.png"
+    const charSkin = state.gearAttachEditor.charSkin || state.characterSkins[0] || "009"
+
+    const itemImg = new Image()
+    itemImg.crossOrigin = "anonymous"
+    itemImg.src = `/sprites/spritesheets/items/${file}?v=${Date.now()}`
+
+    const charImg = new Image()
+    charImg.crossOrigin = "anonymous"
+    charImg.src = `/sprites/characters/Character_${charSkin}.png?v=${Date.now()}`
+
+    await Promise.all([
+        new Promise((resolve, reject) => {
+            itemImg.onload = () => resolve()
+            itemImg.onerror = () => reject(new Error("Could not load item sprite"))
+        }),
+        new Promise((resolve, reject) => {
+            charImg.onload = () => resolve()
+            charImg.onerror = () => reject(new Error("Could not load character sprite"))
+        }),
+    ])
+
+    state.gearAttachEditor.itemImage = itemImg
+    state.gearAttachEditor.charImage = charImg
+}
+
+function computeGearAttachCanvasLayout() {
+    const canvas = document.getElementById("gear-attach-canvas")
+    const wrap = canvas?.parentElement
+    if (!canvas || !wrap) {
+        return { zoom: GEAR_ATTACH_ZOOM, cx: 0, cy: 0, bodyW: 0, bodyH: 0, canvasW: 0, canvasH: 0 }
+    }
+
+    const canvasW = wrap.clientWidth
+    const canvasH = wrap.clientHeight
+    if (canvas.width !== canvasW || canvas.height !== canvasH) {
+        canvas.width = canvasW
+        canvas.height = canvasH
+    }
+
+    const zoom = GEAR_ATTACH_ZOOM
+    const bodyW = GEAR_CHAR_FRAME_PX * zoom
+    const bodyH = GEAR_CHAR_FRAME_PX * zoom
+    const cx = canvasW / 2 - bodyW / 2
+    const cy = canvasH / 2 - bodyH / 2
+
+    return { zoom, cx, cy, bodyW, bodyH, canvasW, canvasH }
+}
+
+function gearItemFrame(item) {
+    const sprite = item?.sprite || {}
+    return {
+        x: sprite.x || 0,
+        y: sprite.y || 0,
+        w: sprite.w || 1,
+        h: sprite.h || 1,
+    }
+}
+
+function gearToolDrawRect(layout, rect) {
+    const z = layout.zoom
+    return {
+        x: layout.cx + rect.x * z,
+        y: layout.cy + rect.y * z,
+        w: rect.w * z,
+        h: rect.h * z,
+        rect,
+    }
+}
+
+function drawGearAttachCanvas() {
+    const editor = state.gearAttachEditor
+    const canvas = document.getElementById("gear-attach-canvas")
+    if (!canvas || !editor.open || !editor.item || !editor.charImage || !editor.itemImage) return
+
+    const ctx = canvas.getContext("2d")
+    const layout = computeGearAttachCanvasLayout()
+    editor.canvasLayout = layout
+    const direction = editor.direction
+    const attach = currentGearFace()
+    const rect = attach.rect
+    const charFrame = GEAR_CHAR_IDLE[direction] || GEAR_CHAR_IDLE.left
+    const sprite = editor.item.sprite || {}
+    const frame = {
+        x: sprite.x || 0,
+        y: sprite.y || 0,
+        w: sprite.w || 1,
+        h: sprite.h || 1,
+    }
+
+    ctx.clearRect(0, 0, layout.canvasW, layout.canvasH)
+    ctx.fillStyle = "#12151a"
+    ctx.fillRect(0, 0, layout.canvasW, layout.canvasH)
+
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(
+        editor.charImage,
+        charFrame.x, charFrame.y, charFrame.w, charFrame.h,
+        layout.cx, layout.cy, layout.bodyW, layout.bodyH
+    )
+
+    const toolBox = gearToolDrawRect(layout, rect)
+    if (!toolBox) return
+
+    ctx.drawImage(
+        editor.itemImage,
+        frame.x, frame.y, frame.w, frame.h,
+        toolBox.x, toolBox.y, toolBox.w, toolBox.h
+    )
+
+    ctx.strokeStyle = attach.eligible ? "#4ade80" : "#f87171"
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 4])
+    ctx.strokeRect(toolBox.x + 0.5, toolBox.y + 0.5, toolBox.w - 1, toolBox.h - 1)
+    ctx.setLineDash([])
+
+    const hs = FRAME_HANDLE_SIZE
+    const hx = toolBox.x + toolBox.w - hs / 2
+    const hy = toolBox.y + toolBox.h - hs / 2
+    ctx.fillStyle = "#facc15"
+    ctx.strokeStyle = "#1a1d24"
+    ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs)
+    ctx.strokeRect(hx - hs / 2 + 0.5, hy - hs / 2 + 0.5, hs - 1, hs - 1)
+}
+
+function resizeGearAttachCanvas() {
+    state.gearAttachEditor.canvasLayout = null
+    drawGearAttachCanvas()
+}
+
+function pointInRect(point, rect) {
+    return (
+        point.x >= rect.x &&
+        point.x <= rect.x + rect.w &&
+        point.y >= rect.y &&
+        point.y <= rect.y + rect.h
+    )
+}
+
+function gearScaleHandlePoint(toolBox) {
+    const hs = FRAME_HANDLE_SIZE
+    return { x: toolBox.x + toolBox.w, y: toolBox.y + toolBox.h, r: hs / 2 }
+}
+
+function hitGearScaleHandle(point, toolBox) {
+    const handle = gearScaleHandlePoint(toolBox)
+    const dx = point.x - handle.x
+    const dy = point.y - handle.y
+    return Math.hypot(dx, dy) <= handle.r + 2
+}
+
+async function openGearAttachEditor(itemId) {
+    const res = await fetch(`/api/gear/items/${encodeURIComponent(itemId)}`)
+    const data = await res.json()
+    if (!res.ok) {
+        showToast(data.error || "Could not load gear item", true)
+        return
+    }
+
+    const item = data
+    state.gearAttachEditor = {
+        open: true,
+        itemId,
+        item,
+        direction: (item.useFacings && item.useFacings[0]) || "left",
+        faces: defaultGearFacesFromItem(item),
+        charImage: null,
+        itemImage: null,
+        charSkin: state.characterSkins[0] || "009",
+        drag: null,
+        canvasLayout: null,
+    }
+
+    const modal = document.getElementById("gear-attach-modal")
+    modal?.classList.remove("hidden")
+    modal?.setAttribute("aria-hidden", "false")
+    document.getElementById("gear-attach-title").textContent = `${item.label || itemId} attach`
+
+    try {
+        await loadGearAttachImages(item)
+        renderGearAttachSidebar()
+        renderGearAttachViewsGrid()
+        resizeGearAttachCanvas()
+        renderGearItemList()
+    } catch (err) {
+        showToast(err.message || "Could not load preview images", true)
+    }
+}
+
+function closeGearAttachEditor() {
+    state.gearAttachEditor.open = false
+    state.gearAttachEditor.drag = null
+    const modal = document.getElementById("gear-attach-modal")
+    modal?.classList.add("hidden")
+    modal?.setAttribute("aria-hidden", "true")
+}
+
+async function saveGearAttachEditor() {
+    const editor = state.gearAttachEditor
+    if (!editor.itemId) return
+
+    readGearFaceInputsToState()
+    const useFacings = GEAR_FACINGS.filter((facing) => editor.faces[facing]?.eligible)
+    const faces = {}
+    for (const facing of GEAR_FACINGS) {
+        const face = editor.faces[facing] || {}
+        faces[facing] = {
+            eligible: Boolean(face.eligible),
+            rect: {
+                x: face.rect?.x ?? 0,
+                y: face.rect?.y ?? 0,
+                w: face.rect?.w ?? 1,
+                h: face.rect?.h ?? 1,
+            },
+        }
+    }
+
+    const res = await fetch(`/api/gear/items/${encodeURIComponent(editor.itemId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useFacings, faces }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+        showToast(data.error || "Could not save gear attach", true)
+        return
+    }
+
+    const idx = state.gearItems.findIndex((entry) => entry.id === editor.itemId)
+    if (idx >= 0) state.gearItems[idx] = data.item
+    editor.item = data.item
+    editor.faces = defaultGearFacesFromItem(data.item)
+    renderGearAttachSidebar()
+    renderGearAttachViewsGrid()
+    drawGearAttachCanvas()
+    renderGearItemList()
+    showToast(data.message || "Gear attach saved")
+}
+
+function bindGearAttachEditor() {
+    document.getElementById("gear-item-list")?.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-edit-gear-item]")
+        if (!btn) return
+        openGearAttachEditor(btn.dataset.editGearItem)
+    })
+
+    document.getElementById("btn-gear-attach-close")?.addEventListener("click", closeGearAttachEditor)
+    document.getElementById("btn-gear-attach-save")?.addEventListener("click", () => {
+        saveGearAttachEditor()
+    })
+
+    document.getElementById("gear-attach-views-grid")?.addEventListener("click", (e) => {
+        const dirBtn = e.target.closest("[data-gear-direction]")
+        if (dirBtn) {
+            readGearFaceInputsToState()
+            state.gearAttachEditor.direction = dirBtn.dataset.gearDirection
+            renderGearAttachViewsGrid()
+            syncGearFaceInputsFromState()
+            drawGearAttachCanvas()
+            return
+        }
+    })
+
+    document.getElementById("gear-attach-views-grid")?.addEventListener("change", (e) => {
+        const eligibleBox = e.target.closest("[data-gear-eligible]")
+        if (!eligibleBox) return
+        const direction = eligibleBox.dataset.gearEligible
+        const face = state.gearAttachEditor.faces[direction]
+        if (!face) return
+        face.eligible = eligibleBox.checked
+        renderGearAttachViewsGrid()
+        if (direction === state.gearAttachEditor.direction) {
+            syncGearFaceInputsFromState()
+        }
+        drawGearAttachCanvas()
+    })
+
+    document.getElementById("gear-face-eligible")?.addEventListener("change", () => {
+        readGearFaceInputsToState()
+        renderGearAttachViewsGrid()
+        drawGearAttachCanvas()
+    })
+
+    for (const id of [
+        "gear-rect-x",
+        "gear-rect-y",
+        "gear-rect-w",
+        "gear-rect-h",
+    ]) {
+        document.getElementById(id)?.addEventListener("input", () => {
+            readGearFaceInputsToState()
+            drawGearAttachCanvas()
+        })
+    }
+
+    const canvas = document.getElementById("gear-attach-canvas")
+    canvas?.addEventListener("pointerdown", (e) => {
+        const editor = state.gearAttachEditor
+        if (!editor.open) return
+
+        readGearFaceInputsToState()
+        const layout = editor.canvasLayout || computeGearAttachCanvasLayout()
+        const point = canvasPointFromEvent(e, layout)
+        const attach = currentGearFace()
+        const rect = attach.rect
+        const toolBox = gearToolDrawRect(layout, rect)
+        if (!toolBox) return
+
+        if (hitGearScaleHandle(point, toolBox)) {
+            editor.drag = {
+                pointerId: e.pointerId,
+                mode: "scale",
+                start: point,
+                originW: rect.w,
+                originH: rect.h,
+                aspect: rect.h / Math.max(0.001, rect.w),
+            }
+            canvas.setPointerCapture(e.pointerId)
+            return
+        }
+
+        if (pointInRect(point, toolBox)) {
+            editor.drag = {
+                pointerId: e.pointerId,
+                mode: "move",
+                start: point,
+                originX: rect.x,
+                originY: rect.y,
+            }
+            canvas.setPointerCapture(e.pointerId)
+            canvas.style.cursor = "grabbing"
+        }
+    })
+
+    canvas?.addEventListener("pointermove", (e) => {
+        const editor = state.gearAttachEditor
+        if (!editor.open) return
+
+        const layout = editor.canvasLayout || computeGearAttachCanvasLayout()
+        const point = canvasPointFromEvent(e, layout)
+        const attach = currentGearFace()
+        const rect = attach.rect
+        const toolBox = gearToolDrawRect(layout, rect)
+
+        if (!editor.drag || editor.drag.pointerId !== e.pointerId) {
+            if (toolBox && hitGearScaleHandle(point, toolBox)) {
+                canvas.style.cursor = "nwse-resize"
+            } else if (toolBox && pointInRect(point, toolBox)) {
+                canvas.style.cursor = "grab"
+            } else {
+                canvas.style.cursor = "default"
+            }
+            return
+        }
+
+        if (editor.drag.mode === "move") {
+            const dx = (point.x - editor.drag.start.x) / layout.zoom
+            const dy = (point.y - editor.drag.start.y) / layout.zoom
+            rect.x = editor.drag.originX + dx
+            rect.y = editor.drag.originY + dy
+            attach.rect = rect
+            editor.faces[editor.direction] = attach
+            syncGearFaceInputsFromState()
+            drawGearAttachCanvas()
+            return
+        }
+
+        if (editor.drag.mode === "scale") {
+            const dxLogical = (point.x - editor.drag.start.x) / layout.zoom
+            rect.w = Math.max(1, editor.drag.originW + dxLogical)
+            rect.h = Math.max(1, rect.w * editor.drag.aspect)
+            attach.rect = rect
+            editor.faces[editor.direction] = attach
+            syncGearFaceInputsFromState()
+            drawGearAttachCanvas()
+        }
+    })
+
+    const endGearDrag = (e) => {
+        const editor = state.gearAttachEditor
+        if (!editor.drag || editor.drag.pointerId !== e.pointerId) return
+        editor.drag = null
+        canvas?.releasePointerCapture(e.pointerId)
+        if (canvas) canvas.style.cursor = "default"
+    }
+    canvas?.addEventListener("pointerup", endGearDrag)
+    canvas?.addEventListener("pointercancel", endGearDrag)
+
+    window.addEventListener("resize", () => {
+        if (state.gearAttachEditor.open) resizeGearAttachCanvas()
+    })
 }
 
 async function loadCatalog() {
@@ -2370,6 +3070,10 @@ function escapeAttr(value) {
         .replace(/</g, "&lt;")
 }
 
+function escapeHtml(value) {
+    return escapeAttr(value).replace(/>/g, "&gt;")
+}
+
 function setInteraction(key, interaction, { refreshOptionsUI = true } = {}) {
     if (!state.tilemap[key]) return
     const allOptions = Array.isArray(interaction?.options) ? interaction.options : []
@@ -2576,14 +3280,26 @@ function normalizeNpcFlows(raw) {
                       .map((line) => line.trim())
                       .filter(Boolean)
             const grantHold = String(flow?.grantHold || "").trim()
+            const grantGear = String(flow?.grantGear || "").trim()
+            const fishingQuest = String(flow?.fishingQuest || "").trim()
             const questStep = String(flow?.questStep || "").trim()
             const questId = String(flow?.questId || "").trim()
+            const gear = Array.isArray(flow?.requires?.gear)
+                ? flow.requires.gear.map((x) => String(x || "").trim()).filter(Boolean)
+                : splitCsv(flow?.requires?.gear)
+            const notGear = Array.isArray(flow?.requires?.notGear)
+                ? flow.requires.notGear.map((x) => String(x || "").trim()).filter(Boolean)
+                : splitCsv(flow?.requires?.notGear)
             const requires = {}
             if (holds.length) requires.holds = holds
             if (notHolds.length) requires.notHolds = notHolds
+            if (gear.length) requires.gear = gear
+            if (notGear.length) requires.notGear = notGear
             const payload = { messages }
             if (Object.keys(requires).length) payload.requires = requires
             if (grantHold) payload.grantHold = grantHold
+            if (grantGear) payload.grantGear = grantGear
+            if (fishingQuest) payload.fishingQuest = fishingQuest
             if (questStep) payload.questStep = questStep
             if (questId) payload.questId = questId
             return payload
@@ -2601,14 +3317,22 @@ function collectNpcFlowsFromDom() {
             .map((line) => line.trim())
             .filter(Boolean)
         const grantHold = card.querySelector(".flow-grant-hold")?.value.trim() || ""
+        const grantGear = card.querySelector(".flow-grant-gear")?.value.trim() || ""
+        const fishingQuest = card.querySelector(".flow-fishing-quest")?.value.trim() || ""
         const questStep = card.querySelector(".flow-quest-step")?.value.trim() || ""
         const questId = card.querySelector(".flow-quest-id")?.value.trim() || ""
+        const gear = splitCsv(card.querySelector(".flow-gear")?.value)
+        const notGear = splitCsv(card.querySelector(".flow-not-gear")?.value)
         const requires = {}
         if (holds.length) requires.holds = holds
         if (notHolds.length) requires.notHolds = notHolds
+        if (gear.length) requires.gear = gear
+        if (notGear.length) requires.notGear = notGear
         const payload = { messages }
         if (Object.keys(requires).length) payload.requires = requires
         if (grantHold) payload.grantHold = grantHold
+        if (grantGear) payload.grantGear = grantGear
+        if (fishingQuest) payload.fishingQuest = fishingQuest
         if (questStep) payload.questStep = questStep
         if (questId) payload.questId = questId
         return payload
@@ -2629,6 +3353,8 @@ function renderNpcFlowsList(flows = []) {
         card.className = "npc-flow-card"
         const holds = (flow.requires?.holds || []).join(", ")
         const notHolds = (flow.requires?.notHolds || []).join(", ")
+        const gear = (flow.requires?.gear || []).join(", ")
+        const notGear = (flow.requires?.notGear || []).join(", ")
         card.innerHTML = `
             <div class="npc-flow-card-head">
                 <strong>Flow ${index + 1}</strong>
@@ -2637,7 +3363,11 @@ function renderNpcFlowsList(flows = []) {
             <div class="npc-flow-grid">
                 <input type="text" class="flow-holds" placeholder="requires holds (bag)" list="hold-item-ids" value="${escapeAttr(holds)}">
                 <input type="text" class="flow-not-holds" placeholder="requires not holds" list="hold-item-ids" value="${escapeAttr(notHolds)}">
+                <input type="text" class="flow-gear" placeholder="requires gear" list="gear-item-ids" value="${escapeAttr(gear)}">
+                <input type="text" class="flow-not-gear" placeholder="requires not gear" list="gear-item-ids" value="${escapeAttr(notGear)}">
                 <input type="text" class="flow-grant-hold" placeholder="grant hold" list="hold-item-ids" value="${escapeAttr(flow.grantHold || "")}">
+                <input type="text" class="flow-grant-gear" placeholder="grant gear" list="gear-item-ids" value="${escapeAttr(flow.grantGear || "")}">
+                <input type="text" class="flow-fishing-quest" placeholder="fishing quest id" list="fishing-quest-ids" value="${escapeAttr(flow.fishingQuest || "")}">
                 <input type="text" class="flow-quest-step" placeholder="quest step" list="quest-step-ids" value="${escapeAttr(flow.questStep || "")}">
             </div>
             <input type="text" class="flow-quest-id" placeholder="quest id (optional)" value="${escapeAttr(flow.questId || "")}">
@@ -2894,6 +3624,15 @@ function bindEvents() {
             }
             if (state.tool === "avatars") {
                 renderAvatarCostGrid()
+            }
+            if (state.tool === "animations") {
+                state.selectedSheet = "anim"
+                renderSheetTabs()
+                renderSpriteGrid({ preserveScroll: false })
+                renderAnimationList()
+            }
+            if (state.tool === "gear-items") {
+                renderGearItemList()
             }
         })
     })
@@ -3281,6 +4020,7 @@ function bindEvents() {
     })
 
     bindAnimalFrameEditor()
+    bindGearAttachEditor()
 }
 
 function syncTools() {
@@ -3290,6 +4030,8 @@ function syncTools() {
     const isNpc = state.tool === "npc"
     const isAvatars = state.tool === "avatars"
     const isAnimals = state.tool === "animals"
+    const isAnimations = state.tool === "animations"
+    const isGearItems = state.tool === "gear-items"
     const isAltCanvas = isBoundary
     document.querySelectorAll(".tool-btn").forEach((b) => {
         b.classList.toggle("active", b.dataset.tool === state.tool)
@@ -3299,11 +4041,11 @@ function syncTools() {
     boundaryWrap.classList.toggle("hidden", !isBoundary)
     document.getElementById("paint-props").classList.toggle(
         "hidden",
-        isAltCanvas || isMessage || isPortals || isNpc || isAvatars || isAnimals || state.selectedPlacement || !state.selectedSprite
+        isAltCanvas || isMessage || isPortals || isNpc || isAvatars || isAnimals || isAnimations || isGearItems || state.selectedPlacement || !state.selectedSprite
     )
     document.getElementById("placement-props").classList.toggle(
         "hidden",
-        isAltCanvas || isMessage || isPortals || isNpc || isAvatars || isAnimals || !state.selectedPlacement
+        isAltCanvas || isMessage || isPortals || isNpc || isAvatars || isAnimals || isAnimations || isGearItems || !state.selectedPlacement
     )
     document.getElementById("boundary-props").classList.toggle("hidden", !isBoundary)
     document.getElementById("message-props").classList.toggle("hidden", !isMessage)
@@ -3311,6 +4053,8 @@ function syncTools() {
     document.getElementById("npc-props").classList.toggle("hidden", !isNpc)
     document.getElementById("avatar-props")?.classList.toggle("hidden", !isAvatars)
     document.getElementById("animal-props")?.classList.toggle("hidden", !isAnimals)
+    document.getElementById("animation-props")?.classList.toggle("hidden", !isAnimations)
+    document.getElementById("gear-items-props")?.classList.toggle("hidden", !isGearItems)
 
     const hints = {
         boundaries: "Click sprite tiles to add boundary points · Right-click undo last point",
@@ -3319,6 +4063,8 @@ function syncTools() {
         npc: "Select NPC · click map to add patrol waypoints · green dot = start",
         avatars: "Set coin price per trainer avatar · saved with the world map",
         animals: "Draw boxes · drag inside to move · drag yellow handles to resize · click any box to edit it",
+        animations: "3×3 loop frames (0–8) · pick sprite from anim sheet · paint on object layer",
+        "gear-items": "Edit attach opens full-screen editor · per-view eligible + drag/drop attach",
     }
     document.getElementById("toolbar-hint").textContent = hints[state.tool]
         || "Use Pan tool or middle mouse to move · Pinch/scroll to zoom · Left drag to paint"
@@ -3334,6 +4080,7 @@ function syncTools() {
     if (isNpc) updateNpcEditor()
     if (isAvatars) renderAvatarCostGrid()
     if (isAnimals) renderAnimalList()
+    if (isAnimations) renderAnimationList()
     updateMapNameOverlay()
 }
 
@@ -3367,14 +4114,217 @@ const ANIMAL_DIR_COLORS = {
     up: "rgba(244, 114, 182, 0.35)",
 }
 
+const ANIMATION_LOOP_SLOTS = 9
+const ANIMATION_LOOP_COLS = 3
+const ANIMATION_LOOP_ROWS = 3
+const ANIM_LOOP_COLOR = "rgba(96, 165, 250, 0.35)"
+
+function isAnimationEditor() {
+    return state.animalFrameEditor?.editorKind === "animation"
+}
+
+function defaultAnimationFrameSize(animal) {
+    const cols = animal?.columns || ANIMATION_LOOP_COLS
+    const rows = animal?.rows || ANIMATION_LOOP_ROWS
+    return {
+        w: Math.max(1, Math.round((animal?.width || 144) / cols)),
+        h: Math.max(1, Math.round((animal?.height || 144) / rows)),
+    }
+}
+
+function readAnimationFixedSizeInputs() {
+    const editor = state.animalFrameEditor
+    const w = Number(document.getElementById("anim-frame-w")?.value)
+    const h = Number(document.getElementById("anim-frame-h")?.value)
+    const fw = Number.isFinite(w) && w > 0 ? Math.round(w) : editor.fixedFrameW
+    const fh = Number.isFinite(h) && h > 0 ? Math.round(h) : editor.fixedFrameH
+    editor.fixedFrameW = fw
+    editor.fixedFrameH = fh
+    return { w: fw, h: fh }
+}
+
+function syncAnimationFixedSizeInputs() {
+    const editor = state.animalFrameEditor
+    const wEl = document.getElementById("anim-frame-w")
+    const hEl = document.getElementById("anim-frame-h")
+    if (wEl) wEl.value = String(editor.fixedFrameW)
+    if (hEl) hEl.value = String(editor.fixedFrameH)
+}
+
+function syncAnimationEditorChrome() {
+    const isAnim = isAnimationEditor()
+    document.getElementById("animal-frame-fixed-wrap")?.classList.toggle("hidden", !isAnim)
+    document.getElementById("animal-frame-slots-label").textContent = isAnim ? "Loop frames" : "Walk frames"
+    if (isAnim) syncAnimationFixedSizeInputs()
+}
+
+function clearAnimationFrames() {
+    const editor = state.animalFrameEditor
+    if (!isAnimationEditor()) return
+    editor.frames = {}
+    editor.customFrames = false
+    renderAnimalFrameSidebar()
+    drawAnimalFrameCanvas()
+    showToast("All frames cleared — set size then Apply to all 9")
+}
+
+function applyFixedFrameSizeToAll() {
+    const editor = state.animalFrameEditor
+    if (!isAnimationEditor() || !editor.animal) return
+
+    const { w: frameW, h: frameH } = readAnimationFixedSizeInputs()
+    const frames = {}
+    for (let slot = 0; slot < ANIMATION_LOOP_SLOTS; slot++) {
+        const col = slot % ANIMATION_LOOP_COLS
+        const row = Math.floor(slot / ANIMATION_LOOP_COLS)
+        frames[`loop_${slot}`] = {
+            x: col * frameW,
+            y: row * frameH,
+            w: frameW,
+            h: frameH,
+        }
+    }
+    editor.frames = frames
+    editor.customFrames = true
+    renderAnimalFrameSidebar()
+    drawAnimalFrameCanvas()
+    showToast(`Applied ${frameW}×${frameH} to all 9 frames`)
+}
+
+function normalizeAnimationFramesForSave(frames) {
+    const { w: fw, h: fh } = readAnimationFixedSizeInputs()
+    const normalized = {}
+    for (const [key, rect] of Object.entries(frames || {})) {
+        if (!key.startsWith("loop_")) continue
+        normalized[key] = {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            w: fw,
+            h: fh,
+        }
+    }
+    return normalized
+}
+
 function animalFrameKey(direction, slot) {
+    if (state.animalFrameEditor?.editorKind === "animation") {
+        return `loop_${slot}`
+    }
     return `walk_${direction}_${slot}`
 }
 
 function parseAnimalFrameKey(key) {
-    const match = /^walk_(down|left|right|up)_(\d+)$/.exec(key || "")
-    if (!match) return null
-    return { direction: match[1], slot: Number(match[2]) }
+    const walk = /^walk_(down|left|right|up)_(\d+)$/.exec(key || "")
+    if (walk) {
+        return { kind: "walk", direction: walk[1], slot: Number(walk[2]) }
+    }
+    const loop = /^loop_(\d+)$/.exec(key || "")
+    if (loop) {
+        return { kind: "loop", slot: Number(loop[1]) }
+    }
+    return null
+}
+
+function animationSpriteUrl(entry) {
+    if (!entry) return ""
+    if (entry.url) return entry.url
+    const folder = entry.folder || entry.id
+    const path = entry.path || `${folder}/${entry.file}`
+    return `/sprites/animations/${path}`
+}
+
+function animationThumbStyle(entry) {
+    const fw = entry.frameWidth || Math.max(1, Math.floor(entry.width / (entry.columns || 8)))
+    const fh = entry.frameHeight || entry.height
+    const z = (CHAR_FRAME.w * CHAR_THUMB_ZOOM) / fw
+    return [
+        `background-image:url(${animationSpriteUrl(entry)})`,
+        `background-size:${entry.width * z}px ${entry.height * z}px`,
+        `background-position:0 0`,
+        `width:${Math.round(fw * z)}px`,
+        `height:${Math.round(fh * z)}px`,
+    ].join(";")
+}
+
+function renderAnimationList() {
+    const list = document.getElementById("animation-list")
+    if (!list) return
+
+    if (!state.animationSkins.length) {
+        list.innerHTML = `<p class="prop-meta">Create one folder per animation in <code>sprites/animations/</code> with a PNG + auto <code>{name}.json</code></p>`
+        return
+    }
+
+    list.innerHTML = state.animationSkins.map((entry) => `
+        <div class="animal-list-item">
+            <div class="animal-list-thumb" style="${animationThumbStyle(entry)}"></div>
+            <div class="animal-list-meta">
+                <strong>${entry.id}</strong>
+                <span>${entry.width}×${entry.height} · 9 frames · ${entry.frameMs || 180}ms${entry.customFrames ? " · custom" : ""}</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" data-edit-animation="${entry.id}">Edit frames</button>
+        </div>
+    `).join("")
+}
+
+async function openAnimationFrameEditor(animationId) {
+    const res = await fetch(`/api/animations/${encodeURIComponent(animationId)}/frames`)
+    const data = await res.json()
+    if (!res.ok) {
+        showToast(data.error || "Could not load animation frames", true)
+        return
+    }
+
+    const img = new Image()
+    img.src = `${animationSpriteUrl(data.animation)}?v=${Date.now()}`
+    await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = () => reject(new Error("Could not load animation image"))
+    })
+
+    const loop0 = data.frames?.loop_0
+    const fallback = defaultAnimationFrameSize(data.animation)
+    const fixedW = data.frameWidth || loop0?.w || data.animation.frameWidth || fallback.w
+    const fixedH = data.frameHeight || loop0?.h || data.animation.frameHeight || fallback.h
+
+    state.animalFrameEditor = {
+        open: true,
+        editorKind: "animation",
+        animal: data.animation,
+        frames: { ...(data.frames || {}) },
+        direction: "down",
+        slot: 0,
+        displayScale: data.displayScale || data.animation.displayScale || 1,
+        frameMs: data.frameMs || data.animation.frameMs || 180,
+        fixedFrameW: fixedW,
+        fixedFrameH: fixedH,
+        customFrames: Boolean(data.customFrames),
+        image: img,
+        drag: null,
+        canvasLayout: null,
+    }
+
+    const modal = document.getElementById("animal-frame-modal")
+    modal?.classList.remove("hidden")
+    modal?.setAttribute("aria-hidden", "false")
+    document.getElementById("animal-frame-title").textContent = `${data.animation.id} loop animation`
+    document.getElementById("animal-frame-scale").value = String(state.animalFrameEditor.displayScale)
+    document.getElementById("animal-frame-directions")?.classList.add("hidden")
+    document.getElementById("animal-frame-ms-wrap")?.classList.remove("hidden")
+    document.getElementById("anim-gear-use-wrap")?.classList.remove("hidden")
+    document.getElementById("anim-gear-use-help")?.classList.remove("hidden")
+    const gearUseEl = document.getElementById("anim-gear-use-target")
+    if (gearUseEl) {
+        gearUseEl.checked = Boolean(data.gearUseTarget || data.animation?.gearUseTarget)
+    }
+    document.getElementById("animal-frame-ms").value = String(state.animalFrameEditor.frameMs)
+    document.getElementById("animal-frame-help").textContent =
+        "Fixed size for all frames · Clear → set W/H → Apply to all 9 · click map to place"
+    syncAnimationEditorChrome()
+
+    renderAnimalFrameSidebar()
+    resizeAnimalFrameCanvas()
+    drawAnimalFrameCanvas()
 }
 
 function renderAnimalList() {
@@ -3415,11 +4365,13 @@ async function openAnimalFrameEditor(animalId) {
 
     state.animalFrameEditor = {
         open: true,
+        editorKind: "animal",
         animal: data.animal,
         frames: { ...(data.frames || {}) },
         direction: "down",
         slot: 0,
         displayScale: data.displayScale || data.animal.displayScale || 1,
+        frameMs: 120,
         customFrames: Boolean(data.customFrames),
         image: img,
         drag: null,
@@ -3431,6 +4383,13 @@ async function openAnimalFrameEditor(animalId) {
     modal?.setAttribute("aria-hidden", "false")
     document.getElementById("animal-frame-title").textContent = `${data.animal.id} sprite frames`
     document.getElementById("animal-frame-scale").value = String(state.animalFrameEditor.displayScale)
+    document.getElementById("animal-frame-directions")?.classList.remove("hidden")
+    document.getElementById("animal-frame-ms-wrap")?.classList.add("hidden")
+    document.getElementById("anim-gear-use-wrap")?.classList.add("hidden")
+    document.getElementById("anim-gear-use-help")?.classList.add("hidden")
+    document.getElementById("animal-frame-help").textContent =
+        "Idle uses frame 1 · scale targets ~48px on the tile grid"
+    syncAnimationEditorChrome()
 
     renderAnimalFrameSidebar()
     resizeAnimalFrameCanvas()
@@ -3447,22 +4406,30 @@ function closeAnimalFrameEditor() {
 
 function renderAnimalFrameSidebar() {
     const editor = state.animalFrameEditor
+    const isAnim = editor.editorKind === "animation"
     const dirWrap = document.getElementById("animal-frame-directions")
     const slotWrap = document.getElementById("animal-frame-slots")
-    if (!dirWrap || !slotWrap) return
+    if (!slotWrap) return
 
-    dirWrap.innerHTML = ANIMAL_DIRECTIONS.map((direction) => `
-        <button type="button" class="animal-frame-dir ${direction === editor.direction ? "active" : ""}" data-direction="${direction}">
-            ${direction}
-        </button>
-    `).join("")
+    if (dirWrap) {
+        dirWrap.classList.toggle("hidden", isAnim)
+        if (!isAnim) {
+            dirWrap.innerHTML = ANIMAL_DIRECTIONS.map((direction) => `
+                <button type="button" class="animal-frame-dir ${direction === editor.direction ? "active" : ""}" data-direction="${direction}">
+                    ${direction}
+                </button>
+            `).join("")
+        }
+    }
 
-    slotWrap.innerHTML = Array.from({ length: ANIMAL_FRAMES_PER_DIR }, (_, slot) => {
+    const slotCount = isAnim ? ANIMATION_LOOP_SLOTS : ANIMAL_FRAMES_PER_DIR
+    slotWrap.innerHTML = Array.from({ length: slotCount }, (_, slot) => {
         const key = animalFrameKey(editor.direction, slot)
         const hasFrame = Boolean(editor.frames[key])
+        const idleLabel = !isAnim && slot === 1 ? " · idle" : ""
         return `
             <button type="button" class="animal-frame-slot ${slot === editor.slot ? "active" : ""} ${hasFrame ? "has-frame" : ""}" data-slot="${slot}">
-                ${slot}${slot === 1 ? " · idle" : ""}
+                ${slot}${idleLabel}
             </button>
         `
     }).join("")
@@ -3650,6 +4617,10 @@ function findFrameHit(point, frames, preferredKey) {
 function selectAnimalFrameFromKey(key) {
     const parsed = parseAnimalFrameKey(key)
     if (!parsed) return
+    if (parsed.kind === "loop") {
+        state.animalFrameEditor.slot = parsed.slot
+        return
+    }
     state.animalFrameEditor.direction = parsed.direction
     state.animalFrameEditor.slot = parsed.slot
 }
@@ -3720,8 +4691,18 @@ function drawAnimalFrameCanvas() {
         const parsed = parseAnimalFrameKey(key)
         if (!parsed) continue
         const box = spriteRectToCanvas(rect, layout)
-        const color = ANIMAL_DIR_COLORS[parsed.direction] || "rgba(255,255,255,0.25)"
-        const selected = parsed.direction === editor.direction && parsed.slot === editor.slot
+        let color
+        let selected
+        let label
+        if (parsed.kind === "loop") {
+            color = ANIM_LOOP_COLOR
+            selected = parsed.slot === editor.slot
+            label = String(parsed.slot)
+        } else {
+            color = ANIMAL_DIR_COLORS[parsed.direction] || "rgba(255,255,255,0.25)"
+            selected = parsed.direction === editor.direction && parsed.slot === editor.slot
+            label = `${parsed.direction[0]}${parsed.slot}`
+        }
 
         ctx.fillStyle = color
         ctx.fillRect(box.x, box.y, box.w, box.h)
@@ -3731,9 +4712,9 @@ function drawAnimalFrameCanvas() {
 
         ctx.fillStyle = selected ? "#facc15" : "#ffffff"
         ctx.font = "11px sans-serif"
-        ctx.fillText(`${parsed.direction[0]}${parsed.slot}`, box.x + 4, box.y + 13)
+        ctx.fillText(label, box.x + 4, box.y + 13)
 
-        if (selected) {
+        if (selected && !isAnimationEditor()) {
             drawFrameResizeHandles(ctx, box)
         }
     }
@@ -3756,6 +4737,28 @@ function resizeAnimalFrameCanvas() {
 function resetAnimalFrameGrid() {
     const editor = state.animalFrameEditor
     if (!editor.animal) return
+
+    if (editor.editorKind === "animation") {
+        const { w: frameW, h: frameH } = readAnimationFixedSizeInputs()
+        editor.fixedFrameW = frameW
+        editor.fixedFrameH = frameH
+        const frames = {}
+        for (let slot = 0; slot < ANIMATION_LOOP_SLOTS; slot++) {
+            const col = slot % ANIMATION_LOOP_COLS
+            const row = Math.floor(slot / ANIMATION_LOOP_COLS)
+            frames[`loop_${slot}`] = {
+                x: col * frameW,
+                y: row * frameH,
+                w: frameW,
+                h: frameH,
+            }
+        }
+        editor.frames = frames
+        editor.customFrames = false
+        renderAnimalFrameSidebar()
+        drawAnimalFrameCanvas()
+        return
+    }
 
     const cols = editor.animal.columns || ANIMAL_FRAMES_PER_DIR
     const rows = editor.animal.rows || ANIMAL_DIRECTIONS.length
@@ -3786,6 +4789,47 @@ async function saveAnimalFrameEditor() {
     if (!editor.animal) return
 
     const displayScale = Number(document.getElementById("animal-frame-scale")?.value)
+
+    if (editor.editorKind === "animation") {
+        const frameMs = Number(document.getElementById("animal-frame-ms")?.value)
+        const { w: frameW, h: frameH } = readAnimationFixedSizeInputs()
+        const gearUseTarget = document.getElementById("anim-gear-use-target")?.checked
+        const normalizedFrames = normalizeAnimationFramesForSave(editor.frames)
+        const res = await fetch(`/api/animations/${encodeURIComponent(editor.animal.id)}/frames`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                frames: normalizedFrames,
+                displayScale: Number.isFinite(displayScale) ? displayScale : editor.displayScale,
+                frameMs: Number.isFinite(frameMs) ? frameMs : editor.frameMs,
+                frameWidth: frameW,
+                frameHeight: frameH,
+                gearUseTarget: Boolean(gearUseTarget),
+            }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+            showToast(data.error || "Could not save animation frames", true)
+            return
+        }
+
+        editor.customFrames = true
+        editor.frames = normalizedFrames
+        editor.frameMs = data.frameMs || editor.frameMs
+        if (data.animation) {
+            const idx = state.animationSkins.findIndex((entry) => entry.id === data.animation.id)
+            if (idx >= 0) state.animationSkins[idx] = data.animation
+            else state.animationSkins.push(data.animation)
+        }
+
+        const catalogRes = await fetch("/api/sprites")
+        state.catalog = await catalogRes.json()
+        renderAnimationList()
+        renderSpriteGrid({ preserveScroll: true })
+        showToast(data.message || "Animation frames saved")
+        return
+    }
+
     const res = await fetch(`/api/animals/${encodeURIComponent(editor.animal.id)}/frames`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3819,9 +4863,16 @@ function bindAnimalFrameEditor() {
         openAnimalFrameEditor(btn.dataset.editAnimal)
     })
 
+    document.getElementById("animation-list")?.addEventListener("click", (e) => {
+        const editBtn = e.target.closest("[data-edit-animation]")
+        if (editBtn) openAnimationFrameEditor(editBtn.dataset.editAnimation)
+    })
+
     document.getElementById("btn-animal-frame-close")?.addEventListener("click", closeAnimalFrameEditor)
     document.getElementById("btn-animal-frame-reset")?.addEventListener("click", resetAnimalFrameGrid)
     document.getElementById("btn-animal-frame-save")?.addEventListener("click", saveAnimalFrameEditor)
+    document.getElementById("btn-anim-clear-frames")?.addEventListener("click", clearAnimationFrames)
+    document.getElementById("btn-anim-apply-size")?.addEventListener("click", applyFixedFrameSizeToAll)
 
     document.getElementById("animal-frame-directions")?.addEventListener("click", (e) => {
         const btn = e.target.closest("[data-direction]")
@@ -3860,20 +4911,22 @@ function bindAnimalFrameEditor() {
         const existing = editor.frames[key]
 
         if (existing) {
-            const handle = hitFrameHandle(canvasPoint, existing, layout)
-            if (handle) {
-                editor.drag = {
-                    pointerId: e.pointerId,
-                    start,
-                    preview: { ...existing },
-                    mode: "resize",
-                    handle,
-                    origin: { ...existing },
-                    key,
+            if (!isAnimationEditor()) {
+                const handle = hitFrameHandle(canvasPoint, existing, layout)
+                if (handle) {
+                    editor.drag = {
+                        pointerId: e.pointerId,
+                        start,
+                        preview: { ...existing },
+                        mode: "resize",
+                        handle,
+                        origin: { ...existing },
+                        key,
+                    }
+                    canvas.setPointerCapture(e.pointerId)
+                    drawAnimalFrameCanvas()
+                    return
                 }
-                canvas.setPointerCapture(e.pointerId)
-                drawAnimalFrameCanvas()
-                return
             }
             if (pointInSpriteRect(start, existing)) {
                 editor.drag = {
@@ -3888,6 +4941,25 @@ function bindAnimalFrameEditor() {
                 drawAnimalFrameCanvas()
                 return
             }
+        }
+
+        if (isAnimationEditor()) {
+            const { w: fw, h: fh } = readAnimationFixedSizeInputs()
+            const maxW = editor.animal.width
+            const maxH = editor.animal.height
+            editor.frames[key] = clampFrameRect(
+                {
+                    x: Math.round(start.x),
+                    y: Math.round(start.y),
+                    w: fw,
+                    h: fh,
+                },
+                maxW,
+                maxH
+            )
+            renderAnimalFrameSidebar()
+            drawAnimalFrameCanvas()
+            return
         }
 
         editor.drag = {
@@ -3919,26 +4991,44 @@ function bindAnimalFrameEditor() {
         const maxH = editor.animal.height
 
         if (editor.drag.mode === "draw") {
-            const x = Math.min(editor.drag.start.x, point.x)
-            const y = Math.min(editor.drag.start.y, point.y)
-            const w = Math.abs(point.x - editor.drag.start.x)
-            const h = Math.abs(point.y - editor.drag.start.y)
-            editor.drag.preview = clampFrameRect(
-                {
-                    x: Math.round(x),
-                    y: Math.round(y),
-                    w: Math.round(w),
-                    h: Math.round(h),
-                },
-                maxW,
-                maxH
-            )
+            if (isAnimationEditor()) {
+                const { w: fw, h: fh } = readAnimationFixedSizeInputs()
+                editor.drag.preview = clampFrameRect(
+                    {
+                        x: Math.round(editor.drag.start.x),
+                        y: Math.round(editor.drag.start.y),
+                        w: fw,
+                        h: fh,
+                    },
+                    maxW,
+                    maxH
+                )
+            } else {
+                const x = Math.min(editor.drag.start.x, point.x)
+                const y = Math.min(editor.drag.start.y, point.y)
+                const w = Math.abs(point.x - editor.drag.start.x)
+                const h = Math.abs(point.y - editor.drag.start.y)
+                editor.drag.preview = clampFrameRect(
+                    {
+                        x: Math.round(x),
+                        y: Math.round(y),
+                        w: Math.round(w),
+                        h: Math.round(h),
+                    },
+                    maxW,
+                    maxH
+                )
+            }
         } else if (editor.drag.mode === "move" && editor.drag.origin) {
+            const size = isAnimationEditor()
+                ? readAnimationFixedSizeInputs()
+                : { w: editor.drag.origin.w, h: editor.drag.origin.h }
             editor.drag.preview = clampFrameRect(
                 {
-                    ...editor.drag.origin,
                     x: Math.round(editor.drag.origin.x + (point.x - editor.drag.start.x)),
                     y: Math.round(editor.drag.origin.y + (point.y - editor.drag.start.y)),
+                    w: size.w,
+                    h: size.h,
                 },
                 maxW,
                 maxH
@@ -3981,6 +5071,8 @@ async function init() {
     try {
         await loadCharacters()
         await loadAnimals()
+        await loadAnimations()
+        await loadGearItems()
         await loadCatalog()
         await loadMap()
         renderSheetTabs()
