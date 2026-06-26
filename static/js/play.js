@@ -75,8 +75,9 @@
         }
         if (walletBarLabel) {
             walletBarLabel.textContent = address
-                ? `${address.slice(0, 4)}…${address.slice(-4)} connected`
-                : "Wallet connected"
+                ? `${address.slice(0, 4)}…${address.slice(-4)}`
+                : ""
+            walletBarLabel.classList.toggle("hidden", !address)
         }
         if (walletDisconnectBtn) {
             walletDisconnectBtn.disabled = !token

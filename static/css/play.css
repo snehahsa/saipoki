@@ -225,8 +225,9 @@ body.play-body {
     right: 14px;
     z-index: 10160;
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
     pointer-events: auto;
 }
 
@@ -238,11 +239,22 @@ body.play-in-app:has(#game-screen:not(.hidden)) .play-wallet-bar {
     display: none !important;
 }
 
-.play-wallet-bar-label {
+.play-wallet-bar-address {
+    padding: 6px 10px;
+    border: 2px solid rgba(93, 255, 157, 0.55);
+    border-radius: 6px;
+    background: rgba(93, 255, 157, 0.14);
+    box-shadow:
+        0 0 12px rgba(93, 255, 157, 0.22),
+        inset 0 0 10px rgba(93, 255, 157, 0.08);
     font-size: 9px;
     letter-spacing: 0.06em;
-    color: var(--play-muted);
+    color: var(--play-glow);
     text-transform: uppercase;
+}
+
+.play-wallet-bar-address.hidden {
+    display: none;
 }
 
 .play-wallet-bar-disconnect {
