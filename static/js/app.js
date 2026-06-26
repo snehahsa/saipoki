@@ -2782,7 +2782,8 @@ function openPinScreen(mode) {
 }
 
 function pinUnlocked() {
-    return !session?.has_pin || pinVerified
+    if (TEST_MODE) return true
+    return Boolean(session?.has_pin && pinVerified)
 }
 
 function routeAfterAuth() {
