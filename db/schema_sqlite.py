@@ -152,3 +152,7 @@ def init_sqlite_schema(conn: Any) -> None:
     from kins_payments import ensure_kins_payments_schema
 
     ensure_kins_payments_schema(conn)
+
+    from wallet_auth import ensure_wallet_auth_schema
+
+    ensure_wallet_auth_schema(conn)

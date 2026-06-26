@@ -57,6 +57,7 @@
                         <button type="button" class="tool-btn" data-tool="erase" title="Erase">🧹 Erase</button>
                         <button type="button" class="tool-btn" data-tool="pick" title="Eyedropper">💧 Pick</button>
                         <button type="button" class="tool-btn" data-tool="spawn" title="Set spawn">⭐ Spawn</button>
+                        <button type="button" class="tool-btn" data-tool="map-boundary" title="Invisible map edge">🚧 Map Edge</button>
                         <button type="button" class="tool-btn" data-tool="boundaries" title="Sprite boundaries">⬡ Boundaries</button>
                         <button type="button" class="tool-btn" data-tool="message" title="Sign messages">💬 Messages</button>
                         <button type="button" class="tool-btn" data-tool="portals" title="Portal links">🌀 Portals</button>
@@ -160,12 +161,25 @@
                 </div>
 
                 <div id="boundary-props" class="item-props hidden">
-                    <div class="panel-subhead">Boundary</div>
+                    <div class="panel-subhead">Sprite boundary</div>
                     <div class="stat-grid">
                         <div class="stat"><span>Points</span><strong id="boundary-point-count">0</strong></div>
                         <div class="stat"><span>Blocked tiles</span><strong id="boundary-tile-count">0</strong></div>
                     </div>
                     <div class="prop-meta">Saves to <code id="boundary-save-path">sprite.json</code> per sprite</div>
+                </div>
+
+                <div id="map-boundary-props" class="item-props hidden">
+                    <div class="panel-subhead">Map edge (invisible)</div>
+                    <p class="prop-meta">Draw connected lines on this map. Players cannot cross them or leave the enclosed area. Not shown in-game.</p>
+                    <div class="stat-grid">
+                        <div class="stat"><span>Points</span><strong id="map-boundary-point-count">0</strong></div>
+                        <div class="stat"><span>Blocked tiles</span><strong id="map-boundary-tile-count">0</strong></div>
+                    </div>
+                    <div class="map-boundary-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-map-boundary-undo">Undo point</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-map-boundary-clear">Clear</button>
+                    </div>
                 </div>
 
                 <div id="message-props" class="item-props hidden">
@@ -224,15 +238,47 @@
                     <div class="panel-subhead">Portal connections</div>
                     <div class="portal-actions">
                         <button type="button" class="btn btn-ghost btn-sm" id="btn-new-portal-connection">+ New connection</button>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-portal-list-scope">All maps</button>
                         <button type="button" class="btn btn-ghost btn-sm" id="btn-remove-all-portals">Remove all portals</button>
                     </div>
+                    <p id="portal-list-filter" class="prop-meta portal-list-filter"></p>
                     <div id="portal-list" class="portal-list"></div>
-                    <p class="prop-meta">Each link has an Enter spot and an Exit spot. Use Edit Enter or Edit Exit to move either side on the map.</p>
+                    <div id="portal-connection-detail" class="portal-connection-detail hidden">
+                        <div class="panel-subhead">Edit connection</div>
+                        <p id="portal-conn-label" class="prop-meta portal-conn-label"></p>
+                        <label class="field">
+                            <span>Title</span>
+                            <input type="text" id="portal-conn-title" maxlength="48" placeholder="Portal title">
+                        </label>
+                        <label class="field">
+                            <span>Message</span>
+                            <textarea id="portal-conn-message" rows="2" maxlength="500" placeholder="Step through to continue."></textarea>
+                        </label>
+                        <label class="field">
+                            <span>Exit map</span>
+                            <select id="portal-conn-map-id"></select>
+                        </label>
+                        <div class="portal-coords">
+                            <label class="field field-inline">
+                                <span>Exit X</span>
+                                <input type="number" id="portal-conn-x" step="1">
+                            </label>
+                            <label class="field field-inline">
+                                <span>Exit Y</span>
+                                <input type="number" id="portal-conn-y" step="1">
+                            </label>
+                        </div>
+                        <div class="portal-actions">
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-portal-conn-enter">Pick Enter</button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-portal-conn-exit">Pick Exit</button>
+                        </div>
+                    </div>
+                    <p class="prop-meta">Click a connection or a 🌀 on the map. Use Pick Enter/Exit to move either spot.</p>
                 </div>
 
                 <div id="avatar-props" class="item-props hidden">
                     <div class="panel-subhead">Avatar shop prices</div>
-                    <p class="prop-meta">Set coin cost per trainer avatar. Players pay once to unlock; default skin stays free.</p>
+                    <p class="prop-meta">Set Chip cost per trainer avatar. Players pay once to unlock; default skin stays free.</p>
                     <div class="avatar-shop-actions">
                         <button type="button" class="btn btn-ghost btn-sm" id="btn-avatar-tier-defaults">Apply tier defaults</button>
                         <button type="button" class="btn btn-ghost btn-sm" id="btn-avatar-all-free">All free</button>

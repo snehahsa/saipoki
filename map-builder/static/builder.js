@@ -81,6 +81,7 @@ const state = {
     selectedPlacement: null,
     boundaryPoints: [],
     boundaryColliders: [],
+    mapBoundary: [],
     npcs: [],
     selectedNpcIndex: 0,
     selectedMessageTile: null,
@@ -106,6 +107,8 @@ const state = {
     portalPreview: null,
     portalPreviewReturn: 0,
     portalPick: null,
+    selectedPortalConnectionId: null,
+    portalListShowAll: false,
     animalFrameEditor: {
         open: false,
         editorKind: "animal",
@@ -166,6 +169,11 @@ function cloneTilemap(map) {
 
 function cloneNpcs(list) {
     return JSON.parse(JSON.stringify(list || []))
+}
+
+function cloneMapBoundary(points) {
+    if (!Array.isArray(points)) return []
+    return points.map((p) => ({ x: Number(p.x), y: Number(p.y) }))
 }
 
 function ensureRoomIds(rooms) {
@@ -256,16 +264,124 @@ function resolveExitForEnter(enter) {
     }
 }
 
+function buildEnterPortalRecord(roomIndex, key, cell) {
+    const portal = cell.interaction.portal
+    const { x, y } = parseKey(key)
+    return {
+        sourceRoomIndex: roomIndex,
+        sourceMapId: getRoomId(state.rooms[roomIndex], roomIndex),
+        sourceMapName: getRoomDisplayName(state.rooms[roomIndex], roomIndex),
+        sourceKey: key,
+        sourceX: x,
+        sourceY: y,
+        targetMapId: portal.mapId,
+        targetMapName: getRoomDisplayName(
+            findRoomByMapId(portal.mapId),
+            findRoomIndexByMapId(portal.mapId)
+        ),
+        targetX: portal.x,
+        targetY: portal.y,
+        title: cell.interaction?.title || "Portal",
+    }
+}
+
+function portalConnectionId(enter) {
+    return `${enter.sourceMapId}@${enter.sourceX},${enter.sourceY}`
+}
+
+function resolveEnterFromAnyPortalTile(roomIndex, key, cell) {
+    const interaction = cell?.interaction
+    if (!interaction?.portal?.mapId) return null
+
+    const autoReturn = interaction.portalAutoReturn
+    if (autoReturn) {
+        const match = String(autoReturn).match(/^(.+)@(-?\d+),(-?\d+)$/)
+        if (match) {
+            const [, refMapId, rx, ry] = match
+            const refRoomIdx = findRoomIndexByMapId(refMapId)
+            if (refRoomIdx >= 0) {
+                const refKey = tileKey(Number(rx), Number(ry))
+                const refCell = state.rooms[refRoomIdx]?.tilemap?.[refKey]
+                if (refCell?.interaction?.portal) {
+                    const { x, y } = parseKey(key)
+                    const myMapId = getRoomId(state.rooms[roomIndex], roomIndex)
+                    const myTag = `${myMapId}@${x},${y}`
+                    if (refCell.interaction.portalAutoReturn === myTag) {
+                        return buildEnterPortalRecord(roomIndex, key, cell)
+                    }
+                    if (!refCell.interaction.portalAutoReturn) {
+                        return buildEnterPortalRecord(refRoomIdx, refKey, refCell)
+                    }
+                    return resolveEnterFromAnyPortalTile(refRoomIdx, refKey, refCell)
+                }
+            }
+        }
+    }
+
+    return buildEnterPortalRecord(roomIndex, key, cell)
+}
+
 function collectPortalConnections() {
-    return collectAllPortals()
-        .filter((enter) => {
-            const room = state.rooms[enter.sourceRoomIndex]
-            return !room?.tilemap?.[enter.sourceKey]?.interaction?.portalAutoReturn
-        })
-        .map((enter) => ({
-            enter,
-            exit: resolveExitForEnter(enter),
-        }))
+    const seen = new Set()
+    const connections = []
+    state.rooms.forEach((room, roomIndex) => {
+        for (const [key, cell] of Object.entries(room.tilemap || {})) {
+            if (!cell?.interaction?.portal?.mapId) continue
+            const enter = resolveEnterFromAnyPortalTile(roomIndex, key, cell)
+            if (!enter) continue
+            const id = portalConnectionId(enter)
+            if (seen.has(id)) continue
+            seen.add(id)
+            connections.push({
+                id,
+                enter,
+                exit: resolveExitForEnter(enter),
+            })
+        }
+    })
+    return connections
+}
+
+function connectionTouchesRoom(connection, roomIndex) {
+    const { enter, exit } = connection
+    if (enter.sourceRoomIndex === roomIndex) return true
+    if (exit?.roomIndex === roomIndex) return true
+    return false
+}
+
+function getPortalConnectionsForDisplay() {
+    const all = collectPortalConnections()
+    if (state.portalListShowAll) return all
+    return all.filter((c) => connectionTouchesRoom(c, state.roomIndex))
+}
+
+function getSelectedPortalConnection() {
+    if (!state.selectedPortalConnectionId) return null
+    return collectPortalConnections().find((c) => c.id === state.selectedPortalConnectionId) || null
+}
+
+function focusPortalConnection(connection) {
+    if (!connection) return
+    state.selectedPortalConnectionId = connection.id
+    state.tool = "portals"
+    syncTools()
+    updatePortalConnectionEditor()
+    renderPortalList()
+    draw()
+}
+
+function focusPortalConnectionAt(roomIndex, key) {
+    const cell = state.rooms[roomIndex]?.tilemap?.[key]
+    if (!cell?.interaction?.portal?.mapId) return false
+    const enter = resolveEnterFromAnyPortalTile(roomIndex, key, cell)
+    if (!enter) return false
+    const id = portalConnectionId(enter)
+    const connection = collectPortalConnections().find((c) => c.id === id)
+    if (!connection) return false
+    const { x, y } = parseKey(key)
+    pickTile(x, y)
+    focusPortalConnection(connection)
+    return true
 }
 
 function upsertPortalConnection({
@@ -408,6 +524,9 @@ function deletePortalConnection(connection) {
         updateMessageEditor()
         updatePortalSpotDisplay()
     }
+    if (state.selectedPortalConnectionId === portalConnectionId(enter)) {
+        state.selectedPortalConnectionId = null
+    }
     renderPortalList()
     pushHistory()
     draw()
@@ -513,6 +632,12 @@ function applyPortalPick(x, y) {
         }
         updateMessageEditor()
         updatePortalSpotDisplay()
+        const enterCell = state.rooms[draft.sourceRoomIndex]?.tilemap?.[key]
+        if (enterCell?.interaction?.portal) {
+            const enter = buildEnterPortalRecord(draft.sourceRoomIndex, key, enterCell)
+            state.selectedPortalConnectionId = portalConnectionId(enter)
+            updatePortalConnectionEditor()
+        }
         renderPortalList()
         draw()
         return true
@@ -556,18 +681,35 @@ function applyPortalPick(x, y) {
     document.getElementById("portal-x").value = String(x)
     document.getElementById("portal-y").value = String(y)
 
+    const keepPortalsTool = state.tool === "portals"
+
     if (sourceRoomIndex !== state.roomIndex) {
-        loadRoomIntoEditor(sourceRoomIndex, { skipHistory: true })
+        loadRoomIntoEditor(sourceRoomIndex, { skipHistory: true, keepPortalPick: keepPortalsTool })
         state.selectedMessageTile = sourceKey
-        state.tool = "message"
-        syncTools()
+        if (!keepPortalsTool) {
+            state.tool = "message"
+            syncTools()
+        }
     } else {
         state.selectedMessageTile = sourceKey
-        setInteraction(sourceKey, readMessageFieldsFromDom(), { refreshOptionsUI: false })
+        if (!keepPortalsTool) {
+            setInteraction(sourceKey, readMessageFieldsFromDom(), { refreshOptionsUI: false })
+        }
     }
 
+    const enterCell = state.rooms[sourceRoomIndex]?.tilemap?.[sourceKey]
+    if (enterCell?.interaction?.portal) {
+        state.selectedPortalConnectionId = portalConnectionId(
+            buildEnterPortalRecord(sourceRoomIndex, sourceKey, enterCell)
+        )
+    }
+    if (keepPortalsTool) {
+        state.tool = "portals"
+        syncTools()
+    } else {
+        updateMessageEditor()
+    }
     pushHistory()
-    updateMessageEditor()
     updatePortalSpotDisplay()
     renderPortalList()
     showToast(`Exit portal set at ${x}, ${y}`)
@@ -666,6 +808,7 @@ function persistCurrentRoom() {
         tilemap: cloneTilemap(state.tilemap),
         npcs: cloneNpcs(state.npcs),
         ...(state.roomMeta?.channelId ? { channelId: state.roomMeta.channelId } : {}),
+        ...(state.mapBoundary?.length ? { mapBoundary: cloneMapBoundary(state.mapBoundary) } : {}),
     }
 }
 
@@ -688,16 +831,26 @@ function loadRoomIntoEditor(index, { skipPersist = false, skipHistory = false, k
     state.roomName = getRoomDisplayName(room, index)
     state.tilemap = cloneTilemap(room.tilemap || {})
     state.npcs = cloneNpcs(room.npcs || [])
+    state.mapBoundary = cloneMapBoundary(room.mapBoundary || [])
     state.roomMeta = { channelId: room.channelId }
     state.selectedNpcIndex = Math.min(state.selectedNpcIndex, Math.max(0, state.npcs.length - 1))
     state.selectedMessageTile = null
     state.selectedPlacement = null
+
+    if (Object.keys(state.tilemap).length === 0 && !keepPortalPick) {
+        if (state.tool === "message" || state.tool === "portals" || state.portalPick) {
+            cancelPortalPick()
+            state.tool = "paint"
+            syncTools()
+        }
+    }
 
     document.getElementById("room-name").value = state.roomName
     document.getElementById("room-map-id").value = getRoomId(room, index)
 
     updateNpcEditor()
     updateMessageEditor()
+    updateMapBoundaryEditor()
     updatePortalMapIdSelect()
     renderRoomTabs()
     renderPortalList()
@@ -717,8 +870,11 @@ function addRoom() {
         tilemap: {},
         npcs: [],
     })
+    cancelPortalPick()
+    state.tool = "paint"
     loadRoomIntoEditor(newIndex)
-    showToast(`Added ${defaultRoomNameForIndex(newIndex)}`)
+    syncTools()
+    showToast(`Added ${defaultRoomNameForIndex(newIndex)} — pick a sprite, then paint`)
 }
 
 function collectAllPortals() {
@@ -775,41 +931,138 @@ function renderRoomTabs() {
 }
 
 function updatePortalMapIdSelect() {
-    const select = document.getElementById("portal-map-id")
-    if (!select) return
-    const current = select.value
-    select.innerHTML = ""
-    const placeholder = document.createElement("option")
-    placeholder.value = ""
-    placeholder.textContent = "Select target map…"
-    select.appendChild(placeholder)
-    state.rooms.forEach((room, index) => {
-        const option = document.createElement("option")
-        const mapId = getRoomId(room, index)
-        option.value = mapId
-        option.textContent = `${mapId} — ${getRoomDisplayName(room, index)}`
-        select.appendChild(option)
+    const selects = [
+        document.getElementById("portal-map-id"),
+        document.getElementById("portal-conn-map-id"),
+    ].filter(Boolean)
+    if (!selects.length) return
+
+    selects.forEach((select) => {
+        const current = select.value
+        select.innerHTML = ""
+        const placeholder = document.createElement("option")
+        placeholder.value = ""
+        placeholder.textContent = "Select target map…"
+        select.appendChild(placeholder)
+        state.rooms.forEach((room, index) => {
+            const option = document.createElement("option")
+            const mapId = getRoomId(room, index)
+            option.value = mapId
+            option.textContent = `${mapId} — ${getRoomDisplayName(room, index)}`
+            select.appendChild(option)
+        })
+        if (current && [...select.options].some((opt) => opt.value === current)) {
+            select.value = current
+        }
     })
-    if (current && [...select.options].some((opt) => opt.value === current)) {
-        select.value = current
+}
+
+function updatePortalConnectionEditor() {
+    const panel = document.getElementById("portal-connection-detail")
+    if (!panel) return
+    const connection = getSelectedPortalConnection()
+    panel.classList.toggle("hidden", !connection)
+    if (!connection) return
+
+    updatePortalMapIdSelect()
+    const { enter } = connection
+    const sourceRoom = state.rooms[enter.sourceRoomIndex]
+    const interaction = sourceRoom?.tilemap?.[enter.sourceKey]?.interaction || {}
+    const portal = interaction.portal || {}
+
+    const label = document.getElementById("portal-conn-label")
+    if (label) {
+        label.textContent = `${enter.sourceMapName} (${enter.sourceMapId}) @ ${enter.sourceX}, ${enter.sourceY}`
     }
+    const titleInput = document.getElementById("portal-conn-title")
+    const messageInput = document.getElementById("portal-conn-message")
+    const mapIdInput = document.getElementById("portal-conn-map-id")
+    const xInput = document.getElementById("portal-conn-x")
+    const yInput = document.getElementById("portal-conn-y")
+    if (titleInput) titleInput.value = interaction.title || ""
+    if (messageInput) messageInput.value = interaction.message || ""
+    if (mapIdInput) mapIdInput.value = portal.mapId || ""
+    if (xInput) xInput.value = Number.isFinite(portal.x) ? String(portal.x) : ""
+    if (yInput) yInput.value = Number.isFinite(portal.y) ? String(portal.y) : ""
+}
+
+function applyPortalConnectionFields() {
+    const connection = getSelectedPortalConnection()
+    if (!connection) return
+    const { enter } = connection
+    persistCurrentRoom()
+
+    const title = document.getElementById("portal-conn-title")?.value.trim() || "Portal"
+    const message = document.getElementById("portal-conn-message")?.value.trim() || ""
+    const portalMapId = document.getElementById("portal-conn-map-id")?.value.trim() || ""
+    const portalX = Number(document.getElementById("portal-conn-x")?.value)
+    const portalY = Number(document.getElementById("portal-conn-y")?.value)
+
+    const sourceRoom = state.rooms[enter.sourceRoomIndex]
+    if (!sourceRoom.tilemap[enter.sourceKey]) sourceRoom.tilemap[enter.sourceKey] = {}
+    const interaction = sourceRoom.tilemap[enter.sourceKey].interaction || {}
+    sourceRoom.tilemap[enter.sourceKey].interaction = {
+        ...interaction,
+        title,
+        message: message || interaction.message || "Step through to continue.",
+        showExit: interaction.showExit !== false,
+    }
+    delete sourceRoom.tilemap[enter.sourceKey].interaction.portalAutoReturn
+
+    if (portalMapId && Number.isFinite(portalX) && Number.isFinite(portalY)) {
+        sourceRoom.tilemap[enter.sourceKey].interaction.portal = {
+            mapId: portalMapId,
+            x: portalX,
+            y: portalY,
+        }
+        const targetIndex = findRoomIndexByMapId(portalMapId)
+        if (targetIndex >= 0) {
+            upsertPortalConnection({
+                sourceRoomIndex: enter.sourceRoomIndex,
+                sourceKey: enter.sourceKey,
+                targetRoomIndex: targetIndex,
+                exitX: portalX,
+                exitY: portalY,
+            })
+        }
+    }
+
+    if (state.roomIndex === enter.sourceRoomIndex) {
+        state.tilemap = cloneTilemap(sourceRoom.tilemap)
+    }
+    renderPortalList()
+    pushHistory()
+    draw()
 }
 
 function renderPortalList() {
     const list = document.getElementById("portal-list")
     if (!list) return
-    const connections = collectPortalConnections()
+    const connections = getPortalConnectionsForDisplay()
+    const allCount = collectPortalConnections().length
     list.innerHTML = ""
+
+    const filterRow = document.getElementById("portal-list-filter")
+    if (filterRow) {
+        const roomName = getRoomDisplayName(state.rooms[state.roomIndex], state.roomIndex)
+        filterRow.textContent = state.portalListShowAll
+            ? `All maps (${allCount} connection${allCount === 1 ? "" : "s"})`
+            : `${roomName} (${connections.length} of ${allCount})`
+    }
+
     if (!connections.length) {
-        list.innerHTML =
-            '<p class="prop-meta interaction-options-empty">No portal connections yet. Use Messages or the buttons below to add one.</p>'
+        list.innerHTML = state.portalListShowAll
+            ? '<p class="prop-meta interaction-options-empty">No portal connections yet. Use + New connection below.</p>'
+            : `<p class="prop-meta interaction-options-empty">No portals on this map. Toggle “All maps” or add a connection.</p>`
+        updatePortalConnectionEditor()
         return
     }
 
     connections.forEach((connection) => {
-        const { enter, exit } = connection
+        const { enter, exit, id } = connection
         const card = document.createElement("div")
         card.className = "portal-card"
+        if (id === state.selectedPortalConnectionId) card.classList.add("selected")
         const exitLabel = exit
             ? `${exit.mapName || exit.mapId} @ ${exit.x}, ${exit.y}${exit.missing ? " (needs exit item)" : ""}`
             : `${enter.targetMapName || enter.targetMapId} @ ${enter.targetX}, ${enter.targetY}`
@@ -832,6 +1085,10 @@ function renderPortalList() {
                 <button type="button" class="btn btn-ghost btn-sm portal-remove-btn">Remove</button>
             </div>
         `
+        card.addEventListener("click", (e) => {
+            if (e.target.closest("button")) return
+            focusPortalConnection(connection)
+        })
         card.querySelector(".portal-pick-enter-btn").addEventListener("click", () => {
             closePortalPreview()
             startPortalPick("enter", {
@@ -865,6 +1122,7 @@ function renderPortalList() {
         })
         list.appendChild(card)
     })
+    updatePortalConnectionEditor()
 }
 
 function openPortalPreview(portal) {
@@ -1028,6 +1286,7 @@ function pushHistory() {
         tilemap: cloneTilemap(state.tilemap),
         spawnpoint: { ...state.spawnpoint },
         npcs: cloneNpcs(state.npcs),
+        mapBoundary: cloneMapBoundary(state.mapBoundary),
     })
     if (state.history.length > 80) state.history.shift()
     state.historyIndex = state.history.length - 1
@@ -1049,12 +1308,14 @@ function applySnapshot(snap) {
     state.tilemap = cloneTilemap(snap.tilemap)
     state.spawnpoint = { ...snap.spawnpoint }
     state.npcs = cloneNpcs(snap.npcs || [])
+    state.mapBoundary = cloneMapBoundary(snap.mapBoundary || [])
     state.selectedPlacement = null
     state.selectedMessageTile = null
     updateStats()
     updatePlacementEditor()
     updateNpcEditor()
     updateMessageEditor()
+    updateMapBoundaryEditor()
     draw()
 }
 
@@ -1350,6 +1611,7 @@ function draw() {
 
     if (!state.portalPreview) drawInteractionMarkers(ctx)
     if (!state.portalPreview) drawNpcPaths(ctx)
+    if (!state.portalPreview) drawMapBoundary(ctx)
     drawPortalPreviewOverlay(ctx)
     if (state.tool === "boundaries") drawMapNameBanner(ctx)
 
@@ -1358,6 +1620,14 @@ function draw() {
 }
 
 function drawInteractionMarkers(targetCtx) {
+    const selected = state.tool === "portals" ? getSelectedPortalConnection() : null
+    const selectedKeys = new Set()
+    if (selected) {
+        const { enter, exit } = selected
+        if (enter.sourceRoomIndex === state.roomIndex) selectedKeys.add(enter.sourceKey)
+        if (exit?.roomIndex === state.roomIndex && exit.key) selectedKeys.add(exit.key)
+    }
+
     for (const [key, cell] of Object.entries(state.tilemap)) {
         const interaction = cell.interaction
         const hasPortal = !!interaction?.portal?.mapId
@@ -1365,6 +1635,14 @@ function drawInteractionMarkers(targetCtx) {
         const { x, y } = parseKey(key)
         const px = x * TILE + TILE / 2
         const py = y * TILE + 6 / state.zoom
+        const isSelected = selectedKeys.has(key)
+        if (isSelected) {
+            targetCtx.strokeStyle = "#facc15"
+            targetCtx.lineWidth = 2 / state.zoom
+            targetCtx.beginPath()
+            targetCtx.arc(px, py, 9 / state.zoom, 0, Math.PI * 2)
+            targetCtx.stroke()
+        }
         targetCtx.fillStyle = hasPortal ? "rgba(167, 139, 250, 0.9)" : "rgba(96, 165, 250, 0.85)"
         targetCtx.beginPath()
         targetCtx.arc(px, py, 5 / state.zoom, 0, Math.PI * 2)
@@ -1489,8 +1767,29 @@ function applyTool(x, y) {
         return
     }
 
+    if (state.tool === "map-boundary") {
+        addMapBoundaryPoint(x, y)
+        draw()
+        return
+    }
+
     if (state.tool === "message") {
         selectMessageTile(x, y)
+        draw()
+        return
+    }
+
+    if (state.tool === "portals") {
+        const key = tileKey(x, y)
+        if (!tileHasPlacement(key)) {
+            showToast("No sprite here — place a tile first", true)
+            return
+        }
+        if (!getInteraction(key)?.portal?.mapId) {
+            showToast("Click a portal marker (🌀) on the map", true)
+            return
+        }
+        focusPortalConnectionAt(state.roomIndex, key)
         draw()
         return
     }
@@ -1514,7 +1813,11 @@ function applyTool(x, y) {
         return
     }
 
-    if (state.tool === "paint" && state.selectedSprite) {
+    if (state.tool === "paint") {
+        if (!state.selectedSprite) {
+            showToast("Select a sprite from the palette first", true)
+            return
+        }
         placeTile(x, y, state.selectedLayer, state.selectedSprite.id)
         updateStats()
         draw()
@@ -1631,10 +1934,10 @@ function selectSprite(sprite) {
     state.selectedLayer = sprite.layer || "floor"
     state.selectedPlacement = null
     state.paintScale = isAnimSprite(sprite) ? 1 : (sprite.defaultScale ?? 1)
-    state.tool = state.tool === "boundaries" ? "boundaries"
-        : state.tool === "message" ? "message"
-        : state.tool === "npc" ? "npc"
-        : state.tool === "avatars" ? "avatars" : "paint"
+    const keepTool = new Set(["boundaries", "npc", "avatars", "animals", "animations", "gear-items", "map-boundary"])
+    if (!keepTool.has(state.tool)) {
+        state.tool = "paint"
+    }
     syncLayerTabs()
     syncTools()
     updateSpriteSelection()
@@ -2638,6 +2941,7 @@ async function saveMap() {
         }
         if (room.channelId) payload.channelId = room.channelId
         if (room.npcs?.length) payload.npcs = cloneNpcs(room.npcs)
+        if (room.mapBoundary?.length) payload.mapBoundary = cloneMapBoundary(room.mapBoundary)
         return payload
     })
 
@@ -2681,6 +2985,156 @@ function pointInPolygon(x, y, polygon) {
         if (intersect) inside = !inside
     }
     return inside
+}
+
+function tilesAlongSegment(a, b) {
+    const keys = []
+    let x0 = a.x
+    let y0 = a.y
+    const x1 = b.x
+    const y1 = b.y
+    const dx = Math.abs(x1 - x0)
+    const dy = Math.abs(y1 - y0)
+    const sx = x0 < x1 ? 1 : -1
+    const sy = y0 < y1 ? 1 : -1
+    let err = dx - dy
+    while (true) {
+        keys.push(tileKey(x0, y0))
+        if (x0 === x1 && y0 === y1) break
+        const e2 = 2 * err
+        if (e2 > -dy) {
+            err -= dy
+            x0 += sx
+        }
+        if (e2 < dx) {
+            err += dx
+            y0 += sy
+        }
+    }
+    return keys
+}
+
+function computeMapBoundaryBlockedPreview(points) {
+    const blocked = new Set()
+    if (!points?.length) return blocked
+
+    for (let i = 0; i < points.length - 1; i++) {
+        for (const key of tilesAlongSegment(points[i], points[i + 1])) {
+            blocked.add(key)
+        }
+    }
+
+    if (points.length >= 3) {
+        for (const key of tilesAlongSegment(points[points.length - 1], points[0])) {
+            blocked.add(key)
+        }
+
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+        const grow = (x, y) => {
+            minX = Math.min(minX, x)
+            minY = Math.min(minY, y)
+            maxX = Math.max(maxX, x)
+            maxY = Math.max(maxY, y)
+        }
+        for (const p of points) grow(p.x, p.y)
+        for (const key of Object.keys(state.tilemap)) {
+            const { x, y } = parseKey(key)
+            grow(x, y)
+        }
+        grow(state.spawnpoint.x, state.spawnpoint.y)
+        const margin = 60
+        minX -= margin
+        minY -= margin
+        maxX += margin
+        maxY += margin
+
+        for (let tx = minX; tx <= maxX; tx++) {
+            for (let ty = minY; ty <= maxY; ty++) {
+                if (!pointInPolygon(tx + 0.5, ty + 0.5, points)) {
+                    blocked.add(tileKey(tx, ty))
+                }
+            }
+        }
+    }
+
+    return blocked
+}
+
+function addMapBoundaryPoint(x, y) {
+    const last = state.mapBoundary[state.mapBoundary.length - 1]
+    if (last && last.x === x && last.y === y) return
+    state.mapBoundary.push({ x, y })
+    updateMapBoundaryEditor()
+}
+
+function undoMapBoundaryPoint() {
+    state.mapBoundary.pop()
+    updateMapBoundaryEditor()
+    draw()
+}
+
+function clearMapBoundary() {
+    state.mapBoundary = []
+    updateMapBoundaryEditor()
+    draw()
+}
+
+function updateMapBoundaryEditor() {
+    const countEl = document.getElementById("map-boundary-point-count")
+    const tileEl = document.getElementById("map-boundary-tile-count")
+    const points = state.mapBoundary || []
+    const blocked = computeMapBoundaryBlockedPreview(points)
+    if (countEl) countEl.textContent = String(points.length)
+    if (tileEl) tileEl.textContent = String(blocked.size)
+}
+
+function drawMapBoundary(targetCtx) {
+    const points = state.mapBoundary || []
+    if (!points.length) return
+
+    const blocked = computeMapBoundaryBlockedPreview(points)
+    if (blocked.size && points.length >= 3) {
+        targetCtx.fillStyle = "rgba(248, 113, 113, 0.12)"
+        for (const key of blocked) {
+            const { x, y } = parseKey(key)
+            if (pointInPolygon(x + 0.5, y + 0.5, points)) continue
+            targetCtx.fillRect(x * TILE, y * TILE, TILE, TILE)
+        }
+    }
+
+    if (points.length >= 2) {
+        targetCtx.strokeStyle = "rgba(251, 146, 60, 0.95)"
+        targetCtx.lineWidth = 3 / state.zoom
+        targetCtx.setLineDash([8 / state.zoom, 5 / state.zoom])
+        targetCtx.beginPath()
+        points.forEach((pt, i) => {
+            const px = pt.x * TILE + TILE / 2
+            const py = pt.y * TILE + TILE / 2
+            if (i === 0) targetCtx.moveTo(px, py)
+            else targetCtx.lineTo(px, py)
+        })
+        if (points.length >= 3) {
+            const first = points[0]
+            targetCtx.lineTo(first.x * TILE + TILE / 2, first.y * TILE + TILE / 2)
+        }
+        targetCtx.stroke()
+        targetCtx.setLineDash([])
+    }
+
+    for (const pt of points) {
+        const px = pt.x * TILE + TILE / 2
+        const py = pt.y * TILE + TILE / 2
+        targetCtx.fillStyle = "#fb923c"
+        targetCtx.beginPath()
+        targetCtx.arc(px, py, 5 / state.zoom, 0, Math.PI * 2)
+        targetCtx.fill()
+        targetCtx.strokeStyle = "#1a1d24"
+        targetCtx.lineWidth = 2 / state.zoom
+        targetCtx.stroke()
+    }
 }
 
 function collidersFromBoundary(boundary, width, height) {
@@ -2970,7 +3424,7 @@ function tileHasPlacement(key) {
 function selectMessageTile(x, y) {
     const key = tileKey(x, y)
     if (!tileHasPlacement(key)) {
-        showToast("Click a tile with a placed sprite", true)
+        showToast("No sprite here — use Paint tool to place tiles first", true)
         return
     }
     state.selectedMessageTile = key
@@ -3732,9 +4186,63 @@ function bindEvents() {
         startPortalPick("exit", draft)
     })
     document.getElementById("btn-new-portal-connection")?.addEventListener("click", () => {
-        state.tool = "message"
+        state.tool = "portals"
         syncTools()
-        startPortalPick("enter", {})
+        startPortalPick("enter", { sourceRoomIndex: state.roomIndex })
+    })
+    document.getElementById("btn-portal-list-scope")?.addEventListener("click", () => {
+        state.portalListShowAll = !state.portalListShowAll
+        const btn = document.getElementById("btn-portal-list-scope")
+        if (btn) btn.textContent = state.portalListShowAll ? "This map only" : "All maps"
+        renderPortalList()
+    })
+    document.getElementById("portal-conn-title")?.addEventListener("change", () => {
+        applyPortalConnectionFields()
+    })
+    document.getElementById("portal-conn-message")?.addEventListener("change", () => {
+        applyPortalConnectionFields()
+    })
+    document.getElementById("portal-conn-map-id")?.addEventListener("change", () => {
+        applyPortalConnectionFields()
+    })
+    document.getElementById("portal-conn-x")?.addEventListener("change", () => {
+        applyPortalConnectionFields()
+    })
+    document.getElementById("portal-conn-y")?.addEventListener("change", () => {
+        applyPortalConnectionFields()
+    })
+    document.getElementById("btn-pick-portal-conn-enter")?.addEventListener("click", () => {
+        const connection = getSelectedPortalConnection()
+        if (!connection) return
+        const { enter } = connection
+        closePortalPreview()
+        startPortalPick("enter", {
+            sourceRoomIndex: enter.sourceRoomIndex,
+            sourceKey: enter.sourceKey,
+            sourceMapId: enter.sourceMapId,
+            sourceX: enter.sourceX,
+            sourceY: enter.sourceY,
+            targetMapId: enter.targetMapId,
+            exitX: enter.targetX,
+            exitY: enter.targetY,
+        })
+    })
+    document.getElementById("btn-pick-portal-conn-exit")?.addEventListener("click", () => {
+        const connection = getSelectedPortalConnection()
+        if (!connection) return
+        const { enter, exit } = connection
+        closePortalPreview()
+        startPortalPick("exit", {
+            sourceRoomIndex: enter.sourceRoomIndex,
+            sourceKey: enter.sourceKey,
+            sourceMapId: enter.sourceMapId,
+            sourceX: enter.sourceX,
+            sourceY: enter.sourceY,
+            targetMapId: enter.targetMapId,
+            targetRoomIndex: exit?.roomIndex ?? findRoomIndexByMapId(enter.targetMapId),
+            exitX: enter.targetX,
+            exitY: enter.targetY,
+        })
     })
     document.getElementById("btn-remove-all-portals")?.addEventListener("click", () => {
         removeAllPortals()
@@ -3918,6 +4426,17 @@ function bindEvents() {
     document.getElementById("btn-boundary-clear").addEventListener("click", clearBoundaryPoints)
     document.getElementById("btn-boundary-save").addEventListener("click", saveBoundary)
 
+    document.getElementById("btn-map-boundary-undo")?.addEventListener("click", () => {
+        if (!state.mapBoundary.length) return
+        pushHistory()
+        undoMapBoundaryPoint()
+    })
+    document.getElementById("btn-map-boundary-clear")?.addEventListener("click", () => {
+        if (!state.mapBoundary.length) return
+        pushHistory()
+        clearMapBoundary()
+    })
+
     boundaryCanvas.addEventListener("pointerdown", (e) => {
         if (state.tool !== "boundaries" || e.button !== 0) return
         const tile = boundaryPointerToTile(e)
@@ -3957,7 +4476,17 @@ function bindEvents() {
         draw()
     }, { passive: false })
 
-    wrap.addEventListener("contextmenu", (e) => e.preventDefault())
+    wrap.addEventListener("contextmenu", (e) => {
+        if (state.tool === "map-boundary") {
+            e.preventDefault()
+            if (state.mapBoundary.length) {
+                pushHistory()
+                undoMapBoundaryPoint()
+            }
+            return
+        }
+        e.preventDefault()
+    })
 
     wrap.addEventListener("pointerdown", (e) => {
         if (shouldPan(e)) {
@@ -3968,6 +4497,11 @@ function bindEvents() {
         if (e.button !== 0) return
         const rect = canvas.getBoundingClientRect()
         const tile = screenToTile(e.clientX - rect.left, e.clientY - rect.top)
+        if (state.tool === "map-boundary") {
+            pushHistory()
+            handlePaint(tile.x, tile.y)
+            return
+        }
         state.painting = true
         pushHistory()
         handlePaint(tile.x, tile.y)
@@ -4025,6 +4559,7 @@ function bindEvents() {
 
 function syncTools() {
     const isBoundary = state.tool === "boundaries"
+    const isMapBoundary = state.tool === "map-boundary"
     const isMessage = state.tool === "message"
     const isPortals = state.tool === "portals"
     const isNpc = state.tool === "npc"
@@ -4033,6 +4568,7 @@ function syncTools() {
     const isAnimations = state.tool === "animations"
     const isGearItems = state.tool === "gear-items"
     const isAltCanvas = isBoundary
+    const isMapEditOverlay = isMessage || isPortals || isNpc || isAvatars || isAnimals || isAnimations || isGearItems || isMapBoundary
     document.querySelectorAll(".tool-btn").forEach((b) => {
         b.classList.toggle("active", b.dataset.tool === state.tool)
     })
@@ -4041,13 +4577,14 @@ function syncTools() {
     boundaryWrap.classList.toggle("hidden", !isBoundary)
     document.getElementById("paint-props").classList.toggle(
         "hidden",
-        isAltCanvas || isMessage || isPortals || isNpc || isAvatars || isAnimals || isAnimations || isGearItems || state.selectedPlacement || !state.selectedSprite
+        isAltCanvas || isMapEditOverlay || state.selectedPlacement || !state.selectedSprite
     )
     document.getElementById("placement-props").classList.toggle(
         "hidden",
-        isAltCanvas || isMessage || isPortals || isNpc || isAvatars || isAnimals || isAnimations || isGearItems || !state.selectedPlacement
+        isAltCanvas || isMapEditOverlay || !state.selectedPlacement
     )
     document.getElementById("boundary-props").classList.toggle("hidden", !isBoundary)
+    document.getElementById("map-boundary-props")?.classList.toggle("hidden", !isMapBoundary)
     document.getElementById("message-props").classList.toggle("hidden", !isMessage)
     document.getElementById("portal-props")?.classList.toggle("hidden", !isPortals)
     document.getElementById("npc-props").classList.toggle("hidden", !isNpc)
@@ -4058,10 +4595,11 @@ function syncTools() {
 
     const hints = {
         boundaries: "Click sprite tiles to add boundary points · Right-click undo last point",
+        "map-boundary": "Click map to add edge points · lines connect in order · 3+ closes walkable area · invisible in game",
         message: "Pick Enter item, choose exit map, then Pick Exit · Purple dot = portal",
-        portals: "Each connection has an Enter spot and an Exit spot — both are editable",
+        portals: "Click a 🌀 portal on the map to select it · list shows connections for this map",
         npc: "Select NPC · click map to add patrol waypoints · green dot = start",
-        avatars: "Set coin price per trainer avatar · saved with the world map",
+        avatars: "Set Chip price per trainer avatar · saved with the world map",
         animals: "Draw boxes · drag inside to move · drag yellow handles to resize · click any box to edit it",
         animations: "3×3 loop frames (0–8) · pick sprite from anim sheet · paint on object layer",
         "gear-items": "Edit attach opens full-screen editor · per-view eligible + drag/drop attach",
@@ -4081,6 +4619,7 @@ function syncTools() {
     if (isAvatars) renderAvatarCostGrid()
     if (isAnimals) renderAnimalList()
     if (isAnimations) renderAnimationList()
+    if (isMapBoundary) updateMapBoundaryEditor()
     updateMapNameOverlay()
 }
 

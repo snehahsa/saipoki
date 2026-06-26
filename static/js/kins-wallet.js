@@ -1,8 +1,28 @@
 (function () {
     let solanaModulesPromise = null
+    let kinsWalletPending = false
 
     function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms))
+    }
+
+    function setKinsWalletPending(active, message) {
+        kinsWalletPending = Boolean(active)
+        document.body.classList.toggle("kins-wallet-pending", kinsWalletPending)
+
+        const overlay = document.getElementById("kins-wallet-pending")
+        const label = document.getElementById("kins-wallet-pending-label")
+        if (overlay) overlay.classList.toggle("hidden", !kinsWalletPending)
+        if (label && message) label.textContent = message
+
+        document.querySelectorAll("[data-kins-buy]").forEach((el) => {
+            el.disabled = kinsWalletPending
+            el.setAttribute("aria-disabled", kinsWalletPending ? "true" : "false")
+        })
+
+        if (!kinsWalletPending && typeof window.SaiPokeKins?.refreshBuyButtons === "function") {
+            window.SaiPokeKins.refreshBuyButtons()
+        }
     }
 
     function bytesToBase58(bytes) {
@@ -99,6 +119,11 @@
             throw new Error("Payment amount mismatch — refresh and try again.")
         }
 
+        const createTreasuryAtaIfNeeded =
+            transfer?.createTreasuryAtaIfNeeded === true ||
+            (transfer?.createTreasuryAtaIfNeeded !== false &&
+                config?.createTreasuryAtaIfNeeded === true)
+
         return {
             amountKins,
             rawAmount,
@@ -106,6 +131,7 @@
             tokenProgram: transfer?.tokenProgram || config?.tokenProgram,
             mint: transfer?.mint || config?.mint,
             treasuryWallet: transfer?.treasuryWallet || config?.treasuryWallet,
+            createTreasuryAtaIfNeeded,
         }
     }
 
@@ -116,12 +142,6 @@
         }
 
         const config = await fetchKinsConfig()
-        if (config.treasuryReady === false) {
-            throw new Error(
-                "Treasury $KINS account is not ready yet. Try again in a few minutes.",
-            )
-        }
-
         const plan = resolveTransferPlan(transfer, config)
         if (!plan.tokenProgram || !plan.mint || !plan.treasuryWallet) {
             throw new Error("Missing $KINS transfer configuration.")
@@ -129,7 +149,11 @@
 
         const { web3, spl } = await loadSolanaModules()
         const { PublicKey, Transaction, Connection } = web3
-        const { getAssociatedTokenAddress, createTransferCheckedInstruction } = spl
+        const {
+            getAssociatedTokenAddress,
+            createTransferCheckedInstruction,
+            createAssociatedTokenAccountIdempotentInstruction,
+        } = spl
 
         const tokenProgramId = new PublicKey(plan.tokenProgram)
         const mint = new PublicKey(plan.mint)
@@ -150,13 +174,11 @@
         )
 
         const connection = config.rpcUrl ? new Connection(config.rpcUrl, "confirmed") : null
+        let createTreasuryAta = plan.createTreasuryAtaIfNeeded
+
         if (connection) {
             const treasuryInfo = await connection.getAccountInfo(treasuryAta)
-            if (!treasuryInfo) {
-                throw new Error(
-                    "Treasury $KINS account is not ready yet. Only token transfers are supported — try again shortly.",
-                )
-            }
+            createTreasuryAta = !treasuryInfo
 
             const ownerInfo = await connection.getAccountInfo(ownerAta)
             if (!ownerInfo) {
@@ -181,6 +203,18 @@
             lastValidBlockHeight,
         })
 
+        if (createTreasuryAta) {
+            transaction.add(
+                createAssociatedTokenAccountIdempotentInstruction(
+                    owner,
+                    treasuryAta,
+                    treasury,
+                    mint,
+                    tokenProgramId,
+                ),
+            )
+        }
+
         transaction.add(
             createTransferCheckedInstruction(
                 ownerAta,
@@ -203,6 +237,7 @@
     }
 
     async function confirmKinsPayment(paymentId, signature, authBody) {
+        setKinsWalletPending(true, "Confirming on-chain payment…")
         for (let attempt = 0; attempt < 18; attempt += 1) {
             const response = await fetch("/api/kins/confirm", {
                 method: "POST",
@@ -223,19 +258,29 @@
     }
 
     async function payKinsIntent(intentPath, intentBody, authBody) {
-        const intentResponse = await fetch(intentPath, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(authBody(intentBody)),
-        })
-        const intent = await intentResponse.json()
-        if (!intentResponse.ok || !intent.success) {
-            throw new Error(intent.error || "Could not start $KINS payment.")
+        if (kinsWalletPending) {
+            throw new Error("A wallet payment is already in progress.")
         }
 
-        const transfer = intent.transfer || { amountKins: intent.amountKins }
-        const signature = await sendKinsTransfer(transfer)
-        return confirmKinsPayment(intent.paymentId, signature, authBody)
+        setKinsWalletPending(true, "Preparing payment…")
+        try {
+            const intentResponse = await fetch(intentPath, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(authBody(intentBody)),
+            })
+            const intent = await intentResponse.json()
+            if (!intentResponse.ok || !intent.success) {
+                throw new Error(intent.error || "Could not start $KINS payment.")
+            }
+
+            const transfer = intent.transfer || { amountKins: intent.amountKins }
+            setKinsWalletPending(true, "Approve in your wallet…")
+            const signature = await sendKinsTransfer(transfer)
+            return await confirmKinsPayment(intent.paymentId, signature, authBody)
+        } finally {
+            setKinsWalletPending(false)
+        }
     }
 
     window.KinsWallet = {
@@ -244,5 +289,7 @@
         confirmKinsPayment,
         payKinsIntent,
         getWalletProvider,
+        isPaymentPending: () => kinsWalletPending,
+        setPaymentPending: setKinsWalletPending,
     }
 })()

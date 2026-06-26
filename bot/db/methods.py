@@ -66,7 +66,7 @@ async def ensure_user(tg_userid, name=None, username=None):
 
 
 def _credit_welcome_balance_sync(tg_userid) -> bool:
-    """One-time starter coins for web-only accounts that never hit /start."""
+    """One-time starter Chips for web-only accounts that never hit /start."""
     init_db()
     tg_id = str(tg_userid)
     with db_connection() as conn:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check treasury $KINS token account status (one-time setup before user deposits)."""
+"""Check treasury $KINS token account status."""
 
 from __future__ import annotations
 
@@ -28,7 +28,8 @@ def main() -> int:
         return 0
 
     print("\nTreasury $KINS account is NOT created yet.")
-    print("Create it once from the treasury wallet before accepting deposits:")
+    print("Deposits still work: the first payer creates it automatically (~0.002 SOL one-time).")
+    print("\nOptional — create it yourself from the treasury wallet so players never pay rent:")
     print(
         "\n  spl-token create-account "
         f"{KINS_TOKEN_MINT} "
@@ -40,7 +41,6 @@ def main() -> int:
         "\nOr in Phantom/Solflare: connect the treasury wallet, add $KINS, "
         "and create its token receive account (one-time ~0.002 SOL from treasury)."
     )
-    print("\nUntil this exists, deposits are blocked so players are not charged SOL rent.")
     return 1
 
 

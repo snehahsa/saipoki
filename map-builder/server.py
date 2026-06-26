@@ -22,6 +22,7 @@ from sprite_catalog import (
     save_single_meta,
     single_sidecar_path,
     single_sprite_name,
+    publish_single_assets,
     sync_single_manifest,
 )
 from animation_catalog import (
@@ -259,13 +260,15 @@ def api_save_map():
 
     WORLD_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
     write_world_map(payload)
+    published = publish_single_assets()
 
     return jsonify(
         {
             "ok": True,
             "path": str(WORLD_MAP_PATH.relative_to(ROOT)),
             "deployed": [str(p.relative_to(ROOT)) for p in DEPLOY_MAP_PATHS],
-            "message": "Map saved to gather-clone, data/, and game-server/data/. Commit those files and redeploy saipoki + game.",
+            "singleSprites": len(published.get("sprites") or []),
+            "message": "Map saved. Single sprites synced to static/ — re-enter the realm to see new tiles.",
         }
     )
 
@@ -323,14 +326,14 @@ def api_save_sprite_meta(sprite_id: str):
         meta["scale"] = existing["scale"]
 
     save_single_meta(name, meta)
-    sync_single_manifest()
+    publish_single_assets()
 
     return jsonify(
         {
             "ok": True,
             "path": str(single_sidecar_path(sprite_id).relative_to(ROOT)),
             "colliders": colliders,
-            "message": "Boundary saved. Rebuild game client (npm run build) for in-game colliders.",
+            "message": "Boundary saved. Re-enter the realm to see updated colliders.",
         }
     )
 

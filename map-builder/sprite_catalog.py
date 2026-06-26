@@ -2,6 +2,7 @@
 
 import json
 import re
+import shutil
 import struct
 from pathlib import Path
 from typing import Optional
@@ -9,8 +10,10 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parent.parent
 SHEET_DIR = ROOT / "gather-clone/frontend/utils/pixi/spritesheet"
 SINGLE_DIR = ROOT / "gather-clone/frontend/public/sprites/spritesheets/single"
+STATIC_SINGLE_DIR = ROOT / "static/sprites/spritesheets/single"
 SCIFI_DIR = ROOT / "gather-clone/frontend/public/sprites/scifi"
 MANIFEST_PATH = SHEET_DIR / "single.manifest.json"
+STATIC_SINGLE_MANIFEST_PATH = STATIC_SINGLE_DIR / "manifest.json"
 SCIFI_MANIFEST_PATH = SHEET_DIR / "scifi.manifest.json"
 SHEET_NAMES = ("ground", "grasslands", "village", "city", "single", "scifi", "anim")
 FOLDER_SHEETS: dict[str, dict] = {
@@ -269,9 +272,8 @@ def parse_single() -> dict:
     }
 
 
-def sync_single_manifest() -> dict:
-    single = parse_single()
-    manifest = {
+def _single_manifest_payload(single: dict) -> dict:
+    return {
         "width": single["width"],
         "height": single["height"],
         "sprites": [
@@ -287,7 +289,28 @@ def sync_single_manifest() -> dict:
             for sprite in single["sprites"]
         ],
     }
+
+
+def sync_single_manifest() -> dict:
+    single = parse_single()
+    manifest = _single_manifest_payload(single)
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return single
+
+
+def publish_single_assets() -> dict:
+    """Sync manifest from PNGs and copy sprites + manifest into static/ for the live game."""
+    single = sync_single_manifest()
+    manifest = _single_manifest_payload(single)
+
+    STATIC_SINGLE_DIR.mkdir(parents=True, exist_ok=True)
+    STATIC_SINGLE_MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    if SINGLE_DIR.is_dir():
+        for path in SINGLE_DIR.iterdir():
+            if path.suffix.lower() in {".png", ".json"}:
+                shutil.copy2(path, STATIC_SINGLE_DIR / path.name)
+
     return single
 
 

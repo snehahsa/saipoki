@@ -377,6 +377,13 @@ body {
     flex-shrink: 0;
 }
 
+.map-boundary-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
 .canvas-wrap.hidden { display: none; }
 
 #map-canvas {
@@ -926,6 +933,32 @@ body {
     border-radius: 8px;
     border: 1px solid var(--panel-border);
     background: #1e2430;
+    cursor: pointer;
+}
+
+.portal-card:hover {
+    border-color: #a78bfa;
+}
+
+.portal-card.selected {
+    border-color: #facc15;
+    background: rgba(250, 204, 21, 0.08);
+}
+
+.portal-list-filter {
+    margin: 4px 0 8px;
+}
+
+.portal-connection-detail {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--panel-border);
+}
+
+.portal-conn-label {
+    margin-bottom: 8px;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
 }
 
 .portal-card-head {

@@ -99,6 +99,13 @@
     <div class="retro-pixel-grass-strip"></div>
 </div>
 
+<div id="kins-wallet-pending" class="kins-wallet-pending hidden" aria-live="polite" aria-busy="true">
+    <div class="kins-wallet-pending-card">
+        <div class="kins-wallet-pending-spinner" aria-hidden="true"></div>
+    </div>
+    <p class="kins-wallet-pending-label" id="kins-wallet-pending-label">Waiting for wallet…</p>
+</div>
+
 {% if play_mode %}
 <div class="play-bg" aria-hidden="true">
     <img
@@ -112,6 +119,11 @@
     <div class="play-bg__shade"></div>
     <div class="play-bg__scan"></div>
     <div class="play-bg__grain"></div>
+</div>
+
+<div class="play-wallet-bar hidden" id="play-wallet-bar">
+    <span class="play-wallet-bar-label" id="play-wallet-bar-label"></span>
+    <button type="button" class="play-wallet-bar-disconnect" id="play-wallet-disconnect">Disconnect</button>
 </div>
 
 <section id="play-landing" aria-label="Enter PokeQuest">
@@ -146,14 +158,25 @@
         <p class="play-wallet-copy">
             Prove ownership with a signed message to enter the realm.
         </p>
+        <p id="play-wallet-status" class="play-wallet-status hidden" aria-live="polite"></p>
         <div class="play-wallet-options">
             <button type="button" class="play-wallet-option" data-wallet="phantom">
-                <span class="play-wallet-icon" aria-hidden="true">👻</span>
-                <span>Phantom</span>
+                <span class="play-wallet-icon" aria-hidden="true">
+                    <img src="/static/logos/ph.svg?v={{ asset_v.phantom_logo }}" alt="" width="28" height="28" decoding="async">
+                </span>
+                <span class="play-wallet-option-text">
+                    <span class="play-wallet-option-name">Phantom</span>
+                    <span class="play-wallet-detected hidden" data-wallet-detected="phantom">Phantom detected</span>
+                </span>
             </button>
             <button type="button" class="play-wallet-option" data-wallet="solflare">
-                <span class="play-wallet-icon" aria-hidden="true">🔥</span>
-                <span>Solflare</span>
+                <span class="play-wallet-icon" aria-hidden="true">
+                    <img src="/static/logos/sol.svg?v={{ asset_v.solflare_logo }}" alt="" width="28" height="28" decoding="async">
+                </span>
+                <span class="play-wallet-option-text">
+                    <span class="play-wallet-option-name">Solflare</span>
+                    <span class="play-wallet-detected hidden" data-wallet-detected="solflare">Solflare detected</span>
+                </span>
             </button>
         </div>
         <button type="button" class="play-wallet-close" id="play-wallet-close">Cancel</button>
@@ -236,7 +259,7 @@
         </div>
 
         <button class="btn btn-play welcome-setup-btn" id="welcome-setup-btn" type="button">Setup Your Profile</button>
-        <p class="welcome-footnote">Set a PIN, choose your avatar with starter coins &amp; enter your trainer name</p>
+        <p class="welcome-footnote">Set a PIN, enter your trainer name &amp; choose your avatar</p>
     </div>
 </div>
 
@@ -246,7 +269,7 @@
         <div class="welcome-cloud welcome-cloud-b"></div>
         <div class="welcome-cloud welcome-cloud-c"></div>
     </div>
-    <div class="panel panel-pin">
+    <div class="panel panel-pin panel-hub">
         <p class="panel-pixel-title" id="pin-title">SET YOUR PIN</p>
         <p class="subtitle" id="pin-subtitle">Pick a 3-digit trainer code</p>
         <div class="pin-display" id="pin-display" aria-live="polite">
@@ -278,7 +301,10 @@
         <div class="welcome-cloud welcome-cloud-b"></div>
         <div class="welcome-cloud welcome-cloud-c"></div>
     </div>
-    <div class="panel panel-skin">
+    <div class="panel panel-skin panel-with-nav panel-hub">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back hidden" id="skin-name-back-btn" type="button">← Back</button>
+        </nav>
         <p class="panel-pixel-title">SETUP YOUR PROFILE</p>
         <p class="subtitle" id="skin-setup-subtitle">Enter your trainer name</p>
 
@@ -291,7 +317,7 @@
                     class="skin-name-input"
                     maxlength="24"
                     autocomplete="nickname"
-                    placeholder="Trainer name"
+                    placeholder=""
                 >
             </label>
             <p class="skin-name-hint">Shown under your character in the world</p>
@@ -301,27 +327,28 @@
             <p class="skin-section-label">Avatar</p>
             <div class="skin-economy-row" aria-live="polite">
                 <span class="skin-economy-label">Balance:</span>
-                <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
+                <span class="poke-chips poke-chips--sm" aria-hidden="true"></span>
                 <span id="skin-balance" class="skin-economy-value">0</span>
             </div>
-            <div class="skin-picker-row">
-                <button class="icon-btn icon-btn-prev" id="skin-prev" type="button" aria-label="Previous avatar"></button>
-                <div class="skin-hero-stage">
-                    <div id="skin-preview" class="skin-sprite-preview skin-sprite-preview-hero" role="img" aria-label="Avatar preview"></div>
+            <div class="skin-picker-frame">
+                <div class="skin-picker-row">
+                    <button class="icon-btn icon-btn-prev" id="skin-prev" type="button" aria-label="Previous avatar"></button>
+                    <div class="skin-hero-stage">
+                        <div id="skin-preview" class="skin-sprite-preview skin-sprite-preview-hero" role="img" aria-label="Avatar preview"></div>
+                    </div>
+                    <button class="icon-btn icon-btn-next" id="skin-next" type="button" aria-label="Next avatar"></button>
                 </div>
-                <button class="icon-btn icon-btn-next" id="skin-next" type="button" aria-label="Next avatar"></button>
-            </div>
-            <span class="skin-counter" id="skin-counter">9 / 83</span>
-            <div class="skin-economy-row skin-economy-row--cost" aria-live="polite">
-                <span class="skin-economy-label">Cost:</span>
-                <span id="skin-price-tag" class="skin-economy-value skin-price-value">FREE</span>
+                <span class="skin-counter" id="skin-counter">9 / 83</span>
+                <div class="skin-economy-row skin-economy-row--cost" aria-live="polite">
+                    <span class="skin-economy-label">Cost:</span>
+                    <span id="skin-price-tag" class="skin-economy-value skin-price-value">FREE</span>
+                </div>
             </div>
         </section>
 
         <div class="menu-grid skin-setup-actions" style="margin-top: 18px;">
             <button class="btn btn-play" id="skin-name-next-btn" type="button">Next</button>
             <button class="btn btn-play hidden" id="save-skin-btn" type="button">Buy</button>
-            <button class="btn btn-secondary hidden" id="skin-name-back-btn" type="button">Back</button>
         </div>
         <p class="skin-purchase-hint" id="skin-purchase-hint"></p>
         <p class="status" id="skin-status"></p>
@@ -334,7 +361,7 @@
         <div class="welcome-cloud welcome-cloud-b"></div>
         <div class="welcome-cloud welcome-cloud-c"></div>
     </div>
-    <div class="panel">
+    <div class="panel panel-hub">
         <img
             class="menu-title-logo"
             src="/static/imgs/titles.png?v={{ asset_v.titles }}"
@@ -353,7 +380,7 @@
             <div class="menu-player-stack">
                 <div class="player-name" id="menu-player-name">Trainer</div>
                 <div class="balance-line balance-line--menu" aria-live="polite">
-                    <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
+                    <span class="poke-chips poke-chips--sm" aria-hidden="true"></span>
                     <span id="menu-balance">0</span>
                 </div>
                 <div class="menu-avatar-wrap">
@@ -380,33 +407,39 @@
 </div>
 
 <div id="profile-screen" class="screen hidden">
-    <div class="panel panel-profile">
+    <div class="panel panel-profile panel-with-nav panel-hub">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back" id="profile-back-btn" type="button">← Back</button>
+        </nav>
         <p class="panel-pixel-title">PROFILE</p>
         <p class="subtitle">your trainer &amp; avatars</p>
 
         <div class="balance-line balance-line--profile" aria-live="polite">
-            <span class="poke-coin poke-coin--sm" aria-hidden="true"></span>
+            <span class="poke-chips poke-chips--sm" aria-hidden="true"></span>
             <span id="profile-balance">0</span>
-            <span class="profile-balance-label"> gold coins</span>
+            <span class="profile-balance-label"> Chips</span>
         </div>
 
-        <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Deposit $KINS">
-            <p class="profile-section-title">Add $KINS Balance</p>
-            <p class="profile-section-note">1 $KINS = 1 gold coin. Sends on-chain to the realm treasury, then credits your balance after verification.</p>
-            <label class="skin-name-field profile-deposit-field">
-                <span class="skin-name-label">Amount in $KINS</span>
+        <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Buy and sell Chips">
+            <p class="profile-section-title">Chips Exchange</p>
+            <p class="profile-section-note">1 $KINS = 1 Chip. Buy sends on-chain to treasury; sell debits Chips and queues $KINS to your wallet.</p>
+            <div class="profile-chips-actions">
+                <button class="profile-chips-btn profile-chips-btn--buy" id="profile-deposit-btn" type="button" data-kins-buy>Buy Chips</button>
+                <button class="profile-chips-btn profile-chips-btn--sell" id="profile-withdraw-btn" type="button">Sell Chips</button>
+            </div>
+            <div class="profile-chips-form hidden" id="profile-chips-form">
                 <input
                     type="number"
                     id="profile-deposit-amount"
-                    class="skin-name-input"
+                    class="profile-chips-amount-input"
                     min="1"
                     step="1"
                     inputmode="numeric"
-                    placeholder="e.g. 1000"
+                    placeholder="Amount"
+                    aria-label="Amount"
                 >
-            </label>
-            <button class="btn btn-play profile-deposit-btn" id="profile-deposit-btn" type="button">Deposit $KINS</button>
-            <p class="profile-section-note profile-kins-treasury-note" id="profile-kins-treasury-note"></p>
+                <button class="profile-chips-btn profile-chips-submit profile-chips-btn--buy" id="profile-chips-submit" type="button" data-kins-buy>Buy</button>
+            </div>
         </section>
 
         <div class="profile-xp-block" aria-live="polite">
@@ -417,10 +450,12 @@
         </div>
 
         <div class="profile-preview-block">
-            <div class="skin-hero-stage skin-hero-stage-sm">
-                <div id="profile-preview" class="skin-sprite-preview skin-sprite-preview-profile" role="img" aria-label="Selected avatar preview"></div>
+            <div class="skin-picker-frame profile-preview-frame">
+                <div class="skin-hero-stage skin-hero-stage-sm">
+                    <div id="profile-preview" class="skin-sprite-preview skin-sprite-preview-profile" role="img" aria-label="Selected avatar preview"></div>
+                </div>
+                <p class="profile-equipped-label" id="profile-equipped-label">Equipped avatar</p>
             </div>
-            <p class="profile-equipped-label" id="profile-equipped-label">Equipped avatar</p>
         </div>
 
         <section class="profile-section" aria-label="Owned avatars">
@@ -429,13 +464,17 @@
                 <span class="profile-owned-count" id="profile-owned-count">0 owned</span>
             </div>
             <p class="profile-section-note">Purchased skins stay in your collection. Tap one to equip.</p>
-            <div id="profile-owned-grid" class="profile-skin-grid" role="list"></div>
+            <div class="profile-skin-grid-wrap">
+                <div id="profile-owned-grid" class="profile-skin-grid" role="list"></div>
+            </div>
         </section>
 
         <section class="profile-section" aria-label="Avatar shop">
             <p class="profile-section-title">Avatar Shop</p>
-            <p class="profile-section-note">Spend coins to unlock new looks.</p>
-            <div id="profile-shop-grid" class="profile-skin-grid profile-skin-grid--shop" role="list"></div>
+            <p class="profile-section-note">Spend Chips to unlock new looks.</p>
+            <div class="profile-skin-grid-wrap">
+                <div id="profile-shop-grid" class="profile-skin-grid profile-skin-grid--shop" role="list"></div>
+            </div>
             <p class="profile-shop-empty hidden" id="profile-shop-empty">You own every avatar!</p>
         </section>
 
@@ -447,7 +486,6 @@
         <div class="menu-grid profile-actions">
             <button class="btn btn-play" id="profile-action-btn" type="button">Equip</button>
             <button class="btn btn-secondary" id="profile-stats-btn" type="button">My Stats</button>
-            <button class="btn btn-secondary back-row" id="profile-back-btn" type="button">Back</button>
         </div>
         <p class="skin-purchase-hint" id="profile-purchase-hint"></p>
         <p class="status" id="profile-status"></p>
@@ -455,7 +493,10 @@
 </div>
 
 <div id="quests-screen" class="screen hidden">
-    <div class="panel panel-quests-wood">
+    <div class="panel panel-quests-wood panel-with-nav panel-hub">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back quests-back-btn" id="quests-back-btn" type="button">← Back</button>
+        </nav>
         <span class="quests-wood-nail quests-wood-nail--tl" aria-hidden="true"></span>
         <span class="quests-wood-nail quests-wood-nail--tr" aria-hidden="true"></span>
         <span class="quests-wood-nail quests-wood-nail--bl" aria-hidden="true"></span>
@@ -465,23 +506,27 @@
         <p class="quests-weekly-banner">Weekly quests unlock each week — revenue share &amp; prizes await.</p>
 
         <div class="quests-timeline" id="quests-timeline" role="list"></div>
-
-        <button class="btn btn-secondary back-row quests-back-btn" id="quests-back-btn" type="button">Back</button>
     </div>
 </div>
 
 <div id="revenue-share-screen" class="screen hidden">
-    <div class="panel">
+    <div class="panel panel-with-nav panel-hub">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back" id="revenue-share-back-btn" type="button">← Back</button>
+        </nav>
         <p class="panel-pixel-title">REVENUE SHARE</p>
         <p class="subtitle">earn from the realm</p>
         <p class="subtitle" style="margin-top: 12px;">Revenue sharing details coming soon.</p>
-        <button class="btn btn-secondary back-row" id="revenue-share-back-btn" type="button" style="width: 100%;">Back</button>
     </div>
 </div>
 
 <div id="leaderboard-screen" class="screen hidden">
-    <div class="panel panel-leaderboard">
+    <div class="panel panel-leaderboard panel-with-nav panel-hub">
         <div class="lb-scanlines" aria-hidden="true"></div>
+
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back lb-back-btn" id="leaderboard-back-btn" type="button">← Back to Menu</button>
+        </nav>
 
         <header class="lb-header">
             <h2 class="lb-title">LEADERBOARD</h2>
@@ -516,35 +561,38 @@
         <div class="lb-footer">
             <button class="btn btn-secondary" id="lb-my-stats-btn" type="button">My Stats</button>
             <button class="btn btn-play lb-challenge-btn" id="lb-challenge-btn" type="button">Enter the Realm</button>
-            <button class="btn btn-secondary back-row lb-back-btn" id="leaderboard-back-btn" type="button">Back to Menu</button>
         </div>
     </div>
 </div>
 
 <div id="trainer-stats-screen" class="screen hidden">
-    <div class="panel panel-trainer-stats">
+    <div class="panel panel-trainer-stats panel-with-nav panel-hub">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back" id="trainer-stats-back-btn" type="button">← Back</button>
+        </nav>
         <p class="panel-pixel-title">TRAINER STATS</p>
         <p class="subtitle" id="trainer-stats-subtitle">your battle record</p>
         <div class="trainer-stats-level-block">
             <p class="trainer-stats-level" id="trainer-stats-level">Lv.1</p>
             <p class="trainer-stats-xp" id="trainer-stats-xp">0 / 3 XP to next level</p>
             <div class="trainer-stats-xpbar" aria-hidden="true"><div id="trainer-stats-xpfill"></div></div>
+            <p class="trainer-stats-req-hint" id="trainer-stats-req-hint"></p>
         </div>
         <div class="trainer-stats-grid" id="trainer-stats-grid"></div>
         <p class="trainer-stats-section-title">Recent battles</p>
         <ul class="trainer-stats-history" id="trainer-stats-history"></ul>
-        <button class="btn btn-secondary back-row" id="trainer-stats-back-btn" type="button">Back</button>
     </div>
 </div>
 
 <div id="bag-screen" class="screen hidden">
-    <div class="panel">
+    <div class="panel panel-with-nav panel-hub">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back" id="bag-back-btn" type="button">← Back</button>
+        </nav>
         <p class="panel-pixel-title">BAG</p>
         <p class="subtitle">your collectibles</p>
 
         <div class="bag-grid" id="bag-grid"></div>
-
-        <button class="btn btn-secondary back-row" id="bag-back-btn" type="button" style="width: 100%;">Back</button>
     </div>
 </div>
 
@@ -555,20 +603,33 @@
             <div class="hud-line hud-line--xp">xp: <span id="stat-xp" class="hud-v">0</span></div>
             <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
             <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
-            <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-coin poke-coin--sm hud-coin" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
+            <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-chips poke-chips--sm hud-chips" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
             <div class="hud-line">coord: <span id="stat-coord" class="hud-v">—, —</span></div>
         </div>
-        <div class="game-hud-deposit hidden" id="game-hud-deposit" aria-label="Add $KINS balance">
-            <button type="button" class="game-hud-deposit-btn" id="game-hud-deposit-toggle">Add Balance</button>
-            <div class="game-hud-deposit-pop hidden" id="game-hud-deposit-pop" role="dialog" aria-label="Deposit $KINS">
-                <p class="game-hud-deposit-title">Deposit $KINS</p>
-                <p class="game-hud-deposit-note">1 $KINS = 1 gold coin · sends on-chain to treasury</p>
-                <label class="game-hud-deposit-field">
-                    <span class="game-hud-deposit-label">Amount</span>
-                    <input type="number" id="game-hud-deposit-amount" class="game-hud-deposit-input" min="1" step="1" inputmode="numeric" placeholder="e.g. 500">
-                </label>
-                <button type="button" class="game-hud-deposit-buy" id="game-hud-deposit-buy">Buy</button>
-                <p class="game-hud-deposit-status" id="game-hud-deposit-status" aria-live="polite"></p>
+        <div class="game-hud-deposit hidden" id="game-hud-deposit" aria-label="Buy and sell Chips">
+            <div class="game-hud-chips-actions">
+                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--buy" id="game-hud-buy-toggle" data-kins-buy>Buy Chips</button>
+                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--sell" id="game-hud-sell-toggle">Sell Chips</button>
+            </div>
+            <div class="game-hud-chips-form hidden" id="game-hud-chips-form">
+                <input
+                    type="number"
+                    id="game-hud-deposit-amount"
+                    class="game-hud-chips-amount-input"
+                    min="1"
+                    step="1"
+                    inputmode="numeric"
+                    placeholder="Amount"
+                    aria-label="Amount"
+                >
+                <button type="button" class="game-hud-chips-submit game-hud-chips-submit--buy" id="game-hud-chips-submit" data-kins-buy>Buy</button>
+                <button type="button" class="game-hud-chips-close" id="game-hud-chips-close">Cancel</button>
+            </div>
+            <div class="game-hud-chips-toast hidden" id="game-hud-chips-toast" role="status" aria-live="polite">
+                <div class="game-hud-chips-toast-row">
+                    <span class="poke-chips poke-chips--sm game-hud-chips-toast-chips" aria-hidden="true"></span>
+                    <p class="game-hud-chips-toast-text" id="game-hud-chips-toast-text"></p>
+                </div>
             </div>
         </div>
     </div>
@@ -860,7 +921,7 @@
                 <button type="button" class="vending-exit" id="vending-exit">EJECT / EXIT</button>
             </div>
 
-            <div class="vending-coin-slot" aria-hidden="true"></div>
+            <div class="vending-chips-slot" aria-hidden="true"></div>
             <div class="vending-card-slot" aria-hidden="true"></div>
         </div>
     </div>

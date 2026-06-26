@@ -10,6 +10,7 @@ import { buildInteractables, findActiveInteraction, InteractableEntry } from './
 import { canGrantFlowHold, NpcFlowRequires } from './flows'
 import { buildGearUseTargets, GearUseTarget, resolveGearUse } from './gearTargets'
 import { getGearItem } from './gearCatalog'
+import { computeMapBoundaryBlockedTiles } from './mapBoundary'
 
 export class PlayApp extends App {
     private static readonly TILE_SIZE = 32
@@ -48,6 +49,8 @@ export class PlayApp extends App {
     private spectatorPinchDistance = 0
     private spectatorPinchScale = 1
     private spectatorWheelTarget: HTMLElement | null = null
+    private spectatorPointerTarget: HTMLCanvasElement | null = null
+    private spectatorActivePointerId: number | null = null
     private enterAsSpectator = false
 
     constructor(
@@ -630,43 +633,91 @@ export class PlayApp extends App {
     }
 
     private setupSpectatorCameraControls() {
-        const stage = this.app.stage
-        stage.on('pointerdown', this.onSpectatorPointerDown)
-        stage.on('pointermove', this.onSpectatorPointerMove)
-        stage.on('pointerup', this.onSpectatorPointerUp)
-        stage.on('pointerupoutside', this.onSpectatorPointerUp)
-        stage.on('pointercancel', this.onSpectatorPointerUp)
-
-        const canvas = this.getApp().canvas
+        const canvas = this.getApp().canvas as HTMLCanvasElement
+        this.spectatorPointerTarget = canvas
         this.spectatorWheelTarget = canvas
+        canvas.style.touchAction = 'none'
+        canvas.style.cursor = 'grab'
+
+        canvas.addEventListener('pointerdown', this.onSpectatorDomPointerDown)
         canvas.addEventListener('wheel', this.onSpectatorWheel, { passive: false })
     }
 
-    private removeSpectatorCameraControls() {
-        const stage = this.app.stage
-        stage.off('pointerdown', this.onSpectatorPointerDown)
-        stage.off('pointermove', this.onSpectatorPointerMove)
-        stage.off('pointerup', this.onSpectatorPointerUp)
-        stage.off('pointerupoutside', this.onSpectatorPointerUp)
-        stage.off('pointercancel', this.onSpectatorPointerUp)
+    private bindSpectatorPointerTracking() {
+        window.addEventListener('pointermove', this.onSpectatorDomPointerMove)
+        window.addEventListener('pointerup', this.onSpectatorDomPointerUp)
+        window.addEventListener('pointercancel', this.onSpectatorDomPointerUp)
+    }
 
+    private unbindSpectatorPointerTracking() {
+        window.removeEventListener('pointermove', this.onSpectatorDomPointerMove)
+        window.removeEventListener('pointerup', this.onSpectatorDomPointerUp)
+        window.removeEventListener('pointercancel', this.onSpectatorDomPointerUp)
+    }
+
+    private setSpectatorDraggingUi(dragging: boolean) {
+        document.body.classList.toggle('spectator-dragging', dragging)
+        if (this.spectatorPointerTarget) {
+            this.spectatorPointerTarget.style.cursor = dragging ? 'grabbing' : 'grab'
+        }
+    }
+
+    private removeSpectatorCameraControls() {
+        this.unbindSpectatorPointerTracking()
+
+        const canvas = this.spectatorPointerTarget
+        if (canvas) {
+            canvas.removeEventListener('pointerdown', this.onSpectatorDomPointerDown)
+            canvas.style.cursor = ''
+            canvas.style.touchAction = ''
+        }
+
+        this.spectatorPointerTarget = null
         this.spectatorWheelTarget?.removeEventListener('wheel', this.onSpectatorWheel)
         this.spectatorWheelTarget = null
+        this.spectatorActivePointerId = null
         this.spectatorDragging = false
         this.spectatorPointers.clear()
         this.spectatorPinchDistance = 0
+        this.setSpectatorDraggingUi(false)
     }
 
-    private onSpectatorPointerDown = (event: PIXI.FederatedPointerEvent) => {
-        if (!this.spectatorMode) return
+    private applySpectatorDragDelta(dx: number, dy: number) {
+        if (dx === 0 && dy === 0) return
+        this.spectatorPivot.x -= dx / this.scale
+        this.spectatorPivot.y -= dy / this.scale
+        this.clampSpectatorPivot()
+        this.applySpectatorCamera()
+    }
 
-        this.spectatorPointers.set(event.pointerId, { x: event.global.x, y: event.global.y })
+    private onSpectatorDomPointerDown = (event: PointerEvent) => {
+        if (!this.spectatorMode) return
+        if (event.pointerType === 'mouse' && event.button !== 0) return
+
+        const canvas = this.spectatorPointerTarget
+        if (!canvas || event.target !== canvas) return
+
+        event.preventDefault()
+
+        if (this.spectatorPointers.size === 0) {
+            this.bindSpectatorPointerTracking()
+        }
+
+        this.spectatorPointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
 
         if (this.spectatorPointers.size === 1) {
+            this.spectatorActivePointerId = event.pointerId
             this.spectatorDragging = true
-            this.spectatorDragLast = { x: event.global.x, y: event.global.y }
+            this.spectatorDragLast = { x: event.clientX, y: event.clientY }
+            this.setSpectatorDraggingUi(true)
+            try {
+                canvas.setPointerCapture(event.pointerId)
+            } catch {
+                // Pointer capture is optional; window listeners still track drag.
+            }
         } else if (this.spectatorPointers.size === 2) {
             this.spectatorDragging = false
+            this.setSpectatorDraggingUi(false)
             const points = [...this.spectatorPointers.values()]
             const dx = points[1].x - points[0].x
             const dy = points[1].y - points[0].y
@@ -675,10 +726,10 @@ export class PlayApp extends App {
         }
     }
 
-    private onSpectatorPointerMove = (event: PIXI.FederatedPointerEvent) => {
+    private onSpectatorDomPointerMove = (event: PointerEvent) => {
         if (!this.spectatorMode || !this.spectatorPointers.has(event.pointerId)) return
 
-        this.spectatorPointers.set(event.pointerId, { x: event.global.x, y: event.global.y })
+        this.spectatorPointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
 
         if (this.spectatorPointers.size >= 2) {
             const points = [...this.spectatorPointers.values()]
@@ -687,42 +738,57 @@ export class PlayApp extends App {
             const distance = Math.hypot(dx, dy)
             const midpointX = (points[0].x + points[1].x) / 2
             const midpointY = (points[0].y + points[1].y) / 2
+            const canvas = this.spectatorPointerTarget
+            const rect = canvas?.getBoundingClientRect()
 
-            if (this.spectatorPinchDistance > 0) {
+            if (this.spectatorPinchDistance > 0 && rect) {
                 const factor = distance / this.spectatorPinchDistance
                 const targetScale = this.clampSpectatorScale(this.spectatorPinchScale * factor)
                 const zoomFactor = targetScale / this.scale
                 if (zoomFactor !== 1) {
-                    this.zoomSpectatorAt(midpointX, midpointY, zoomFactor)
+                    this.zoomSpectatorAt(midpointX - rect.left, midpointY - rect.top, zoomFactor)
                 }
             }
             return
         }
 
-        if (!this.spectatorDragging) return
+        if (!this.spectatorDragging || event.pointerId !== this.spectatorActivePointerId) return
 
-        const dx = event.global.x - this.spectatorDragLast.x
-        const dy = event.global.y - this.spectatorDragLast.y
-        this.spectatorDragLast = { x: event.global.x, y: event.global.y }
-        this.spectatorPivot.x -= dx / this.scale
-        this.spectatorPivot.y -= dy / this.scale
-        this.clampSpectatorPivot()
-        this.applySpectatorCamera()
+        const dx = event.clientX - this.spectatorDragLast.x
+        const dy = event.clientY - this.spectatorDragLast.y
+        this.spectatorDragLast = { x: event.clientX, y: event.clientY }
+        this.applySpectatorDragDelta(dx, dy)
     }
 
-    private onSpectatorPointerUp = (event: PIXI.FederatedPointerEvent) => {
+    private onSpectatorDomPointerUp = (event: PointerEvent) => {
         if (!this.spectatorMode) return
 
+        const canvas = this.spectatorPointerTarget
+        try {
+            canvas?.releasePointerCapture(event.pointerId)
+        } catch {
+            // Ignore release failures.
+        }
+
         this.spectatorPointers.delete(event.pointerId)
+        if (event.pointerId === this.spectatorActivePointerId) {
+            this.spectatorActivePointerId = null
+        }
+
         if (this.spectatorPointers.size < 2) {
             this.spectatorPinchDistance = 0
         }
+
         if (this.spectatorPointers.size === 0) {
             this.spectatorDragging = false
+            this.setSpectatorDraggingUi(false)
+            this.unbindSpectatorPointerTracking()
         } else if (this.spectatorPointers.size === 1) {
-            const remaining = [...this.spectatorPointers.values()][0]
+            const [remainingId, remainingPoint] = [...this.spectatorPointers.entries()][0]
+            this.spectatorActivePointerId = remainingId
             this.spectatorDragging = true
-            this.spectatorDragLast = { x: remaining.x, y: remaining.y }
+            this.spectatorDragLast = { x: remainingPoint.x, y: remainingPoint.y }
+            this.setSpectatorDraggingUi(true)
         }
     }
 
@@ -814,8 +880,9 @@ export class PlayApp extends App {
 
     private setUpBlockedTiles = () => {
         this.blocked = new Set<TilePoint>()
+        const room = this.realmData.rooms[this.currentRoomIndex]
 
-        for (const [key, value] of Object.entries(this.realmData.rooms[this.currentRoomIndex].tilemap)) {
+        for (const [key, value] of Object.entries(room.tilemap)) {
             if (value.impassable) {
                 this.blocked.add(key as TilePoint)
             }
@@ -825,6 +892,15 @@ export class PlayApp extends App {
             if (value) {
                 this.blocked.add(key as TilePoint)
             }
+        }
+
+        const boundaryBlocked = computeMapBoundaryBlockedTiles(
+            room.mapBoundary,
+            room.tilemap,
+            this.realmData.spawnpoint,
+        )
+        for (const key of boundaryBlocked) {
+            this.blocked.add(key as TilePoint)
         }
     }
 

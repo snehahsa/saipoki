@@ -210,13 +210,67 @@ body.play-body {
 }
 
 .play-btn--ghost {
-    color: var(--play-text);
-    background: rgba(255, 248, 234, 0.08);
-    box-shadow: 0 4px 0 #4a3a28;
+    color: #2a2218;
+    background: #ffffff;
+    box-shadow: 0 4px 0 #b8b0a0;
 }
 
 .play-btn--ghost:hover:not(:disabled) {
-    background: rgba(255, 248, 234, 0.14);
+    background: #fffefb;
+}
+
+.play-wallet-bar {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 10160;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.play-wallet-bar.hidden {
+    display: none;
+}
+
+body.play-in-app:has(#game-screen:not(.hidden)) .play-wallet-bar {
+    display: none !important;
+}
+
+.play-wallet-bar-label {
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: var(--play-muted);
+    text-transform: uppercase;
+}
+
+.play-wallet-bar-disconnect {
+    padding: 7px 12px;
+    border: 2px solid var(--play-border);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.28);
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b2a2a;
+    cursor: pointer;
+}
+
+.play-wallet-bar-disconnect:hover:not(:disabled) {
+    background: #fff;
+}
+
+.play-wallet-bar-disconnect:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.28);
+}
+
+.play-wallet-bar-disconnect:disabled {
+    opacity: 0.55;
+    cursor: wait;
 }
 
 .play-status {
@@ -280,6 +334,38 @@ body.play-body {
     color: #6b5d48;
 }
 
+.play-wallet-status {
+    margin: -6px 0 14px;
+    padding: 10px 12px;
+    font-size: 10px;
+    line-height: 1.55;
+    border: 2px solid #2d2418;
+    background: #fff8ea;
+    color: #2a2218;
+}
+
+.play-wallet-status.hidden {
+    display: none !important;
+}
+
+.play-wallet-status.is-error {
+    border-color: #8b2e2e;
+    background: #ffe8e8;
+    color: #5a1515;
+}
+
+.play-wallet-status.is-success {
+    border-color: #2d6a3e;
+    background: #e8f8ec;
+    color: #1a4a28;
+}
+
+.play-wallet-status.is-info {
+    border-color: #2d2418;
+    background: #fff2d6;
+    color: #2a2218;
+}
+
 .play-wallet-options {
     display: grid;
     gap: 10px;
@@ -303,16 +389,45 @@ body.play-body {
     background: #fff2d6;
 }
 
+.play-wallet-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.play-wallet-option-name {
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+.play-wallet-detected {
+    font-size: 9px;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    color: #1a6b3a;
+}
+
+.play-wallet-detected.hidden {
+    display: none;
+}
+
 .play-wallet-icon {
     width: 28px;
     height: 28px;
     border-radius: 6px;
     display: grid;
     place-items: center;
-    font-size: 16px;
-    background: #2d2418;
-    color: #fff8ea;
+    overflow: hidden;
     flex-shrink: 0;
+}
+
+.play-wallet-icon img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: 6px;
 }
 
 .play-wallet-close {
@@ -419,8 +534,29 @@ body.spectator-mode #app-container canvas {
     touch-action: none;
 }
 
+body.spectator-mode #game-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+    width: 100%;
+    height: 100%;
+}
+
+body.spectator-mode #app-container {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    position: relative;
+    z-index: 1;
+}
+
 body.spectator-mode #app-container canvas {
     cursor: grab;
+}
+
+body.spectator-mode.spectator-dragging #app-container canvas {
+    cursor: grabbing !important;
 }
 
 body.spectator-mode #app-container canvas:active {

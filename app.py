@@ -62,9 +62,9 @@ from kins_payments import (
     MAX_DEPOSIT_KINS,
     MIN_DEPOSIT_KINS,
     TOKEN_2022_PROGRAM_ID,
-    assert_treasury_payment_ready,
     confirm_payment,
     create_payment_intent,
+    create_withdrawal,
     get_latest_blockhash,
     get_mint_decimals,
     is_wallet_user_id,
@@ -538,6 +538,15 @@ def normalize_pin(raw) -> Optional[str]:
     return pin
 
 
+def profile_setup_needs_pin(row) -> bool:
+    """First-time profile save requires a PIN (blocks API bypass of onboarding)."""
+    if row is None:
+        return False
+    skin = row["skin"] if "skin" in row.keys() else None
+    pin = row["pin"] if "pin" in row.keys() else None
+    return skin is None and not pin
+
+
 def parse_badges(raw) -> list:
     if not raw:
         return []
@@ -728,6 +737,8 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
             "play_css": asset_version("static/css/play.css"),
             "play_js": asset_version("static/js/play.js"),
             "bg": asset_version("static/background/bg.png"),
+            "phantom_logo": asset_version("static/logos/ph.svg"),
+            "solflare_logo": asset_version("static/logos/sol.svg"),
         })
     return render_template(
         "index.html",
@@ -818,11 +829,17 @@ def _apply_skin_to_user(
     avatar_costs: dict,
 ) -> tuple[Optional[dict], Optional[tuple]]:
     row = conn.execute(
-        "SELECT display_name, skin, balance, owned_skins FROM users WHERE telegram_id = ?",
+        "SELECT display_name, skin, balance, owned_skins, pin FROM users WHERE telegram_id = ?",
         (telegram_id,),
     ).fetchone()
     if row is None:
         return None, (jsonify({"success": False, "error": "User not found"}), 404)
+
+    if profile_setup_needs_pin(row):
+        return None, (
+            jsonify({"success": False, "error": "Set a trainer PIN first."}),
+            403,
+        )
 
     owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
     cost = purchase_cost(skin, owned_skins, avatar_costs)
@@ -835,7 +852,7 @@ def _apply_skin_to_user(
                 jsonify(
                     {
                         "success": False,
-                        "error": f"Need {price:,} coins — you have {balance:,}",
+                        "error": f"Need {price:,} Chips — you have {balance:,}",
                         "balance": balance,
                         "cost": cost,
                         "price": price,
@@ -885,6 +902,7 @@ def kins_config_api():
             "mintDecimals": decimals,
             "tokenProgram": TOKEN_2022_PROGRAM_ID,
             "treasuryReady": treasury_kins_ata_exists(),
+            "createTreasuryAtaIfNeeded": not treasury_kins_ata_exists(),
         }
     )
 
@@ -976,11 +994,6 @@ def kins_deposit_intent_api():
             }
         ), 400
 
-    try:
-        assert_treasury_payment_ready()
-    except RuntimeError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 503
-
     with get_db() as conn:
         intent = create_payment_intent(
             conn,
@@ -991,6 +1004,30 @@ def kins_deposit_intent_api():
             payload={"amount_kins": amount_kins},
         )
     return jsonify({"success": True, **intent})
+
+
+@app.route("/api/kins/withdraw", methods=["POST"])
+def kins_withdraw_api():
+    telegram_id, wallet, err = _auth_wallet_context()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    try:
+        amount_kins = int(data.get("amountKins"))
+    except (TypeError, ValueError):
+        amount_kins = 0
+
+    with get_db() as conn:
+        ok, error, result = create_withdrawal(
+            conn,
+            telegram_id=telegram_id,
+            wallet_address=wallet,
+            amount_kins=amount_kins,
+        )
+    if not ok:
+        return jsonify({"success": False, "error": error}), 400
+    return jsonify({"success": True, **result})
 
 
 @app.route("/api/kins/skin-intent", methods=["POST"])
@@ -1013,11 +1050,13 @@ def kins_skin_intent_api():
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
     with get_db() as conn:
         row = conn.execute(
-            "SELECT owned_skins, skin FROM users WHERE telegram_id = ?",
+            "SELECT owned_skins, skin, pin FROM users WHERE telegram_id = ?",
             (telegram_id,),
         ).fetchone()
         if row is None:
             return jsonify({"success": False, "error": "User not found"}), 404
+        if profile_setup_needs_pin(row):
+            return jsonify({"success": False, "error": "Set a trainer PIN first."}), 403
         owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
         cost = purchase_cost(skin, owned_skins, avatar_costs)
         if cost <= 0:
@@ -1028,11 +1067,6 @@ def kins_skin_intent_api():
                     "requires_payment": False,
                 }
             ), 400
-
-        try:
-            assert_treasury_payment_ready()
-        except RuntimeError as exc:
-            return jsonify({"success": False, "error": str(exc)}), 503
 
         intent = create_payment_intent(
             conn,
@@ -1179,7 +1213,8 @@ def auth():
                 "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
             )}), 401
     telegram_id = str(user["id"])
-    display_name = display_name_from_user(user)
+    is_wallet = is_wallet_user_id(telegram_id)
+    display_name = "" if is_wallet else display_name_from_user(user)
     username = user.get("username") or ""
     now = int(time.time())
 
@@ -2221,7 +2256,7 @@ def fishing_cast_complete():
 
 @app.route("/api/vending/spin", methods=["POST"])
 def vending_spin():
-    """Charge coins and return a random pool card for the vending shuffle."""
+    """Charge Chips and return a random pool card for the vending shuffle."""
     import random
 
     telegram_id, err = _auth_user_from_request()
@@ -2244,7 +2279,7 @@ def vending_spin():
             return jsonify(
                 {
                     "success": False,
-                    "error": f"Need {cost:,} coins — you have {balance:,}",
+                    "error": f"Need {cost:,} Chips — you have {balance:,}",
                     "balance": balance,
                     "spin_cost": cost,
                 }

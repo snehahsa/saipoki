@@ -106,7 +106,7 @@ function formatNextLevelRequirements(stats) {
         parts.push(`${n} more win${n === 1 ? "" : "s"}`)
     }
     if (Array.isArray(stats.blocking_quests) && stats.blocking_quests.length) {
-        parts.push(`complete ${stats.blocking_quests.map(questTitleForId).join(", ")}`)
+        parts.push(`complete ${stats.blocking_quests.map(questTitleForId).join(" & ")}`)
     }
     return parts.join(" · ")
 }
@@ -205,12 +205,14 @@ function apiAuthBody(extra = {}) {
 function hidePlayLanding() {
     document.getElementById("play-landing")?.classList.add("is-hidden")
     document.body.classList.add("play-in-app")
+    window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
 
 function showPlayLanding() {
     document.getElementById("play-landing")?.classList.remove("is-hidden")
     document.body.classList.remove("play-in-app", "spectator-mode")
     Object.values(screens).forEach((el) => el?.classList.add("hidden"))
+    window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
 
 try {
@@ -305,6 +307,7 @@ function stopMenuStats() {
 function startGameHud() {
     stopGameHud()
     syncGameHudDepositUi()
+    window.SaiPokePlay?.syncWalletConnectedUi?.()
     if (!window.TelegramGame?.onPlayerPosition) return
 
     updateBalanceDisplays()
@@ -341,6 +344,7 @@ function showScreen(name) {
     )
 
     syncRetroAudioForScreen(name)
+    window.SaiPokePlay?.syncWalletConnectedUi?.()
 
     const active = screens[name]
     if (active) {
@@ -573,10 +577,22 @@ function getSkinNameInputValue() {
     return document.getElementById("skin-player-name-input")?.value || ""
 }
 
+function looksLikeWalletName(name) {
+    const n = String(name || "").trim()
+    if (!n) return false
+    if (/^[1-9A-HJ-NP-Za-km-z]{4}…[1-9A-HJ-NP-Za-km-z]{4}$/.test(n)) return true
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(n)) return true
+    return false
+}
+
 function initSkinNameInput() {
     const input = document.getElementById("skin-player-name-input")
     if (!input || !session) return
-    input.value = session.display_name || ""
+    let name = session.display_name || ""
+    if (!session.has_skin || looksLikeWalletName(name)) {
+        name = ""
+    }
+    input.value = name
 }
 
 function setSkinSetupStep(step) {
@@ -616,6 +632,10 @@ function setSkinSetupStep(step) {
 }
 
 function openSkinSetupScreen() {
+    if (!pinUnlocked()) {
+        openPinScreen(session?.has_pin ? "login" : "setup")
+        return
+    }
     initSkinNameInput()
     setSkinSetupStep("name")
     showScreen("skin")
@@ -641,6 +661,14 @@ function skinImage(skin) {
 function avatarListPrice(skin) {
     const raw = AVATAR_COSTS[skin]
     return Math.max(0, Number.isFinite(raw) ? raw : 0)
+}
+
+function skinPriceTier(price) {
+    const value = Math.max(0, Number(price) || 0)
+    if (value >= 5000) return "gold"
+    if (value >= 3000) return "bronze"
+    if (value >= 1500) return "silver"
+    return "green"
 }
 
 function compareSkinsByPrice(a, b) {
@@ -669,7 +697,7 @@ function avatarPurchaseCost(skin) {
     return avatarListPrice(skin)
 }
 
-function formatCoinAmount(n) {
+function formatChipsAmount(n) {
     return Math.max(0, Number(n) || 0).toLocaleString()
 }
 
@@ -681,7 +709,7 @@ function syncWalletEconomyLabels() {
     const kins = requiresKinsPayments()
     const profileLabel = document.querySelector(".profile-balance-label")
     if (profileLabel) {
-        profileLabel.textContent = kins ? " balance (1 $KINS = 1 coin)" : " gold coins"
+        profileLabel.textContent = kins ? " balance (1 $KINS = 1 Chip)" : " Chips"
     }
     const skinBalanceLabel = document.querySelector("#skin-screen .skin-economy-row .skin-economy-label")
     if (skinBalanceLabel && kins) {
@@ -689,75 +717,181 @@ function syncWalletEconomyLabels() {
     }
 }
 
+let gameHudChipsMode = "buy"
+let profileChipsMode = "buy"
+let gameHudChipsToastTimer = null
+
 function syncGameHudDepositUi() {
     const wrap = document.getElementById("game-hud-deposit")
     if (!wrap) return
     const show = requiresKinsPayments()
     wrap.classList.toggle("hidden", !show)
-    if (!show) closeGameHudDepositPop()
+    if (!show) {
+        closeGameHudDepositPop()
+        hideGameHudChipsToast()
+    }
+}
+
+function hideGameHudChipsToast() {
+    if (gameHudChipsToastTimer) {
+        clearTimeout(gameHudChipsToastTimer)
+        gameHudChipsToastTimer = null
+    }
+    const toast = document.getElementById("game-hud-chips-toast")
+    if (!toast) return
+    toast.classList.add("hidden")
+    toast.classList.remove("is-error", "is-success")
+    const text = document.getElementById("game-hud-chips-toast-text")
+    if (text) text.textContent = ""
+}
+
+function showGameHudChipsToast(message, kind = "info", autoHideMs = 4500) {
+    const toast = document.getElementById("game-hud-chips-toast")
+    const text = document.getElementById("game-hud-chips-toast-text")
+    const form = document.getElementById("game-hud-chips-form")
+    if (!toast || !text) return
+    if (gameHudChipsToastTimer) {
+        clearTimeout(gameHudChipsToastTimer)
+        gameHudChipsToastTimer = null
+    }
+    form?.classList.remove("hidden")
+    text.textContent = message || ""
+    toast.classList.remove("hidden")
+    toast.classList.toggle("is-error", kind === "error")
+    toast.classList.toggle("is-success", kind === "success")
+    if (autoHideMs > 0 && kind !== "info") {
+        gameHudChipsToastTimer = setTimeout(hideGameHudChipsToast, autoHideMs)
+    }
 }
 
 function closeGameHudDepositPop() {
-    document.getElementById("game-hud-deposit-pop")?.classList.add("hidden")
-    const status = document.getElementById("game-hud-deposit-status")
-    if (status) status.textContent = ""
+    document.getElementById("game-hud-chips-form")?.classList.add("hidden")
+    document.getElementById("game-hud-buy-toggle")?.classList.remove("is-active")
+    document.getElementById("game-hud-sell-toggle")?.classList.remove("is-active")
+    const input = document.getElementById("game-hud-deposit-amount")
+    if (input) input.value = ""
+    hideGameHudChipsToast()
 }
 
-function toggleGameHudDepositPop() {
-    const pop = document.getElementById("game-hud-deposit-pop")
-    if (!pop) return
-    const opening = pop.classList.contains("hidden")
-    pop.classList.toggle("hidden")
-    if (opening) {
-        document.getElementById("game-hud-deposit-amount")?.focus()
-    } else {
-        closeGameHudDepositPop()
+function setGameHudChipsMode(mode) {
+    gameHudChipsMode = mode === "sell" ? "sell" : "buy"
+    const submit = document.getElementById("game-hud-chips-submit")
+    const buyBtn = document.getElementById("game-hud-buy-toggle")
+    const sellBtn = document.getElementById("game-hud-sell-toggle")
+    const isSell = gameHudChipsMode === "sell"
+    buyBtn?.classList.toggle("is-active", !isSell)
+    sellBtn?.classList.toggle("is-active", isSell)
+    if (submit) {
+        submit.textContent = isSell ? "Sell" : "Buy"
+        submit.classList.toggle("game-hud-chips-submit--buy", !isSell)
+        submit.classList.toggle("game-hud-chips-submit--sell", isSell)
+        if (isSell) {
+            submit.removeAttribute("data-kins-buy")
+        } else {
+            submit.setAttribute("data-kins-buy", "")
+        }
     }
 }
 
-async function handleGameHudDepositBuy() {
+function openGameHudChipsPop(mode) {
+    const form = document.getElementById("game-hud-chips-form")
+    if (!form) return
+    setGameHudChipsMode(mode)
+    form.classList.remove("hidden")
+    document.getElementById("game-hud-deposit-amount")?.focus()
+}
+
+function openProfileChipsForm(mode) {
+    profileChipsMode = mode === "sell" ? "sell" : "buy"
+    const form = document.getElementById("profile-chips-form")
+    const submit = document.getElementById("profile-chips-submit")
+    const buyBtn = document.getElementById("profile-deposit-btn")
+    const sellBtn = document.getElementById("profile-withdraw-btn")
+    const isSell = profileChipsMode === "sell"
+    buyBtn?.classList.toggle("is-active", !isSell)
+    sellBtn?.classList.toggle("is-active", isSell)
+    if (submit) {
+        submit.textContent = isSell ? "Sell" : "Buy"
+        submit.classList.toggle("profile-chips-btn--sell", isSell)
+        submit.classList.toggle("profile-chips-btn--buy", !isSell)
+        if (isSell) {
+            submit.removeAttribute("data-kins-buy")
+        } else {
+            submit.setAttribute("data-kins-buy", "")
+        }
+    }
+    form?.classList.remove("hidden")
+    document.getElementById("profile-deposit-amount")?.focus()
+}
+
+function closeProfileChipsForm() {
+    document.getElementById("profile-chips-form")?.classList.add("hidden")
+    document.getElementById("profile-deposit-btn")?.classList.remove("is-active")
+    document.getElementById("profile-withdraw-btn")?.classList.remove("is-active")
+    const input = document.getElementById("profile-deposit-amount")
+    if (input) input.value = ""
+}
+
+async function withdrawKinsBalance(amountKins) {
+    const response = await fetch("/api/kins/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiAuthBody({ amountKins })),
+    })
+    const data = await response.json()
+    if (!response.ok || !data.success) {
+        throw new Error(data.error || "Could not sell Chips.")
+    }
+    return data
+}
+
+async function handleGameHudChipsSubmit() {
     const input = document.getElementById("game-hud-deposit-amount")
-    const status = document.getElementById("game-hud-deposit-status")
     const amount = Math.trunc(Number(input?.value || 0))
     if (!Number.isFinite(amount) || amount < 1) {
-        if (status) status.textContent = "Enter a valid $KINS amount."
+        showGameHudChipsToast("Enter a valid amount.", "error")
         return
     }
 
-    const buyBtn = document.getElementById("game-hud-deposit-buy")
-    if (buyBtn) buyBtn.disabled = true
-    if (status) status.textContent = "Approve $KINS transfer in your wallet..."
+    const submitBtn = document.getElementById("game-hud-chips-submit")
+    const isSell = gameHudChipsMode === "sell"
+    if (submitBtn) submitBtn.disabled = true
+    if (window.KinsWallet?.isPaymentPending?.()) {
+        showGameHudChipsToast("A wallet payment is already in progress.", "error")
+        if (submitBtn) submitBtn.disabled = false
+        return
+    }
 
     try {
-        const data = await depositKinsBalance(amount)
+        const data = isSell
+            ? await withdrawKinsBalance(amount)
+            : await depositKinsBalance(amount)
         if (Number.isFinite(data.balance)) session.balance = data.balance
         updateBalanceDisplays()
         if (input) input.value = ""
-        if (status) {
-            status.textContent = `Deposited ${formatCoinAmount(data.amountKins || amount)} $KINS!`
-        }
+        showGameHudChipsToast(
+            isSell
+                ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"} — $KINS payout queued.`
+                : `Bought ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"}!`,
+            "success",
+        )
         window.RetroAudio?.sfx?.("confirm")
     } catch (error) {
-        if (status) status.textContent = error.message || "Deposit failed."
+        showGameHudChipsToast(
+            error.message || (isSell ? "Sell failed." : "Buy failed."),
+            "error",
+        )
         window.RetroAudio?.sfx?.("cancel")
     } finally {
-        if (buyBtn) buyBtn.disabled = false
+        if (submitBtn) submitBtn.disabled = false
     }
 }
 
 function syncProfileKinsDepositUi() {
     const section = document.getElementById("profile-kins-deposit")
-    const note = document.getElementById("profile-kins-treasury-note")
     if (!section) return
-    const show = requiresKinsPayments()
-    section.classList.toggle("hidden", !show)
+    section.classList.toggle("hidden", !requiresKinsPayments())
     syncWalletEconomyLabels()
-    if (note && show) {
-        const treasury = session?.kins_treasury || window.APP_CONFIG?.kinsTreasury || ""
-        note.textContent = treasury
-            ? `Treasury: ${treasury.slice(0, 4)}…${treasury.slice(-4)}`
-            : ""
-    }
 }
 
 async function purchaseSkinWithKins(skin, displayName) {
@@ -770,6 +904,39 @@ async function purchaseSkinWithKins(skin, displayName) {
         apiAuthBody,
     )
 }
+async function handleProfileChipsAction(mode) {
+    const status = document.getElementById("profile-status")
+    const input = document.getElementById("profile-deposit-amount")
+    const amount = Math.trunc(Number(input?.value || 0))
+    if (!Number.isFinite(amount) || amount < 1) {
+        status.textContent = "Enter a valid amount."
+        status.classList.add("error")
+        return
+    }
+
+    const isSell = mode === "sell"
+    status.textContent = isSell
+        ? "Selling Chips..."
+        : "Approve $KINS transfer in your wallet..."
+    status.classList.remove("error")
+
+    try {
+        const data = isSell
+            ? await withdrawKinsBalance(amount)
+            : await depositKinsBalance(amount)
+        if (Number.isFinite(data.balance)) session.balance = data.balance
+        updateBalanceDisplays()
+        renderProfileScreen()
+        if (input) input.value = ""
+        closeProfileChipsForm()
+        status.textContent = isSell
+            ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chips — $KINS payout queued.`
+            : `Bought ${formatChipsAmount(data.amountKins || amount)} Chips!`
+    } catch (error) {
+        status.textContent = error.message
+        status.classList.add("error")
+    }
+}
 
 async function depositKinsBalance(amountKins) {
     if (!window.KinsWallet?.payKinsIntent) {
@@ -780,6 +947,14 @@ async function depositKinsBalance(amountKins) {
         { amountKins },
         apiAuthBody,
     )
+}
+
+window.SaiPokeKins = {
+    refreshBuyButtons() {
+        const skin = profileSelectedSkin || session?.skin
+        if (skin) updateProfileActionButton(skin)
+        if (sortedSkins[skinIndex]) updateAvatarPriceTag(sortedSkins[skinIndex], "skin")
+    },
 }
 
 async function saveSkinOrPay(skin, displayName) {
@@ -794,7 +969,7 @@ function updateBalanceDisplays() {
     const balance = session?.balance ?? 0
     for (const id of ["skin-balance", "profile-balance", "menu-balance", "stat-balance"]) {
         const el = document.getElementById(id)
-        if (el) el.textContent = formatCoinAmount(balance)
+        if (el) el.textContent = formatChipsAmount(balance)
     }
     if (document.getElementById("vending-screen") && !document.getElementById("vending-screen").classList.contains("hidden")) {
         vendingUpdateDrawButton()
@@ -820,19 +995,21 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
     } else if (price === 0) {
         tag.textContent = "FREE"
     } else if (kinsPay) {
-        tag.textContent = `${formatCoinAmount(price)} $KINS`
+        tag.textContent = `${formatChipsAmount(price)} $KINS`
     } else {
-        tag.textContent = formatCoinAmount(price)
+        tag.textContent = formatChipsAmount(price)
         if (cost > balance) tag.classList.add("is-expensive")
     }
 
     if (saveBtn && prefix === "skin") {
         if (kinsPay) {
+            saveBtn.setAttribute("data-kins-buy", "")
             saveBtn.classList.remove("is-unaffordable")
-            saveBtn.textContent = `Buy — ${formatCoinAmount(price)} $KINS`
+            saveBtn.textContent = `Buy — ${formatChipsAmount(price)} $KINS`
         } else {
+            saveBtn.removeAttribute("data-kins-buy")
             saveBtn.classList.toggle("is-unaffordable", cost > balance)
-            saveBtn.textContent = cost > balance && cost > 0 ? "Not enough coins" : "Buy"
+            saveBtn.textContent = cost > balance && cost > 0 ? "Not enough Chips" : "Buy"
         }
     }
 
@@ -842,13 +1019,13 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
 
     if (hint && prefix === "skin") {
         if (kinsPay) {
-            hint.textContent = `Sends ${formatCoinAmount(price)} $KINS on-chain to unlock this avatar.`
+            hint.textContent = `Sends ${formatChipsAmount(price)} $KINS on-chain to unlock this avatar.`
         } else if (!session?.has_skin && STARTING_BALANCE > 0 && !requiresKinsPayments()) {
-            hint.textContent = `New trainers start with ${formatCoinAmount(STARTING_BALANCE)} coins — pick your look wisely.`
+            hint.textContent = `New trainers start with ${formatChipsAmount(STARTING_BALANCE)} Chips — pick your look wisely.`
         } else if (cost > balance && cost > 0) {
-            hint.textContent = `You need ${formatCoinAmount(cost - balance)} more coins for this avatar.`
+            hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips for this avatar.`
         } else if (cost > 0) {
-            hint.textContent = `${formatCoinAmount(cost)} coins will be deducted when you save.`
+            hint.textContent = `${formatChipsAmount(cost)} Chips will be deducted when you save.`
         } else {
             hint.textContent = isAvatarOwned(skin) ? "You already own this avatar." : "This avatar is free."
         }
@@ -860,11 +1037,11 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         } else if (isAvatarOwned(skin)) {
             hint.textContent = "Tap Equip to wear this owned avatar."
         } else if (kinsPay) {
-            hint.textContent = `Sends ${formatCoinAmount(price)} $KINS on-chain to unlock this avatar.`
+            hint.textContent = `Sends ${formatChipsAmount(price)} $KINS on-chain to unlock this avatar.`
         } else if (cost > balance && cost > 0) {
-            hint.textContent = `You need ${formatCoinAmount(cost - balance)} more coins to unlock this avatar.`
+            hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips to unlock this avatar.`
         } else if (cost > 0) {
-            hint.textContent = `${formatCoinAmount(cost)} coins will be deducted when you purchase.`
+            hint.textContent = `${formatChipsAmount(cost)} Chips will be deducted when you purchase.`
         } else {
             hint.textContent = "This avatar is free — claim it to add to your collection."
         }
@@ -929,22 +1106,28 @@ function updateProfileActionButton(skin) {
     if (equipped && owned) {
         btn.textContent = "Equipped"
         btn.disabled = true
+        btn.removeAttribute("data-kins-buy")
     } else if (owned) {
         btn.textContent = "Equip"
         btn.disabled = false
+        btn.removeAttribute("data-kins-buy")
     } else if (kinsPay) {
-        btn.textContent = `Buy — ${formatCoinAmount(cost)} $KINS`
+        btn.setAttribute("data-kins-buy", "")
+        btn.textContent = `Buy — ${formatChipsAmount(cost)} $KINS`
         btn.disabled = false
     } else if (cost > balance) {
-        btn.textContent = "Not enough coins"
+        btn.textContent = "Not enough Chips"
         btn.disabled = true
+        btn.removeAttribute("data-kins-buy")
         btn.classList.add("is-unaffordable")
     } else if (cost > 0) {
-        btn.textContent = `Purchase · ${formatCoinAmount(cost)}`
+        btn.textContent = `Purchase · ${formatChipsAmount(cost)}`
         btn.disabled = false
+        btn.removeAttribute("data-kins-buy")
     } else {
         btn.textContent = "Claim Free"
         btn.disabled = false
+        btn.removeAttribute("data-kins-buy")
     }
 }
 
@@ -959,17 +1142,18 @@ function selectProfileSkin(skin) {
 function buildProfileSkinButton(skin, { shop = false } = {}) {
     const cost = avatarPurchaseCost(skin)
     const price = avatarListPrice(skin)
+    const tier = skinPriceTier(price)
     const balance = session?.balance ?? 0
     const kinsPay = requiresKinsPayments() && shop && cost > 0
     const costClass = shop && !kinsPay && cost > balance && cost > 0 ? " is-expensive" : ""
     const costLabel = shop
-        ? (price === 0 ? "FREE" : kinsPay ? `${formatCoinAmount(price)} $KINS` : formatCoinAmount(price))
+        ? (price === 0 ? "FREE" : kinsPay ? `${formatChipsAmount(price)} $KINS` : formatChipsAmount(price))
         : ""
 
     return `
         <button
             type="button"
-            class="profile-skin-item${session?.skin === skin ? " is-equipped" : ""}${profileSelectedSkin === skin ? " selected" : ""}"
+            class="profile-skin-item profile-skin-item--tier-${tier}${session?.skin === skin ? " is-equipped" : ""}${profileSelectedSkin === skin ? " selected" : ""}"
             data-skin="${skin}"
             role="listitem"
             aria-label="Avatar ${skin}${shop ? `, ${costLabel}` : ", owned"}"
@@ -2602,16 +2786,16 @@ function pinUnlocked() {
 }
 
 function routeAfterAuth() {
-    if (!session.has_skin) {
-        showScreen("welcome")
-        return
-    }
     if (session.has_pin && !pinVerified) {
         openPinScreen("login")
         return
     }
     if (!session.has_pin) {
-        openPinScreen("setup")
+        showScreen("welcome")
+        return
+    }
+    if (!session.has_skin) {
+        openSkinSetupScreen()
         return
     }
     showScreen("menu")
@@ -2941,11 +3125,6 @@ async function openTrainerStats(returnScreen = "menu") {
         session.trainer_stats = stats
         session.level = stats.level ?? 0
         populateMenu()
-        if (subtitle) {
-            subtitle.textContent = stats.display_name
-                ? `${stats.display_name}'s battle record`
-                : "your battle record"
-        }
         const lvlEl = document.getElementById("trainer-stats-level")
         const xpEl = document.getElementById("trainer-stats-xp")
         const xpFill = document.getElementById("trainer-stats-xpfill")
@@ -2960,8 +3139,14 @@ async function openTrainerStats(returnScreen = "menu") {
         }
         if (xpFill) xpFill.style.width = `${Math.min(100, (into / span) * 100)}%`
         const reqHint = formatNextLevelRequirements(stats)
-        if (subtitle && reqHint) {
-            subtitle.textContent = `${stats.display_name ? `${stats.display_name}'s` : "Your"} record · ${reqHint}`
+        const reqHintEl = document.getElementById("trainer-stats-req-hint")
+        if (reqHintEl) {
+            reqHintEl.textContent = reqHint ? `Next level: ${reqHint}` : ""
+        }
+        if (subtitle) {
+            subtitle.textContent = stats.display_name
+                ? `${stats.display_name}'s battle record`
+                : "Your battle record"
         }
         if (grid) {
             grid.innerHTML = [
@@ -3446,9 +3631,9 @@ function vendingUpdateDrawButton() {
     const canAfford = balance >= cost
     btn.disabled = vendingBusy || !canAfford
     btn.classList.toggle("vending-btn-unaffordable", !canAfford && !vendingBusy)
-    btn.innerHTML = `<span class="vending-btn-led" aria-hidden="true"></span>DRAW POKÉCARD<span class="vending-btn-price">${formatCoinAmount(cost)} $POKE</span>`
+    btn.innerHTML = `<span class="vending-btn-led" aria-hidden="true"></span>DRAW POKÉCARD<span class="vending-btn-price">${formatChipsAmount(cost)} $POKE</span>`
     if (menuLine) {
-        menuLine.textContent = `> DRAW  — SPIN ${formatCoinAmount(cost)} $POKE`
+        menuLine.textContent = `> DRAW  — SPIN ${formatChipsAmount(cost)} $POKE`
     }
 }
 
@@ -3720,7 +3905,7 @@ async function vendingPerformDraw() {
         vendingShowView("vending-view-error")
         document.getElementById("vending-error-code").textContent = "ERR-FUNDS"
         document.getElementById("vending-error-msg").textContent =
-            `INSUFFICIENT COINS.\nNEED ${formatCoinAmount(cost)} $POKE TO SPIN.`
+            `INSUFFICIENT CHIPS.\nNEED ${formatChipsAmount(cost)} $POKE TO SPIN.`
         vendingSetLeds("error")
         vendingBeep(200, 0.1)
         return
@@ -4249,9 +4434,40 @@ function applySessionFromAuth(data) {
         session.wallet_address = data.wallet_address
         session.requires_kins_payments = Boolean(data.requires_kins_payments)
         session.kins_treasury = data.kins_treasury || window.APP_CONFIG?.kinsTreasury || null
+        if (data.wallet_address) {
+            sessionStorage.setItem("pokequest_wallet_address", data.wallet_address)
+        }
     }
     syncWalletEconomyLabels()
     syncGameHudDepositUi()
+    window.SaiPokePlay?.syncWalletConnectedUi?.()
+}
+
+function onWalletDisconnect() {
+    stopGameHud()
+    clearPadInput()
+    closeGameDrawer()
+    quickbarSelectedSlot = -1
+    hideGearModeMenu()
+    showQuickbarHint("")
+    syncQuickbar()
+    window.TelegramGame?.setEquippedGear?.(null)
+    window.PoketabSocial?.close?.()
+    window.PoketabSocial?.stopBadgePolling?.()
+    hideSignModal()
+    setGameLoading("", false)
+    if (joinToastHandler) {
+        window.TelegramGame?.offGameEvent("playerJoined", joinToastHandler)
+        joinToastHandler = null
+    }
+    document.getElementById("join-toast-stack")?.replaceChildren()
+    window.TelegramGame?.stopGame?.()
+    playSpectatorMode = false
+    document.body.classList.remove("spectator-mode")
+    session = {}
+    pinVerified = false
+    Object.values(screens).forEach((el) => el?.classList.add("hidden"))
+    showPlayLanding()
 }
 
 async function completeSessionBootstrap() {
@@ -4287,11 +4503,14 @@ async function completeSessionBootstrap() {
 }
 
 async function init() {
-    if (!PLAY_MODE) {
+    if (PLAY_MODE) {
+        dismissBootSplash()
+        window.SaiPokePlay?.bindLanding?.()
+        window.SaiPokePlay?.warmWallet?.()
+    } else {
         setBootMessage("Starting up...")
+        await preloadEssentials()
     }
-
-    await preloadEssentials()
 
     if (!PLAY_MODE) {
         session = await authenticate()
@@ -4374,8 +4593,8 @@ async function init() {
     bindPinKeypad()
 
     document.getElementById("welcome-setup-btn")?.addEventListener("click", () => {
-        if (!session.has_pin) {
-            openPinScreen("setup")
+        if (!pinUnlocked()) {
+            openPinScreen(session?.has_pin ? "login" : "setup")
             return
         }
         openSkinSetupScreen()
@@ -4405,7 +4624,7 @@ async function init() {
     document.getElementById("save-skin-btn").addEventListener("click", async () => {
         const status = document.getElementById("skin-status")
         status.textContent = requiresKinsPayments() && avatarPurchaseCost(sortedSkins[skinIndex]) > 0
-            ? "Approve $KINS transfer in your wallet..."
+            ? ""
             : "Saving..."
         status.classList.remove("error")
 
@@ -4418,7 +4637,7 @@ async function init() {
 
             const cost = avatarPurchaseCost(skin)
             if (!requiresKinsPayments() && cost > (session.balance ?? 0)) {
-                throw new Error(`Need ${formatCoinAmount(cost)} coins — you have ${formatCoinAmount(session.balance)}`)
+                throw new Error(`Need ${formatChipsAmount(cost)} Chips — you have ${formatChipsAmount(session.balance)}`)
             }
 
             const data = await saveSkinOrPay(skin, displayName)
@@ -4481,7 +4700,7 @@ async function init() {
         const skin = profileSelectedSkin || session.skin
         const cost = avatarPurchaseCost(skin)
         status.textContent = requiresKinsPayments() && cost > 0
-            ? "Approve $KINS transfer in your wallet..."
+            ? ""
             : "Saving..."
         status.classList.remove("error")
 
@@ -4489,7 +4708,7 @@ async function init() {
             if (!skin) throw new Error("Select an avatar first")
 
             if (!requiresKinsPayments() && cost > (session.balance ?? 0)) {
-                throw new Error(`Need ${formatCoinAmount(cost)} coins — you have ${formatCoinAmount(session.balance)}`)
+                throw new Error(`Need ${formatChipsAmount(cost)} Chips — you have ${formatChipsAmount(session.balance)}`)
             }
 
             const data = await saveSkinOrPay(skin, session.display_name)
@@ -4501,9 +4720,9 @@ async function init() {
             renderProfileScreen()
             window.TelegramGame?.switchGameSkin?.(skin)
             if (requiresKinsPayments() && cost > 0) {
-                status.textContent = `Purchased with ${formatCoinAmount(cost)} $KINS!`
+                status.textContent = `Purchased with ${formatChipsAmount(cost)} $KINS!`
             } else {
-                status.textContent = cost > 0 ? `Saved! −${formatCoinAmount(cost)} coins` : "Equipped!"
+                status.textContent = cost > 0 ? `Saved! −${formatChipsAmount(cost)} Chips` : "Equipped!"
             }
         } catch (error) {
             status.textContent = error.message
@@ -4511,37 +4730,27 @@ async function init() {
         }
     })
 
-    document.getElementById("game-hud-deposit-toggle")?.addEventListener("click", () => {
-        toggleGameHudDepositPop()
+    document.getElementById("game-hud-buy-toggle")?.addEventListener("click", () => {
+        openGameHudChipsPop("buy")
     })
-    document.getElementById("game-hud-deposit-buy")?.addEventListener("click", () => {
-        handleGameHudDepositBuy()
+    document.getElementById("game-hud-sell-toggle")?.addEventListener("click", () => {
+        openGameHudChipsPop("sell")
+    })
+    document.getElementById("game-hud-chips-submit")?.addEventListener("click", () => {
+        handleGameHudChipsSubmit()
+    })
+    document.getElementById("game-hud-chips-close")?.addEventListener("click", () => {
+        closeGameHudDepositPop()
     })
 
-    document.getElementById("profile-deposit-btn")?.addEventListener("click", async () => {
-        const status = document.getElementById("profile-status")
-        const input = document.getElementById("profile-deposit-amount")
-        const amount = Math.trunc(Number(input?.value || 0))
-        if (!Number.isFinite(amount) || amount < 1) {
-            status.textContent = "Enter a valid $KINS amount."
-            status.classList.add("error")
-            return
-        }
-
-        status.textContent = "Approve $KINS transfer in your wallet..."
-        status.classList.remove("error")
-
-        try {
-            const data = await depositKinsBalance(amount)
-            if (Number.isFinite(data.balance)) session.balance = data.balance
-            updateBalanceDisplays()
-            renderProfileScreen()
-            if (input) input.value = ""
-            status.textContent = `Deposited ${formatCoinAmount(data.amountKins || amount)} $KINS!`
-        } catch (error) {
-            status.textContent = error.message
-            status.classList.add("error")
-        }
+    document.getElementById("profile-deposit-btn")?.addEventListener("click", () => {
+        openProfileChipsForm("buy")
+    })
+    document.getElementById("profile-withdraw-btn")?.addEventListener("click", () => {
+        openProfileChipsForm("sell")
+    })
+    document.getElementById("profile-chips-submit")?.addEventListener("click", () => {
+        handleProfileChipsAction(profileChipsMode)
     })
 
     document.getElementById("sign-modal-close")?.addEventListener("click", closeSignModal)
@@ -4557,7 +4766,7 @@ async function init() {
     bindVendingMachine()
 
     if (PLAY_MODE) {
-        window.SaiPokePlay?.bindLanding?.()
+        preloadEssentials().catch(() => {})
     }
 }
 
@@ -4574,6 +4783,7 @@ window.SaiPokePlay = {
         playSpectatorMode = true
         return completeSessionBootstrap()
     },
+    onWalletDisconnect,
     bindLanding: playLandingBinder,
 }
 

@@ -19,6 +19,8 @@ import base58
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 
+from db.connection import db_connection
+
 KINS_TOKEN_MINT = os.getenv(
     "KINS_TOKEN_MINT",
     "Tqj8yFmagrg7oorpQkVGYR52r96RFTamvWfth9bpump",
@@ -45,12 +47,11 @@ def solana_rpc_urls() -> list[str]:
             ordered.append(url)
     return ordered
 
-CHALLENGE_TTL_SEC = int(os.getenv("WALLET_CHALLENGE_TTL_SEC", "300"))
+CHALLENGE_TTL_SEC = int(os.getenv("WALLET_CHALLENGE_TTL_SEC", "600"))
 SESSION_TTL_SEC = int(os.getenv("WALLET_SESSION_TTL_SEC", str(24 * 3600)))
 MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "1000"))
 
 _lock = threading.Lock()
-_challenges: dict[str, dict[str, Any]] = {}
 _sessions: dict[str, dict[str, Any]] = {}
 
 _SESSION_SECRET = (
@@ -64,12 +65,36 @@ def _utc_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
-def _purge_expired() -> None:
+def ensure_wallet_auth_schema(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS wallet_challenges (
+            challenge_id TEXT PRIMARY KEY,
+            message TEXT NOT NULL,
+            expires_at REAL NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_wallet_challenges_expires
+        ON wallet_challenges (expires_at)
+        """
+    )
+
+
+def _purge_expired_challenges(conn) -> None:
+    conn.execute(
+        "DELETE FROM wallet_challenges WHERE expires_at <= ?",
+        (time.time(),),
+    )
+
+
+def _purge_expired_sessions() -> None:
     now = time.time()
-    for store in (_challenges, _sessions):
-        expired = [key for key, row in store.items() if row.get("expires_at", 0) <= now]
-        for key in expired:
-            store.pop(key, None)
+    expired = [key for key, row in _sessions.items() if row.get("expires_at", 0) <= now]
+    for key in expired:
+        _sessions.pop(key, None)
 
 
 def wallet_telegram_id(wallet_address: str) -> str:
@@ -77,37 +102,71 @@ def wallet_telegram_id(wallet_address: str) -> str:
 
 
 def create_wallet_challenge() -> dict[str, Any]:
-    with _lock:
-        _purge_expired()
-        challenge_id = secrets.token_hex(16)
-        issued = _utc_iso()
-        message = (
-            "Sign in to pokequest\n"
-            f"Challenge: {challenge_id}\n"
-            f"Issued: {issued}"
+    challenge_id = secrets.token_hex(16)
+    issued = _utc_iso()
+    message = (
+        "Sign in to pokequest\n"
+        f"Challenge: {challenge_id}\n"
+        f"Issued: {issued}"
+    )
+    expires_at = time.time() + CHALLENGE_TTL_SEC
+    with db_connection() as conn:
+        ensure_wallet_auth_schema(conn)
+        _purge_expired_challenges(conn)
+        conn.execute(
+            """
+            INSERT INTO wallet_challenges (challenge_id, message, expires_at)
+            VALUES (?, ?, ?)
+            """,
+            (challenge_id, message, expires_at),
         )
-        _challenges[challenge_id] = {
-            "message": message,
-            "issued": issued,
-            "expires_at": time.time() + CHALLENGE_TTL_SEC,
-        }
-        return {
-            "ok": True,
-            "challengeId": challenge_id,
-            "message": message,
-        }
+    return {
+        "ok": True,
+        "challengeId": challenge_id,
+        "message": message,
+    }
 
 
 def _challenge_row(challenge_id: str) -> Optional[dict[str, Any]]:
-    with _lock:
-        _purge_expired()
-        return _challenges.get(challenge_id)
+    with db_connection() as conn:
+        ensure_wallet_auth_schema(conn)
+        _purge_expired_challenges(conn)
+        row = conn.execute(
+            """
+            SELECT message, expires_at
+            FROM wallet_challenges
+            WHERE challenge_id = ?
+            """,
+            (challenge_id,),
+        ).fetchone()
+        if not row:
+            return None
+        if float(row["expires_at"]) <= time.time():
+            conn.execute(
+                "DELETE FROM wallet_challenges WHERE challenge_id = ?",
+                (challenge_id,),
+            )
+            return None
+        return {"message": row["message"], "expires_at": float(row["expires_at"])}
 
 
 def _consume_challenge(challenge_id: str) -> Optional[dict[str, Any]]:
-    with _lock:
-        _purge_expired()
-        return _challenges.pop(challenge_id, None)
+    row = _challenge_row(challenge_id)
+    if not row:
+        return None
+    with db_connection() as conn:
+        conn.execute(
+            "DELETE FROM wallet_challenges WHERE challenge_id = ?",
+            (challenge_id,),
+        )
+    return row
+
+
+def _solana_offchain_payload(message: str) -> bytes:
+    message_bytes = message.encode("utf-8")
+    prefix = b"\xffsolana offchain"
+    length = len(message_bytes).to_bytes(4, "little")
+    return prefix + length + message_bytes
 
 
 def verify_solana_signature(wallet_address: str, message: str, signature_b64: str) -> bool:
@@ -117,9 +176,18 @@ def verify_solana_signature(wallet_address: str, message: str, signature_b64: st
         if len(public_key) != 32:
             return False
         verify_key = VerifyKey(public_key)
-        verify_key.verify(message.encode("utf-8"), signature)
-        return True
-    except (BadSignatureError, ValueError, TypeError):
+        payloads = (
+            message.encode("utf-8"),
+            _solana_offchain_payload(message),
+        )
+        for payload in payloads:
+            try:
+                verify_key.verify(payload, signature)
+                return True
+            except BadSignatureError:
+                continue
+        return False
+    except (ValueError, TypeError):
         return False
 
 
@@ -180,7 +248,7 @@ def issue_wallet_session(wallet_address: str) -> str:
     ).hexdigest()
     token = base64.urlsafe_b64encode(f"{payload}:{sig}".encode("utf-8")).decode("ascii")
     with _lock:
-        _purge_expired()
+        _purge_expired_sessions()
         _sessions[token] = {
             "wallet": wallet_address,
             "issued_at": issued_at,
@@ -194,7 +262,7 @@ def verify_wallet_session(token: str) -> Optional[str]:
         return None
 
     with _lock:
-        _purge_expired()
+        _purge_expired_sessions()
         row = _sessions.get(token)
         if row and row.get("expires_at", 0) > time.time():
             return row.get("wallet")
@@ -236,7 +304,7 @@ def verify_wallet_login(
 
     message = row.get("message") or ""
     if not verify_solana_signature(wallet_address, message, signature_b64):
-        return False, "Signature verification failed.", None
+        return False, "Signature verification failed. Try connecting again.", None
 
     # Token gate (min $KINS hold) — disabled for now; uncomment to re-enable at launch.
     # if require_token:
@@ -250,5 +318,7 @@ def verify_wallet_login(
 
 def clear_wallet_sessions() -> None:
     with _lock:
-        _challenges.clear()
         _sessions.clear()
+    with db_connection() as conn:
+        ensure_wallet_auth_schema(conn)
+        conn.execute("DELETE FROM wallet_challenges")

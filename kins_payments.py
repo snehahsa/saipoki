@@ -96,19 +96,19 @@ def treasury_kins_ata_exists() -> bool:
 
 TREASURY_NOT_READY_ERROR = (
     "Treasury $KINS account is not set up yet. "
-    "Run python scripts/ensure_treasury_kins_ata.py and complete one-time treasury setup."
+    "The first deposit will create it automatically (small one-time SOL fee)."
 )
 
 
 def assert_treasury_payment_ready() -> None:
-    if not treasury_kins_ata_exists():
-        raise RuntimeError(TREASURY_NOT_READY_ERROR)
+    """Legacy helper — deposits no longer require pre-created treasury ATA."""
+    return
 
 
 def build_transfer_plan(amount_kins: int) -> dict[str, Any]:
-    assert_treasury_payment_ready()
     amount_kins = int(amount_kins)
     decimals = get_mint_decimals()
+    treasury_ready = treasury_kins_ata_exists()
     return {
         "amountKins": amount_kins,
         "rawAmount": str(kins_to_raw(amount_kins, decimals)),
@@ -116,6 +116,8 @@ def build_transfer_plan(amount_kins: int) -> dict[str, Any]:
         "tokenProgram": TOKEN_2022_PROGRAM_ID,
         "mint": KINS_TOKEN_MINT,
         "treasuryWallet": KINS_TREASURY_WALLET,
+        "treasuryReady": treasury_ready,
+        "createTreasuryAtaIfNeeded": not treasury_ready,
     }
 
 
@@ -147,6 +149,83 @@ def ensure_kins_payments_schema(conn: Any) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_kins_payments_user "
         "ON kins_payments(telegram_id, created_at)"
+    )
+
+
+def ensure_kins_withdrawals_schema(conn: Any) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS kins_withdrawals (
+            withdrawal_id TEXT PRIMARY KEY,
+            telegram_id TEXT NOT NULL,
+            wallet_address TEXT NOT NULL,
+            amount_kins INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_kins_withdrawals_user "
+        "ON kins_withdrawals(telegram_id, created_at)"
+    )
+
+
+def create_withdrawal(
+    conn: Any,
+    *,
+    telegram_id: str,
+    wallet_address: str,
+    amount_kins: int,
+) -> tuple[bool, str, dict[str, Any]]:
+    ensure_kins_withdrawals_schema(conn)
+    amount_kins = int(amount_kins)
+    if amount_kins < MIN_DEPOSIT_KINS or amount_kins > MAX_DEPOSIT_KINS:
+        return (
+            False,
+            f"Enter between {MIN_DEPOSIT_KINS:,} and {MAX_DEPOSIT_KINS:,} Chips.",
+            {},
+        )
+
+    row = conn.execute(
+        "SELECT balance FROM users WHERE telegram_id = ?",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        return False, "User not found.", {}
+
+    balance = int(row["balance"] or 0)
+    if amount_kins > balance:
+        return False, f"Not enough Chips — you have {balance:,}.", {}
+
+    now = int(time.time())
+    withdrawal_id = secrets.token_hex(16)
+    conn.execute(
+        """
+        UPDATE users
+        SET balance = balance - ?, updated_at = ?
+        WHERE telegram_id = ?
+        """,
+        (amount_kins, now, telegram_id),
+    )
+    conn.execute(
+        """
+        INSERT INTO kins_withdrawals (
+            withdrawal_id, telegram_id, wallet_address, amount_kins, status, created_at
+        )
+        VALUES (?, ?, ?, ?, 'pending', ?)
+        """,
+        (withdrawal_id, telegram_id, wallet_address, amount_kins, now),
+    )
+    return (
+        True,
+        "",
+        {
+            "withdrawalId": withdrawal_id,
+            "amountKins": amount_kins,
+            "balance": balance - amount_kins,
+            "walletAddress": wallet_address,
+        },
     )
 
 
