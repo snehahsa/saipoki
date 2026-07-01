@@ -460,26 +460,62 @@ body.landing-body.landing-nav-open {
     filter: drop-shadow(4px 4px 0 var(--pixel-shadow));
 }
 
-.landing-hero-tag {
-    display: block;
-    max-width: min(100%, 46ch);
+.landing-hero-kicker {
     margin: 0;
     padding: 0 10px;
-    font-size: var(--lfont-lg);
-    line-height: 1.65;
+    max-width: min(100%, 42ch);
+    font-size: var(--lfont-sm);
+    line-height: 1.6;
     letter-spacing: 0.02em;
-    color: var(--accent-cream);
-    text-shadow: var(--shadow-pixel-lg);
+    color: #1a140e;
+    text-shadow: none;
     overflow-wrap: anywhere;
 }
 
 .landing-hero-cta {
-    margin: 16px 0 0;
+    margin: 16px auto 0;
     padding: 0 10px;
+    width: min(360px, 100%);
 }
 
-.landing-hero-cta .landing-btn {
+a.play-btn {
     text-decoration: none;
+}
+
+.landing-hero-cta .play-btn {
+    width: 100%;
+}
+
+.play-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 52px;
+    padding: 12px 18px;
+    border: 3px solid var(--panel-border);
+    font-family: inherit;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 80ms steps(2, end), filter 80ms steps(2, end);
+    image-rendering: pixelated;
+}
+
+.play-btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+}
+
+.play-btn--primary {
+    color: #123a24;
+    background: linear-gradient(180deg, #7dffb8 0%, var(--accent-mint) 55%, #35c974 100%);
+    box-shadow: 0 4px 0 #1a8a4a, 0 0 24px rgba(93, 255, 157, 0.35);
+}
+
+.play-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.06);
 }
 
 .landing-ca-wrap--hero {
@@ -1408,64 +1444,69 @@ body.landing-body.landing-nav-open {
 
 .landing-play-steps-head,
 .landing-play-loot-head {
-    display: grid;
-    grid-template-columns: 44px 1fr;
-    column-gap: 12px;
-    row-gap: 6px;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin-bottom: 12px;
+}
+
+.landing-play-head-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
 }
 
 .landing-play-steps-badge,
 .landing-play-skins-badge,
 .landing-play-loot-badge,
 .landing-play-cards-badge {
-    grid-row: 1 / span 2;
-    align-self: center;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
     border: 2px solid var(--panel-border);
+    border-radius: 10px;
     box-shadow: 2px 2px 0 var(--pixel-shadow);
 }
 
 .landing-play-steps-badge {
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 1;
     color: #fff8ea;
     background: radial-gradient(circle at 35% 30%, #5cb85c, #2e7d32);
 }
 
 .landing-play-skins-badge {
-    font-size: 15px;
+    font-size: 14px;
+    line-height: 1;
     color: #3d2a00;
     background: radial-gradient(circle at 35% 28%, #fff6c8 0%, #f0d050 45%, #c9940f 100%);
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .landing-play-loot-badge {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: bold;
+    line-height: 1;
     color: #fff8ea;
     background: radial-gradient(circle at 35% 30%, #9c7bff, #5c3d99);
 }
 
 .landing-play-steps-title,
 .landing-play-loot-title {
-    grid-column: 2;
-    grid-row: 1;
-    font-size: var(--lfont-xl);
     margin: 0;
-    line-height: 1.2;
+    min-width: 0;
+    flex: 1;
+    font-size: var(--lfont-xl);
+    line-height: 1.15;
     letter-spacing: 0.04em;
     text-shadow: 1px 1px 0 rgba(255, 217, 102, 0.55);
 }
 
 .landing-play-steps-lead,
 .landing-play-loot-lead {
-    grid-column: 2;
-    grid-row: 2;
     font-size: var(--lfont-md);
     line-height: 1.6;
     color: var(--text-muted);
@@ -2128,48 +2169,42 @@ body.landing-body.landing-nav-open {
 
     .landing-play-steps-head,
     .landing-play-loot-head {
-        grid-template-columns: 34px minmax(0, 1fr);
-        column-gap: 10px;
-        row-gap: 6px;
+        gap: 6px;
         margin-bottom: 10px;
+    }
+
+    .landing-play-head-row {
+        gap: 10px;
     }
 
     .landing-play-steps-badge,
     .landing-play-skins-badge,
     .landing-play-loot-badge,
     .landing-play-cards-badge {
-        grid-row: 1;
-        grid-column: 1;
-        align-self: center;
         width: 34px;
         height: 34px;
+        border-radius: 8px;
     }
 
     .landing-play-steps-badge {
-        font-size: 11px;
+        font-size: 10px;
     }
 
     .landing-play-skins-badge {
-        font-size: 13px;
+        font-size: 12px;
     }
 
     .landing-play-loot-badge {
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .landing-play-steps-title,
     .landing-play-loot-title {
-        grid-column: 2;
-        grid-row: 1;
         font-size: var(--lfont-lg);
-        align-self: center;
-        min-width: 0;
     }
 
     .landing-play-steps-lead,
     .landing-play-loot-lead {
-        grid-column: 1 / -1;
-        grid-row: 2;
         font-size: var(--lfont-sm);
         line-height: 1.55;
     }
@@ -2255,25 +2290,33 @@ body.landing-body.landing-nav-open {
         min-height: 106px;
     }
 
-    .landing-play-steps-head,
-    .landing-play-loot-head {
-        grid-template-columns: 44px 1fr;
-        column-gap: 12px;
+    .landing-play-head-row {
+        gap: 12px;
     }
 
     .landing-play-steps-badge,
     .landing-play-skins-badge,
     .landing-play-loot-badge,
     .landing-play-cards-badge {
-        grid-row: 1 / span 2;
         width: 44px;
         height: 44px;
+        border-radius: 10px;
+    }
+
+    .landing-play-steps-badge {
+        font-size: 13px;
+    }
+
+    .landing-play-skins-badge {
+        font-size: 15px;
+    }
+
+    .landing-play-loot-badge {
+        font-size: 16px;
     }
 
     .landing-play-steps-lead,
     .landing-play-loot-lead {
-        grid-column: 2;
-        grid-row: 2;
         font-size: var(--lfont-md);
     }
 
@@ -2906,9 +2949,9 @@ body.landing-body.landing-nav-open {
         width: min(320px, 70vw);
     }
 
-    .landing-hero-tag {
-        font-size: var(--lfont-xl);
-        max-width: 52ch;
+    .landing-hero-kicker {
+        max-width: 48ch;
+        font-size: var(--lfont-md);
     }
 
     .landing-section-title {
