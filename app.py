@@ -700,7 +700,7 @@ def landing_play_lead() -> str:
     """Quick-start intro blurb for the landing how-to-play panel."""
     return (
         "Connect at pokecards.quest, walk the live map with other trainers, "
-        "chain the Vault Trail quests, and wager PokéCards through PokéTab."
+        "chain the Vault Trail quests, and wager PokéCards through Poké tab."
     )
 
 
@@ -729,7 +729,7 @@ def landing_play_steps() -> list:
         },
         {
             "title": "Battle & rank up",
-            "text": "Challenge trainers on PokéTab, wager vault cards, and climb the live leaderboard.",
+            "text": "Challenge trainers on Poké tab, wager vault cards, and climb the live leaderboard.",
             "icon": "rank",
         },
     ]
@@ -791,17 +791,17 @@ def landing_hold_items() -> list:
             "bag",
             "Trainer Bag",
             "Unlocks the bag icon on your HUD — open it anywhere to reach your Poké Vault, "
-            "PokéTab, and any extra tabs you earn as you collect quest gear.",
+            "Poké tab, and any extra tabs you earn as you collect quest gear.",
         ),
         (
             "card_vault",
             "Poké Vault",
             "Permanent home for every PokéCard you spin, win, or discover. Browse your full "
-            "collection and pull cards from here into PokéTab battles and wagers.",
+            "collection and pull cards from here into Poké tab battles and wagers.",
         ),
         (
             "poketab",
-            "PokéTab",
+            "Poké tab",
             "Your handheld link device — scan online trainers, send friend requests, DM allies, "
             "and challenge rivals to wager battles using cards from your vault.",
         ),

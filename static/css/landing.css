@@ -2035,6 +2035,21 @@ body.landing-body.landing-nav-open {
     pointer-events: none;
 }
 
+.landing-play-loot-row--cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-items: center;
+    gap: 10px 12px;
+}
+
+.landing-play-loot-row--cards .landing-play-loot-item {
+    width: 100%;
+    max-width: 120px;
+}
+
+.landing-play-loot-row--cards .landing-play-chip-label {
+    width: 100%;
+}
+
 .landing-play-loot-row--cards .landing-play-loot-item--more {
     padding-top: 0;
 }
@@ -2283,6 +2298,14 @@ body.landing-body.landing-nav-open {
         gap: 8px;
     }
 
+    .landing-play-loot-row--cards {
+        gap: 12px 16px;
+    }
+
+    .landing-play-loot-row--cards .landing-play-loot-item {
+        max-width: 132px;
+    }
+
     .landing-play-card-frame {
         width: 88px;
         height: 120px;
@@ -2352,58 +2375,320 @@ body.landing-body.landing-nav-open {
     overflow-wrap: anywhere;
 }
 
-.landing-roadmap {
-    display: grid;
-    gap: 10px;
+/* ── Roadmap — pixel quest trail ── */
+.landing-panel--roadmap {
+    position: relative;
+    overflow: hidden;
+    background:
+        repeating-conic-gradient(#fff8ea 0% 25%, #f4ecd8 0% 50%) 50% / 8px 8px,
+        var(--panel-bg);
 }
 
-.landing-road-item {
+.landing-panel--roadmap::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 248, 234, 0.72) 0%, transparent 28%, transparent 100%);
+}
+
+.landing-roadmap-lead {
+    margin: 0 0 18px;
+    font-size: var(--lfont-md);
+    line-height: 1.65;
+    color: var(--text-muted);
+    max-width: 52ch;
+}
+
+.landing-road-steps {
+    list-style: none;
+    margin: 0;
+    padding: 8px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    position: relative;
+    z-index: 1;
+}
+
+.landing-road-step {
     display: grid;
-    grid-template-columns: 72px 1fr;
-    gap: 12px;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+    position: relative;
+}
+
+.landing-road-step:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 31px;
+    top: 56px;
+    bottom: -18px;
+    width: 3px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, #8b7355 0%, #c4a574 45%, #8b7355 100%);
+    border-radius: 2px;
+    z-index: 0;
+    opacity: 0.45;
+    box-shadow: 1px 0 0 rgba(255, 248, 234, 0.35);
+}
+
+.landing-road-step--live:not(:last-child)::after {
+    background: linear-gradient(180deg, #3d8f52 0%, #86efac 50%, #3d8f52 100%);
+    opacity: 0.55;
+}
+
+.landing-road-node {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    padding: 10px 12px;
-    background: var(--panel-inner);
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+    padding-top: 0;
+}
+
+.landing-road-node-num {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    font-size: var(--lfont-sm);
+    font-weight: bold;
+    letter-spacing: 0.02em;
+    color: var(--text-dark);
+    background: radial-gradient(circle at 32% 28%, #fff8d0 0%, var(--gold) 58%, #c9940f 100%);
+    border: 3px solid var(--panel-border);
+    border-radius: 50%;
+    box-shadow:
+        inset 0 -3px 0 rgba(140, 98, 10, 0.22),
+        2px 3px 0 var(--gold-shadow);
+    flex-shrink: 0;
+}
+
+.landing-road-step--live .landing-road-node-num {
+    background: radial-gradient(circle at 32% 28%, #e8ffe8 0%, #86efac 52%, #3d8f52 100%);
+    border-color: #2e7d32;
+    color: #14532d;
+    box-shadow:
+        0 0 0 4px rgba(134, 239, 172, 0.35),
+        inset 0 -3px 0 rgba(34, 94, 48, 0.25),
+        2px 3px 0 rgba(34, 94, 48, 0.28);
+}
+
+.landing-road-step--next .landing-road-node-num {
+    background: radial-gradient(circle at 32% 26%, #fffce8 0%, #f0d050 50%, #d4a017 100%);
+    border-color: #b8860b;
+    color: #5c4200;
+    box-shadow:
+        0 0 0 4px rgba(253, 230, 138, 0.45),
+        inset 0 -3px 0 rgba(140, 98, 10, 0.22),
+        2px 3px 0 rgba(140, 98, 10, 0.28);
+    animation: landing-road-node-pulse 2.4s steps(4, end) infinite;
+}
+
+.landing-road-step--soon .landing-road-node-num {
+    background: radial-gradient(circle at 32% 28%, #ece4d4 0%, #d8cdb8 55%, #b8a88e 100%);
+    border-color: #8b7355;
+    box-shadow:
+        inset 0 -2px 0 rgba(45, 36, 24, 0.12),
+        2px 2px 0 rgba(45, 36, 24, 0.16);
+    color: var(--text-muted);
+}
+
+@keyframes landing-road-node-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(253, 230, 138, 0.35), inset 0 -3px 0 rgba(140, 98, 10, 0.22), 2px 3px 0 rgba(140, 98, 10, 0.28); }
+    50% { box-shadow: 0 0 0 7px rgba(253, 230, 138, 0.2), inset 0 -3px 0 rgba(140, 98, 10, 0.22), 2px 3px 0 rgba(140, 98, 10, 0.28); }
+}
+
+.landing-road-badge {
+    display: inline-block;
+    min-width: 52px;
+    padding: 4px 10px;
     border: 2px solid var(--panel-border);
+    border-radius: 999px;
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    text-align: center;
+    line-height: 1.2;
+    background: #e8e0cc;
+    box-shadow: 1px 1px 0 rgba(26, 20, 14, 0.14);
+}
+
+.landing-road-badge.is-live {
+    background: linear-gradient(180deg, #bbf7d0 0%, #86efac 100%);
+    border-color: #3d8f52;
+    color: #14532d;
+}
+
+.landing-road-badge.is-next {
+    background: linear-gradient(180deg, #fef08a 0%, #fde68a 100%);
+    border-color: #b8860b;
+    color: #5c4200;
+    animation: landing-road-badge-pulse 1.8s steps(3, end) infinite;
+}
+
+@keyframes landing-road-badge-pulse {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1px); }
+}
+
+.landing-road-card {
+    position: relative;
+    padding: 14px 14px 14px 16px;
+    border: 2px solid var(--panel-border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.62);
+    box-shadow: 3px 3px 0 rgba(26, 20, 14, 0.1);
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.landing-road-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: #c4a574;
+    z-index: 1;
+}
+
+.landing-road-step--live .landing-road-card {
+    background: linear-gradient(135deg, #e8fbeb 0%, #f8fff9 38%, #fff8ea 100%);
+    border-color: #3d8f52;
+    box-shadow: 3px 3px 0 rgba(34, 94, 48, 0.2);
+}
+
+.landing-road-step--live .landing-road-card::before {
+    background: linear-gradient(180deg, #86efac 0%, #3d8f52 100%);
+}
+
+.landing-road-step--live .landing-road-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        105deg,
+        transparent 38%,
+        rgba(255, 255, 255, 0.32) 50%,
+        transparent 62%
+    );
+    background-size: 220% 100%;
+    animation: landing-road-shine 3.6s ease-in-out infinite;
+}
+
+.landing-road-step--next .landing-road-card {
+    background: linear-gradient(135deg, #fff8d8 0%, #fff8ea 45%, #f0e4c8 100%);
+    border-color: #b8860b;
+    box-shadow: 3px 3px 0 rgba(140, 98, 10, 0.22);
+}
+
+.landing-road-step--next .landing-road-card::before {
+    background: linear-gradient(180deg, #fde68a 0%, #d4a017 100%);
+}
+
+.landing-road-step--next .landing-road-card {
+    outline: 2px dashed rgba(184, 134, 11, 0.35);
+    outline-offset: 3px;
+}
+
+.landing-road-step--soon .landing-road-card {
+    background: rgba(255, 248, 234, 0.5);
+    border-style: dashed;
+    border-color: rgba(139, 115, 85, 0.55);
+    box-shadow: none;
+    opacity: 0.94;
+}
+
+.landing-road-step--soon .landing-road-card::before {
+    background: #d8cdb8;
+}
+
+@keyframes landing-road-shine {
+    0% { background-position: 160% center; }
+    100% { background-position: -160% center; }
 }
 
 .landing-road-phase {
-    font-size: var(--lfont-sm);
+    position: relative;
+    z-index: 2;
+    font-size: 9px;
     color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
+    margin: 0 0 5px;
 }
 
-.landing-road-item h3 {
+.landing-road-card h3 {
+    position: relative;
+    z-index: 2;
     font-size: var(--lfont-lg);
-    margin: 0 0 6px;
+    margin: 0 0 8px;
     letter-spacing: 0.03em;
     text-shadow: 1px 1px 0 rgba(255, 217, 102, 0.35);
     overflow-wrap: anywhere;
 }
 
-.landing-road-item p {
-    font-size: var(--lfont-md);
-    line-height: 1.55;
+.landing-road-card > p {
+    position: relative;
+    z-index: 2;
+    font-size: var(--lfont-sm);
+    line-height: 1.62;
     color: var(--text-muted);
     margin: 0;
     overflow-wrap: anywhere;
 }
 
-.landing-road-badge {
-    display: inline-block;
-    padding: 5px 8px;
-    border: 2px solid var(--panel-border);
-    font-size: var(--lfont-sm);
-    background: #e8e0cc;
+.landing-road-tags {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
 }
 
-.landing-road-badge.is-live {
-    background: #bbf7d0;
+.landing-road-tags li {
+    font-size: 9px;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    border: 2px solid rgba(139, 115, 85, 0.38);
+    border-radius: 999px;
+    background: rgba(255, 248, 234, 0.92);
+    color: var(--text-dark);
+    box-shadow: 1px 1px 0 rgba(26, 20, 14, 0.08);
 }
 
-.landing-road-badge.is-next {
-    background: #fde68a;
+.landing-road-step--live .landing-road-tags li {
+    border-color: rgba(61, 143, 82, 0.4);
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.landing-road-step--next .landing-road-tags li {
+    border-color: rgba(184, 134, 11, 0.42);
+    background: rgba(255, 252, 220, 0.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .landing-road-step--live .landing-road-card::after,
+    .landing-road-step--next .landing-road-node-num,
+    .landing-road-badge.is-next {
+        animation: none;
+    }
+
+    .landing-road-step--next .landing-road-card {
+        outline: none;
+    }
 }
 
 .landing-socials {
@@ -2561,9 +2846,49 @@ body.landing-body.landing-nav-open {
     .landing-sprite--bob {
         animation: sprite-walk-sm 0.55s steps(4) infinite, sprite-bob 1.2s steps(2) infinite;
     }
+}
 
-    .landing-road-item {
-        grid-template-columns: 1fr;
+@media (min-width: 720px) {
+    .landing-road-steps {
+        gap: 22px;
+    }
+
+    .landing-road-step {
+        grid-template-columns: 76px minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .landing-road-step:not(:last-child)::after {
+        left: 37px;
+        top: 58px;
+    }
+
+    .landing-road-node-num {
+        width: 58px;
+        height: 58px;
+        font-size: var(--lfont-md);
+    }
+
+    .landing-road-badge {
+        min-width: 58px;
+        font-size: 9px;
+    }
+
+    .landing-road-card {
+        padding: 16px 18px 16px 20px;
+        border-radius: 14px;
+    }
+
+    .landing-road-card h3 {
+        font-size: var(--lfont-xl);
+    }
+
+    .landing-road-card > p {
+        font-size: var(--lfont-md);
+    }
+
+    .landing-road-tags li {
+        font-size: 10px;
     }
 }
 

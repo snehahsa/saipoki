@@ -133,7 +133,7 @@
                     <span class="landing-intro-cursor hidden" id="landing-intro-cursor" aria-hidden="true">▼</span>
                     <script type="application/json" id="landing-intro-lines">{{ [
                         "Pokecards Quest is a Pokémon-inspired social MMO in your browser. Connect a Solana wallet, create your trainer, explore a live multiplayer map, meet Live Trainers, complete quests, and collect PokéCards from vending machines.",
-                        "Wager battles through PokéTab, track your rank on the leaderboard, and grow your vault. New trainers start with 0 Chips — earn more from quests, battles, and vending spins."
+                        "Wager battles through Poké tab, track your rank on the leaderboard, and grow your vault. New trainers start with 0 Chips — earn more from quests, battles, and vending spins."
                     ] | tojson }}</script>
                 </div>
             </section>
@@ -225,10 +225,6 @@
                             <span class="landing-play-chip-label">{{ card.name }}</span>
                         </li>
                         {% endfor %}
-                        <li class="landing-play-loot-item landing-play-loot-item--more">
-                            <span class="landing-play-more-mark" aria-hidden="true">+</span>
-                            <span class="landing-play-chip-label landing-play-chip-label--more">And many more</span>
-                        </li>
                     </ul>
                 </div>
             </section>
@@ -363,53 +359,98 @@
                 </div>
             </section>
 
-            <section class="landing-panel" id="roadmap" aria-labelledby="roadmap-title">
+            <section class="landing-panel landing-panel--roadmap" id="roadmap" aria-labelledby="roadmap-title">
                 <h2 class="landing-section-title" id="roadmap-title">
                     ROADMAP
                     <span>Where the realm is headed</span>
                 </h2>
-                <div class="landing-roadmap">
-                    <article class="landing-road-item">
-                        <span class="landing-road-badge is-live">LIVE</span>
-                        <div>
-                            <p class="landing-road-phase">Phase 1</p>
+                <p class="landing-roadmap-lead">Follow the trail from Nova City’s first footsteps to a full trainer economy — each checkpoint unlocks more of the realm.</p>
+                <ol class="landing-road-steps">
+                    <li class="landing-road-step landing-road-step--live">
+                        <div class="landing-road-node" aria-hidden="true">
+                            <span class="landing-road-node-num">01</span>
+                            <span class="landing-road-badge is-live">LIVE</span>
+                        </div>
+                        <article class="landing-road-card">
+                            <p class="landing-road-phase">Phase 1 · Foundation</p>
                             <h3>Realm &amp; Avatars</h3>
-                            <p>Multiplayer hub, Live Trainer patrols, avatar shop, PIN login, and Chips economy.</p>
+                            <p>Walk a live multiplayer map, meet patrolling trainers, and build your hero in the avatar shop.</p>
+                            <ul class="landing-road-tags">
+                                <li>Live map</li>
+                                <li>Live Trainers</li>
+                                <li>Avatar shop</li>
+                                <li>PIN login</li>
+                                <li>Chips economy</li>
+                            </ul>
+                        </article>
+                    </li>
+                    <li class="landing-road-step landing-road-step--live">
+                        <div class="landing-road-node" aria-hidden="true">
+                            <span class="landing-road-node-num">02</span>
+                            <span class="landing-road-badge is-live">LIVE</span>
                         </div>
-                    </article>
-                    <article class="landing-road-item">
-                        <span class="landing-road-badge is-live">LIVE</span>
-                        <div>
-                            <p class="landing-road-phase">Phase 2</p>
+                        <article class="landing-road-card">
+                            <p class="landing-road-phase">Phase 2 · Combat</p>
                             <h3>Battles &amp; Vault</h3>
-                            <p>PokéTab PvP wagering, PokéCard vending, vault collection, and battle stats.</p>
+                            <p>Wager PokéCards through Poké tab, spin vending machines, and grow a vault that follows you everywhere.</p>
+                            <ul class="landing-road-tags">
+                                <li>Poké tab PvP</li>
+                                <li>Card vending</li>
+                                <li>Poké Vault</li>
+                                <li>Battle stats</li>
+                            </ul>
+                        </article>
+                    </li>
+                    <li class="landing-road-step landing-road-step--next">
+                        <div class="landing-road-node" aria-hidden="true">
+                            <span class="landing-road-node-num">03</span>
+                            <span class="landing-road-badge is-next">NEXT</span>
                         </div>
-                    </article>
-                    <article class="landing-road-item">
-                        <span class="landing-road-badge is-next">NEXT</span>
-                        <div>
-                            <p class="landing-road-phase">Phase 3</p>
+                        <article class="landing-road-card">
+                            <p class="landing-road-phase">Phase 3 · Adventure</p>
                             <h3>Quests &amp; Events</h3>
-                            <p>Weekly quest trails, world triggers, seasonal Live Trainer stories, and reward loops.</p>
+                            <p>Weekly quest trails, world triggers, and seasonal Live Trainer stories that reshape the map.</p>
+                            <ul class="landing-road-tags">
+                                <li>Vault Trail</li>
+                                <li>World triggers</li>
+                                <li>Seasonal events</li>
+                                <li>Reward loops</li>
+                            </ul>
+                        </article>
+                    </li>
+                    <li class="landing-road-step landing-road-step--soon">
+                        <div class="landing-road-node" aria-hidden="true">
+                            <span class="landing-road-node-num">04</span>
+                            <span class="landing-road-badge">SOON</span>
                         </div>
-                    </article>
-                    <article class="landing-road-item">
-                        <span class="landing-road-badge">SOON</span>
-                        <div>
-                            <p class="landing-road-phase">Phase 4</p>
+                        <article class="landing-road-card">
+                            <p class="landing-road-phase">Phase 4 · Glory</p>
                             <h3>Leaderboard Seasons</h3>
-                            <p>Rotating rankings, podium rewards, and cross-realm stat showcases.</p>
+                            <p>Rotating ranked seasons, podium spotlights, and cross-realm stat showcases for top trainers.</p>
+                            <ul class="landing-road-tags">
+                                <li>Ranked seasons</li>
+                                <li>Podium rewards</li>
+                                <li>Stat showcases</li>
+                            </ul>
+                        </article>
+                    </li>
+                    <li class="landing-road-step landing-road-step--soon">
+                        <div class="landing-road-node" aria-hidden="true">
+                            <span class="landing-road-node-num">05</span>
+                            <span class="landing-road-badge">SOON</span>
                         </div>
-                    </article>
-                    <article class="landing-road-item">
-                        <span class="landing-road-badge">SOON</span>
-                        <div>
-                            <p class="landing-road-phase">Phase 5</p>
+                        <article class="landing-road-card">
+                            <p class="landing-road-phase">Phase 5 · Economy</p>
                             <h3>Trade &amp; Revenue</h3>
-                            <p>Card trading, revenue-share tools, and creator-led realm expansions.</p>
-                        </div>
-                    </article>
-                </div>
+                            <p>Peer card trading, revenue-share tools, and creator-led realm expansions for the community.</p>
+                            <ul class="landing-road-tags">
+                                <li>Card trading</li>
+                                <li>Revenue share</li>
+                                <li>Realm expansions</li>
+                            </ul>
+                        </article>
+                    </li>
+                </ol>
             </section>
 
             <section class="landing-panel" id="socials" aria-labelledby="socials-title">
