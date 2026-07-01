@@ -941,6 +941,7 @@ def _render_landing_page():
         play_lead=landing_play_lead(),
         hero_media_url=hero_media_url,
         hero_media_type=hero_media_type,
+        token_ca=KINS_TOKEN_MINT,
         asset_v={
             "landing_css": asset_version("static/css/landing.css"),
             "landing_js": asset_version("static/js/landing.js"),

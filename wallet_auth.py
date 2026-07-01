@@ -23,7 +23,7 @@ from db.connection import db_connection
 
 KINS_TOKEN_MINT = os.getenv(
     "KINS_TOKEN_MINT",
-    "Tqj8yFmagrg7oorpQkVGYR52r96RFTamvWfth9bpump",
+    "9hYaj2c4Xqbxik6RBBVHMwEpMJAbjWZkGVeJ9CMWj7WB",
 ).strip()
 
 SOLANA_RPC_URL = os.getenv(
