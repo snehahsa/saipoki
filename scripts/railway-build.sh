@@ -15,6 +15,7 @@ python3 -c "import sys; sys.path.insert(0, 'map-builder'); from sprite_catalog i
 if [ -d static/sprites/animations ]; then
   python3 -c "from animation_catalog import sync_manifest; found = sync_manifest(); print(f'animation manifest: {len(found)} entries')"
 fi
+python3 -c "from gear_catalog import sync_items_manifest; sync_items_manifest(); print('gear items manifest synced')"
 if [ -f gather-clone/frontend/utils/defaultmap.json ]; then
   mkdir -p data game-server/data
   cp gather-clone/frontend/utils/defaultmap.json data/defaultmap.json

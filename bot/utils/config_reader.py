@@ -59,7 +59,7 @@ class Settings:
             raise ValueError("REDIS is required when FSM_MODE=redis")
         self.available_chat_ids = os.getenv("AVAILABLE_CHAT_IDS", "").strip()
         self.exclusive_chat_ids = os.getenv("EXCLUSIVE_CHAT_IDS", "").strip()
-        self.start_balance = _env_int("START_BALANCE", 5000)
+        self.start_balance = _env_int("START_BALANCE", 0)
         self.test_mode = _env_bool("TEST_MODE", True)
         self.sqlite_db_path = os.getenv(
             "SQLITE_DB_PATH", str(_WEBP_ROOT / "users.db")

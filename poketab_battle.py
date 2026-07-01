@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
@@ -39,6 +40,58 @@ BATTLE_ROULETTE_POOL_SIZE = 3
 INVITE_TTL_SEC = 300
 MIN_BET = 1
 MAX_DAILY_BATTLES_PER_CARD = 3
+
+
+def battle_player_id(telegram_id: str) -> int:
+    """Map any account id (numeric telegram or wallet:…) to a stable int for the battle engine."""
+    s = str(telegram_id or "").strip()
+    if s.isdigit():
+        return int(s)
+    digest = hashlib.sha256(s.encode("utf-8")).digest()
+    return 900_000_000 + (int.from_bytes(digest[:4], "big") % 99_000_000)
+
+
+def _attach_telegram_ids(game: Game, state: dict) -> Game:
+    game.player1_telegram_id = str(state.get("player1_telegram_id") or state["player1"]["id"])
+    game.player2_telegram_id = str(state.get("player2_telegram_id") or state["player2"]["id"])
+    return game
+
+
+def _game_from_state(state: dict) -> Game:
+    game = Game.from_mongo(state)
+    return _attach_telegram_ids(game, state)
+
+
+def _telegram_for_player(game: Game, player: Player) -> str:
+    if player.id == game.player1.id:
+        return getattr(game, "player1_telegram_id", str(player.id))
+    return getattr(game, "player2_telegram_id", str(player.id))
+
+
+def _quest_player_ids(game: Game) -> list[int]:
+    out: list[int] = []
+    for tg in (_telegram_for_player(game, game.player1), _telegram_for_player(game, game.player2)):
+        if str(tg).isdigit():
+            out.append(int(tg))
+    return out
+
+
+def _game_persist_state(conn: sqlite3.Connection, game: Game) -> dict:
+    info = game.to_mongo()
+    if getattr(game, "player1_telegram_id", None):
+        info["player1_telegram_id"] = game.player1_telegram_id
+        info["player2_telegram_id"] = game.player2_telegram_id
+    else:
+        row = conn.execute(
+            "SELECT state_json FROM battle_games WHERE id = ?",
+            (str(game.game_id),),
+        ).fetchone()
+        if row:
+            existing = json.loads(row["state_json"])
+            for key in ("player1_telegram_id", "player2_telegram_id"):
+                if key in existing:
+                    info[key] = existing[key]
+    return info
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -221,10 +274,7 @@ def _user_display_name(conn: sqlite3.Connection, user_id: str) -> str:
 
 
 def _active_game_for_user(conn: sqlite3.Connection, user_id: str) -> Optional[dict]:
-    try:
-        uid = int(user_id)
-    except (TypeError, ValueError):
-        uid = user_id
+    uid = battle_player_id(user_id)
     row = conn.execute(
         """
         SELECT * FROM battle_games
@@ -265,10 +315,7 @@ def _settled_game_for_status(
     *,
     max_age_seconds: int = 180,
 ) -> Optional[dict]:
-    try:
-        uid = int(user_id)
-    except (TypeError, ValueError):
-        return None
+    uid = battle_player_id(user_id)
     row = conn.execute(
         """
         SELECT * FROM battle_games
@@ -297,9 +344,11 @@ def _opponent_battle_view(
     catalog: dict,
     log: list[str],
 ) -> dict[str, Any]:
-    other_uid = str(
-        game.player2.id if int(user_id) == game.player1.id else game.player1.id
-    )
+    bid = battle_player_id(user_id)
+    if game.player1.id == bid:
+        other_uid = _telegram_for_player(game, game.player2)
+    else:
+        other_uid = _telegram_for_player(game, game.player1)
     return {
         "notify_uid": other_uid,
         "notify_battle": _serialize_game(game, other_uid, catalog, log),
@@ -314,10 +363,10 @@ def forfeit_active_battle_for_offline(
     active_doc = _active_game_for_user(conn, user_id)
     if not active_doc:
         return {"ok": True, "forfeited": False}
-    game = Game.from_mongo(active_doc)
+    game = _game_from_state(active_doc)
     if game.winner is not None:
         return {"ok": True, "forfeited": False}
-    offline_int = int(user_id)
+    offline_int = battle_player_id(user_id)
     winner, loser = game.game_over_coz_flee(offline_int)
     game.winner = winner.id
     log = [f"📴 {loser.name} left — {winner.name} wins!"]
@@ -570,9 +619,18 @@ def _pre_battle_check(
         return f"You need at least {config.min_vault_cards} PokéCard(s) in your vault."
     eligible = eligible_battle_cards(conn, user_id, valid_ids)
     if not eligible:
+        exhausted = [
+            card_id
+            for card_id in vault_ids
+            if card_battles_today(conn, user_id, card_id) >= MAX_DAILY_BATTLES_PER_CARD
+        ]
+        if exhausted and len(exhausted) >= len(vault_ids):
+            return (
+                f"No battle-ready cards today — each card can fight "
+                f"{MAX_DAILY_BATTLES_PER_CARD} times per day."
+            )
         return (
-            f"No battle-ready cards today — each card can fight "
-            f"{MAX_DAILY_BATTLES_PER_CARD} times per day."
+            f"You need at least {config.min_vault_cards} battle-ready PokéCard(s) in your vault."
         )
     if bet < MIN_BET:
         return f"Minimum wager is {MIN_BET} $POKECARD."
@@ -981,7 +1039,7 @@ def _update_game_on_conn(conn: sqlite3.Connection, game_id: str, game_info: dict
 
 def _player_from_team(user_id: str, name: str, team: list[str]) -> Player:
     return Player(
-        id=int(user_id),
+        id=battle_player_id(user_id),
         name=name,
         pokemons_pool=get_pokemons_pool_from_vault(team),
         last_move_time=time.time(),
@@ -1019,13 +1077,17 @@ def _end_game(conn: sqlite3.Connection, winner_id: int, game: Game) -> bool:
         return False
 
     game.winner = winner_id
-    _update_game_on_conn(conn, game.game_id, game.to_mongo())
+    _update_game_on_conn(conn, game.game_id, _game_persist_state(conn, game))
 
-    loser_id = game.player2.id if winner_id == game.player1.id else game.player1.id
+    winner_player = game.player1 if winner_id == game.player1.id else game.player2
+    loser_player = game.player2 if winner_player is game.player1 else game.player1
+    winner_tg = _telegram_for_player(game, winner_player)
+    loser_tg = _telegram_for_player(game, loser_player)
+
     record_battle_outcome_on_conn(
         conn,
-        winner_id,
-        loser_id,
+        winner_tg,
+        loser_tg,
         game_id=game.game_id,
         bet=game.bet,
         source="poketab",
@@ -1035,7 +1097,7 @@ def _end_game(conn: sqlite3.Connection, winner_id: int, game: Game) -> bool:
     if bet > 0:
         for_winner = int(bet * 2 * 0.95)
         prize_pool = bet * 2 * 0.05
-        _adjust_balance_on_conn(conn, str(winner_id), for_winner)
+        _adjust_balance_on_conn(conn, winner_tg, for_winner)
         _deposit_burn_on_conn(conn, prize_pool)
 
     conn.execute(
@@ -1071,7 +1133,7 @@ def _settle_battle(
         "settled": settled,
         "winner_id": winner.id,
         "log": log,
-        "quest_player_ids": [game.player1.id, game.player2.id] if settled else [],
+        "quest_player_ids": _quest_player_ids(game) if settled else [],
     }
 
 
@@ -1118,8 +1180,12 @@ def _try_start_battle(conn: sqlite3.Connection, invite_id: int, valid_ids: set[s
             _player_from_team(p2, _user_display_name(conn, p2), team2),
             bet=bet,
         )
-        game_id = _create_game_on_conn(conn, game.to_mongo())
+        mongo = game.to_mongo()
+        mongo["player1_telegram_id"] = p1
+        mongo["player2_telegram_id"] = p2
+        game_id = _create_game_on_conn(conn, mongo)
         game.game_id = game_id
+        _attach_telegram_ids(game, mongo)
     except Exception:
         _adjust_balance_on_conn(conn, p1, bet)
         _adjust_balance_on_conn(conn, p2, bet)
@@ -1156,7 +1222,7 @@ def _load_game_from_conn(conn: sqlite3.Connection, game_id: str) -> Optional[Gam
     state["bet"] = row["bet"]
     state["winner"] = row["winner"]
     state["creation_time"] = row["creation_time"]
-    return Game.from_mongo(state)
+    return _game_from_state(state)
 
 
 def _load_game(game_id: str) -> Optional[Game]:
@@ -1167,7 +1233,7 @@ def _load_game(game_id: str) -> Optional[Game]:
 
 
 def _save_game(conn: sqlite3.Connection, game: Game) -> None:
-    _update_game_on_conn(conn, game.game_id, game.to_mongo())
+    _update_game_on_conn(conn, game.game_id, _game_persist_state(conn, game))
 
 
 def _serialize_pokemon(pokemon, catalog: dict) -> Optional[dict]:
@@ -1228,7 +1294,7 @@ def _maybe_timeout(game: Game) -> Optional[tuple[Player, Player]]:
 
 
 def _serialize_game(game: Game, viewer_id: str, catalog: dict, log: list[str]) -> dict:
-    viewer_int = int(viewer_id)
+    viewer_int = battle_player_id(viewer_id)
     me = game.player1 if game.player1.id == viewer_int else game.player2
     opp = game.player2 if me is game.player1 else game.player1
     phase = "battle"
@@ -1287,7 +1353,7 @@ def get_status(
     battle = None
     quest_player_ids: list[int] = []
     if active_doc and active_doc.get("winner") is None:
-        game = Game.from_mongo(active_doc)
+        game = _game_from_state(active_doc)
         timeout_result = _resolve_timeout_if_due(conn, game)
         if timeout_result:
             quest_player_ids = timeout_result.get("quest_player_ids") or []
@@ -1302,10 +1368,13 @@ def get_status(
     elif not battle:
         settled_doc = _settled_game_for_status(conn, user_id)
         if settled_doc:
-            game = Game.from_mongo(settled_doc)
+            game = _game_from_state(settled_doc)
             battle = _serialize_game(game, user_id, catalog, [])
 
     balance = _user_balance(conn, user_id)
+    valid = set(catalog.keys())
+    vault_count = len(_user_vault_ids(conn, user_id, valid))
+    eligible_count = len(eligible_battle_cards(conn, user_id, valid))
     return {
         "balance": balance,
         "battle_alerts": alerts,
@@ -1314,7 +1383,8 @@ def get_status(
         "invite": invite,
         "battle": battle,
         "quest_player_ids": quest_player_ids,
-        "eligible_cards": len(eligible_battle_cards(conn, user_id, set(catalog.keys()))),
+        "eligible_cards": eligible_count,
+        "vault_cards": vault_count,
         "daily_battles_per_card": MAX_DAILY_BATTLES_PER_CARD,
     }
 
@@ -1334,7 +1404,7 @@ def perform_action(
     if game_id and str(active_doc.get("_id")) != game_id:
         return {"ok": False, "error": "Battle mismatch."}
 
-    game = Game.from_mongo(active_doc)
+    game = _game_from_state(active_doc)
     if game.winner is not None:
         return {
             "ok": True,
@@ -1354,7 +1424,7 @@ def perform_action(
             **_opponent_battle_view(game, user_id, catalog, log),
         }
 
-    viewer_int = int(user_id)
+    viewer_int = battle_player_id(user_id)
     log: list[str] = []
 
     if action == "select_pokemon":

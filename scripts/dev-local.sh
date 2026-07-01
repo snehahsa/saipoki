@@ -7,6 +7,37 @@ cd "$ROOT"
 export GAME_PORT="${GAME_PORT:-3001}"
 export PORT="${PORT:-5000}"
 
+port_listener_pids() {
+  lsof -ti "tcp:${1}" -sTCP:LISTEN 2>/dev/null || true
+}
+
+port_listener_comm() {
+  lsof -i "tcp:${1}" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1}'
+}
+
+is_port_listening() {
+  [ -n "$(port_listener_pids "$1")" ]
+}
+
+# macOS AirPlay Receiver permanently owns :5000 — never fight it; use 5001.
+pick_flask_port() {
+  local port="${PORT:-5000}"
+  if ! is_port_listening "$port"; then
+    echo "$port"
+    return
+  fi
+  local comm
+  comm="$(port_listener_comm "$port")"
+  if [ "$comm" = "ControlCe" ] || [ "$port" = "5000" ]; then
+    echo "5001"
+    return
+  fi
+  echo "$port"
+}
+
+PORT="$(pick_flask_port)"
+export PORT
+
 pick_python() {
   if [ -n "${PYTHON:-}" ] && command -v "$PYTHON" >/dev/null 2>&1; then
     echo "$PYTHON"
@@ -64,12 +95,30 @@ ensure_game_server_deps() {
   fi
 }
 
+free_port "$GAME_PORT" "game server"
+
+# Only stop our own Flask/Python on the chosen port — not macOS AirPlay on 5000.
+if is_port_listening "$PORT"; then
+  comm="$(port_listener_comm "$PORT")"
+  case "$comm" in
+    Python|python|Python3|python3)
+      free_port "$PORT" "Flask"
+      ;;
+    *)
+      echo "Port ${PORT} is in use by ${comm:-unknown} — set PORT= to another value." >&2
+      exit 1
+      ;;
+  esac
+fi
+
+if is_port_listening "$PORT"; then
+  echo "Could not bind Flask — port ${PORT} is still in use." >&2
+  exit 1
+fi
+
 echo "Flask:       http://127.0.0.1:${PORT}  (/?alice, /?bob, /?alive)"
 echo "Game server: http://127.0.0.1:${GAME_PORT}"
 echo "Press Ctrl+C to stop both."
-
-free_port "$GAME_PORT" "game server"
-free_port "$PORT" "Flask"
 ensure_python_deps
 ensure_game_server_deps
 
@@ -96,5 +145,24 @@ fi
 
 "$PYTHON" app.py &
 FLASK_PID=$!
+
+for _ in $(seq 1 40); do
+  if is_port_listening "$PORT"; then
+    break
+  fi
+  if ! kill -0 "$FLASK_PID" 2>/dev/null; then
+    echo "Flask failed to start on port ${PORT}." >&2
+    wait "$FLASK_PID" 2>/dev/null || true
+    exit 1
+  fi
+  sleep 0.25
+done
+
+if ! is_port_listening "$PORT"; then
+  echo "Flask did not bind to port ${PORT}." >&2
+  exit 1
+fi
+
+echo "Game ready → http://127.0.0.1:${PORT}/?alice"
 
 wait "$FLASK_PID" "$GAME_PID"

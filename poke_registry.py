@@ -135,6 +135,7 @@ VAULT_SOURCES = frozenset(
         "trade",
         "gift",
         "admin",
+        "test_starter",
         "unknown",
     }
 )
@@ -145,8 +146,33 @@ def normalize_vault_source(source: str | None) -> str:
     return value if value in VAULT_SOURCES else "unknown"
 
 
-def parse_vault(raw, valid_card_ids: frozenset[str] | set[str] | None = None) -> list[dict]:
-    """Parse stored vault JSON; drop unknown card ids."""
+def resolve_stored_card_id(
+    card_id: str,
+    valid: set[str],
+    path: Path | None = None,
+) -> str | None:
+    """Map poke-NNN ids, legacy slugs, or display names to a catalog id."""
+    card_id = str(card_id or "").strip()
+    if not card_id:
+        return None
+    if not valid or card_id in valid:
+        return card_id
+    for candidate in (
+        catalog_id_for_name(card_id, path),
+        catalog_id_for_slug(card_id, path),
+    ):
+        if candidate and candidate in valid:
+            return candidate
+    return None
+
+
+def parse_vault(
+    raw,
+    valid_card_ids: frozenset[str] | set[str] | None = None,
+    *,
+    poke_json_path: Path | None = None,
+) -> list[dict]:
+    """Parse stored vault JSON; migrate legacy ids to catalog poke-NNN ids."""
     if not raw:
         items: list = []
     elif isinstance(raw, list):
@@ -175,15 +201,14 @@ def parse_vault(raw, valid_card_ids: frozenset[str] | set[str] | None = None) ->
         else:
             continue
 
-        if not card_id or card_id in seen:
-            continue
-        if valid and card_id not in valid:
+        resolved = resolve_stored_card_id(card_id, valid, poke_json_path)
+        if not resolved or resolved in seen:
             continue
 
-        seen.add(card_id)
+        seen.add(resolved)
         vault.append(
             {
-                "card_id": card_id,
+                "card_id": resolved,
                 "acquired_at": acquired_at,
                 "source": source,
             }

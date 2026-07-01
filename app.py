@@ -61,6 +61,7 @@ from kins_payments import (
     KINS_TREASURY_WALLET,
     MAX_DEPOSIT_KINS,
     MIN_DEPOSIT_KINS,
+    MIN_WITHDRAW_KINS,
     TOKEN_2022_PROGRAM_ID,
     confirm_payment,
     create_payment_intent,
@@ -73,6 +74,7 @@ from kins_payments import (
 from avatar_economy import (
     DEFAULT_SKIN as AVATAR_DEFAULT_SKIN,
     STARTING_BALANCE,
+    TEST_STARTING_BALANCE,
     VENDING_SPIN_FIRST_COST,
     VENDING_SPIN_REPEAT_COST,
     load_avatar_costs_from_map,
@@ -82,6 +84,7 @@ from avatar_economy import (
     skin_list_price,
     vending_spin_cost,
 )
+from npc_economy import grant_npc_balance
 from leaderboard import build_leaderboard_payload
 from trainer_stats import ensure_trainer_stats_schema, trainer_stats_row
 from xp_levels import xp_config_for_client
@@ -101,14 +104,17 @@ from poketab_battle import (
     battleable_opponents,
     cancel_invite,
     count_battle_alerts,
+    eligible_battle_cards,
     ensure_schema as ensure_poketab_battle_schema,
     forfeit_active_battle_for_offline,
     get_status as poketab_battle_status,
+    MAX_DAILY_BATTLES_PER_CARD,
     notify_battle_quests,
     perform_action as poketab_battle_action,
     respond_invite,
     send_challenge,
     set_team,
+    _user_vault_ids,
 )
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -334,9 +340,9 @@ def test_telegram_id_for_slug(slug: str) -> str:
 
 
 def ensure_test_player_profile(conn, telegram_id: str) -> None:
-    """Persist holds and gear for URL test trainers."""
+    """Persist holds, gear, and a starter vault card for URL test trainers."""
     row = conn.execute(
-        "SELECT holds, gear_slots FROM users WHERE telegram_id = ?",
+        "SELECT holds, gear_slots, vault FROM users WHERE telegram_id = ?",
         (telegram_id,),
     ).fetchone()
     if not row:
@@ -351,15 +357,23 @@ def ensure_test_player_profile(conn, telegram_id: str) -> None:
     if gear_changed:
         slots = normalize_gear_slots(TEST_PLAYER_GEAR_SLOTS)
 
-    if not holds_changed and not gear_changed:
+    vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+    vault_changed = False
+    if len(vault_card_ids(vault)) < 1:
+        starter_entries = test_starter_vault_entries()
+        if starter_entries:
+            vault = starter_entries
+            vault_changed = True
+
+    if not holds_changed and not gear_changed and not vault_changed:
         return
 
     conn.execute(
         """
-        UPDATE users SET holds = ?, gear_slots = ?, updated_at = ?
+        UPDATE users SET holds = ?, gear_slots = ?, vault = ?, updated_at = ?
         WHERE telegram_id = ?
         """,
-        (json.dumps(holds), json.dumps(slots), now, telegram_id),
+        (json.dumps(holds), json.dumps(slots), json.dumps(vault), now, telegram_id),
     )
 
 
@@ -600,7 +614,34 @@ def valid_card_ids() -> frozenset[str]:
 
 
 def vault_for_user(raw) -> list[dict]:
-    return parse_vault(raw, valid_card_ids())
+    path = Path(app.root_path) / "poke.json"
+    return parse_vault(raw, valid_card_ids(), poke_json_path=path)
+
+
+def persist_user_vault(conn, telegram_id: str, raw, now: Optional[int] = None) -> list[dict]:
+    """Parse vault, migrate legacy ids, and persist when storage changed."""
+    vault = vault_for_user(raw)
+    serialized = json.dumps(vault)
+    stored = raw if isinstance(raw, str) else json.dumps(raw or [])
+    if serialized != stored:
+        conn.execute(
+            "UPDATE users SET vault = ?, updated_at = ? WHERE telegram_id = ?",
+            (serialized, now or int(time.time()), telegram_id),
+        )
+    return vault
+
+
+def test_starter_card_id() -> Optional[str]:
+    ids = sorted(valid_card_ids())
+    return ids[0] if ids else None
+
+
+def test_starter_vault_entries() -> list[dict]:
+    card_id = test_starter_card_id()
+    if not card_id:
+        return []
+    vault, _ = add_card_to_vault([], card_id, source="test_starter")
+    return vault
 
 
 def is_quest_complete(quest_id: str, completed_steps: list) -> bool:
@@ -633,14 +674,19 @@ def telegram_play_url() -> str:
 GIF_EXTENSIONS = (".gif", ".webp", ".png", ".jpg", ".jpeg", ".mp4")
 
 
-def landing_gif_url() -> Optional[str]:
-    """Resolve /static/giffiles/2 — any supported extension."""
+def landing_gif_url(slot: str = "2") -> Optional[str]:
+    """Resolve /static/giffiles/{slot} — any supported extension."""
     gif_dir = Path(app.root_path) / "static/giffiles"
     for ext in GIF_EXTENSIONS:
-        path = gif_dir / f"2{ext}"
+        path = gif_dir / f"{slot}{ext}"
         if path.is_file():
-            return f"/static/giffiles/2{ext}?v={int(path.stat().st_mtime)}"
+            return f"/static/giffiles/{slot}{ext}?v={int(path.stat().st_mtime)}"
     return None
+
+
+def landing_hero_media_url() -> Optional[str]:
+    """Hero media — /static/giffiles/1.* preferred, then 2.*."""
+    return landing_gif_url("1") or landing_gif_url("2")
 
 
 def landing_pool_cards() -> list:
@@ -650,35 +696,92 @@ def landing_pool_cards() -> list:
     ]
 
 
+def landing_play_lead() -> str:
+    """Quick-start intro blurb for the landing how-to-play panel."""
+    return (
+        "Connect at pokecards.quest, walk the live map with other trainers, "
+        "chain the Vault Trail quests, and wager PokéCards through PokéTab."
+    )
+
+
 def landing_play_steps() -> list:
     """Quick-start steps for the landing page how-to-play panel."""
     return [
         {
-            "title": "1 · Open the bot",
-            "text": "Tap Play Now and send /start in DM.",
-            "icon": "bot",
+            "title": "Connect & enter",
+            "text": "Open pokecards.quest, tap Play Now, and sign in with Phantom or Solflare.",
+            "icon": "wallet",
         },
         {
-            "title": "2 · Build your trainer",
-            "text": "Set a PIN, pick an avatar, name your hero.",
+            "title": "Build your trainer",
+            "text": "Set a PIN, pick an avatar skin, and name your hero.",
             "icon": "trainer",
         },
         {
-            "title": "3 · Roam the realm",
-            "text": "Use the D-pad, talk to NPCs, read signs & boards.",
+            "title": "Roam the realm",
+            "text": "Use the D-pad, meet Live Trainers, and follow quest hints on signs and boards.",
             "icon": "roam",
         },
         {
-            "title": "4 · Battle in group",
-            "text": "Run /battle 50 to wager $POKECARD tokens.",
-            "icon": "battle",
+            "title": "Loot & spin",
+            "text": "Find hidden gear across the map and pull cards from vending machines.",
+            "icon": "loot",
         },
         {
-            "title": "5 · Rank up",
-            "text": "Complete quests, grow your vault, climb the live leaderboard.",
+            "title": "Battle & rank up",
+            "text": "Challenge trainers on PokéTab, wager vault cards, and climb the live leaderboard.",
             "icon": "rank",
         },
     ]
+
+
+def landing_skin_price_tier(price: int) -> str:
+    """Match in-game profile shop tier bands (see skinPriceTier in app.js)."""
+    value = max(0, int(price))
+    if value >= 5000:
+        return "gold"
+    if value >= 3000:
+        return "bronze"
+    if value >= 1500:
+        return "silver"
+    return "green"
+
+
+def landing_skin_thumb_style(skin: str) -> str:
+    """Inline CSS for a compact profile-style skin sprite thumb on the landing page."""
+    zoom = 1.5
+    sheet = 192
+    frame_x, frame_y, frame_w, frame_h = 48, 0, 48, 48
+    url = f"/sprites/characters/Character_{skin}.png"
+    return (
+        f"background-image:url({url});"
+        f"background-size:{sheet * zoom}px {sheet * zoom}px;"
+        f"background-position:-{frame_x * zoom}px -{frame_y * zoom}px;"
+        f"width:{frame_w * zoom}px;height:{frame_h * zoom}px;"
+    )
+
+
+def landing_exclusive_skins() -> list:
+    """Top three costliest avatar skins for the landing showcase."""
+    costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
+    ranked = sorted(
+        (skin for skin in SKINS if skin != AVATAR_DEFAULT_SKIN),
+        key=lambda skin: (skin_list_price(skin, costs), skin),
+        reverse=True,
+    )
+    showcase = []
+    for skin in ranked[:3]:
+        price = skin_list_price(skin, costs)
+        showcase.append(
+            {
+                "skin": skin,
+                "price": price,
+                "tier": landing_skin_price_tier(price),
+                "thumb_style": landing_skin_thumb_style(skin),
+                "sprite_url": f"/sprites/characters/Character_{skin}.png",
+            }
+        )
+    return showcase
 
 
 def landing_hold_items() -> list:
@@ -687,17 +790,20 @@ def landing_hold_items() -> list:
         (
             "bag",
             "Trainer Bag",
-            "Hidden near the Nova City plaza — your first quest pickup.",
+            "Unlocks the bag icon on your HUD — open it anywhere to reach your Poké Vault, "
+            "PokéTab, and any extra tabs you earn as you collect quest gear.",
         ),
         (
             "card_vault",
             "Poké Vault",
-            "Gift from Dr. Ray once you have your bag; stores every PokéCard you mint.",
+            "Permanent home for every PokéCard you spin, win, or discover. Browse your full "
+            "collection and pull cards from here into PokéTab battles and wagers.",
         ),
         (
             "poketab",
             "PokéTab",
-            "Claim it from the PokéHub Manager to chat and battle trainers worldwide.",
+            "Your handheld link device — scan online trainers, send friend requests, DM allies, "
+            "and challenge rivals to wager battles using cards from your vault.",
         ),
     ]
     paths = {
@@ -765,6 +871,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         ui_unlocks=ui_unlocks_for_client(),
         avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
         starting_balance=STARTING_BALANCE,
+        min_withdraw_kins=MIN_WITHDRAW_KINS,
         vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
         vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
         xp_levels=xp_config_for_client(),
@@ -897,6 +1004,7 @@ def kins_config_api():
             "treasuryWallet": KINS_TREASURY_WALLET,
             "minHold": int(MIN_TOKEN_UI_AMOUNT),
             "minDeposit": MIN_DEPOSIT_KINS,
+            "minWithdraw": MIN_WITHDRAW_KINS,
             "maxDeposit": MAX_DEPOSIT_KINS,
             "rpcUrl": SOLANA_RPC_URL,
             "mintDecimals": decimals,
@@ -990,7 +1098,7 @@ def kins_deposit_intent_api():
         return jsonify(
             {
                 "success": False,
-                "error": f"Enter between {MIN_DEPOSIT_KINS:,} and {MAX_DEPOSIT_KINS:,} $KINS.",
+                "error": f"Enter between {MIN_DEPOSIT_KINS:,} and {MAX_DEPOSIT_KINS:,} $POKEQUEST.",
             }
         ), 400
 
@@ -1030,6 +1138,28 @@ def kins_withdraw_api():
     return jsonify({"success": True, **result})
 
 
+@app.route("/api/economy/npc-grant", methods=["POST"])
+def npc_balance_grant_api():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    grant_id = str(data.get("grantId") or data.get("grant_id") or "").strip()
+    if not grant_id:
+        return jsonify({"success": False, "error": "Missing grant id."}), 400
+
+    with get_db() as conn:
+        ok, error, result = grant_npc_balance(
+            conn,
+            telegram_id=telegram_id,
+            grant_id=grant_id,
+        )
+    if not ok:
+        return jsonify({"success": False, "error": error}), 400
+    return jsonify({"success": True, **result})
+
+
 @app.route("/api/kins/skin-intent", methods=["POST"])
 def kins_skin_intent_api():
     telegram_id, wallet, err = _auth_wallet_context()
@@ -1063,7 +1193,7 @@ def kins_skin_intent_api():
             return jsonify(
                 {
                     "success": False,
-                    "error": "No $KINS payment required for this avatar.",
+                    "error": "No $POKEQUEST payment required for this avatar.",
                     "requires_payment": False,
                 }
             ), 400
@@ -1159,18 +1289,17 @@ def kins_confirm_api():
 def landing_page():
     return render_template(
         "landing.html",
-        play_url=telegram_play_url(),
-        bot_username=telegram_bot_username(),
         starting_balance=STARTING_BALANCE,
         pool_cards=landing_pool_cards(),
         showcase_cards=landing_pool_cards()[:3],
         hold_items=landing_hold_items(),
+        exclusive_skins=landing_exclusive_skins(),
         play_steps=landing_play_steps(),
-        gif_url=landing_gif_url(),
+        play_lead=landing_play_lead(),
+        hero_media_url=landing_hero_media_url(),
         asset_v={
             "landing_css": asset_version("static/css/landing.css"),
             "landing_js": asset_version("static/js/landing.js"),
-            "retro_audio_js": asset_version("static/js/retro-audio.js"),
             "titles": asset_version("static/imgs/titles.png"),
         },
     )
@@ -1228,14 +1357,15 @@ def auth():
             is_spectator = telegram_id.startswith("spectator:")
             is_wallet = is_wallet_user_id(telegram_id)
             auto_profile = is_test or is_spectator
-            starting_balance = 0 if is_wallet else STARTING_BALANCE
+            starting_balance = TEST_STARTING_BALANCE if is_test else 0
+            starter_vault = json.dumps(test_starter_vault_entries()) if is_test else "[]"
             conn.execute(
                 """
                 INSERT INTO users (
                     telegram_id, username, display_name, skin, badges, quest_progress,
                     holds, gear_slots, vault, balance, owned_skins, pin, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, '[]', '{"completed_steps":[],"removed_quests":[]}', ?, ?, '[]', ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, '[]', '{"completed_steps":[],"removed_quests":[]}', ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     telegram_id,
@@ -1244,6 +1374,7 @@ def auth():
                     AVATAR_DEFAULT_SKIN if auto_profile else None,
                     json.dumps(TEST_PLAYER_HOLDS) if is_test else "[]",
                     json.dumps(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None]),
+                    starter_vault,
                     starting_balance,
                     owned_skins_json([AVATAR_DEFAULT_SKIN] if auto_profile else []),
                     "123" if is_test else None,
@@ -1255,7 +1386,7 @@ def auth():
             badges = []
             holds = TEST_PLAYER_HOLDS if is_test else []
             gear_slots = list(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None])
-            vault = []
+            vault = test_starter_vault_entries() if is_test else []
             balance = starting_balance
             vending_spins = 0
             owned_skins = parse_owned_skins([AVATAR_DEFAULT_SKIN])
@@ -1299,22 +1430,13 @@ def auth():
             gear_slots = parse_gear_slots(
                 row["gear_slots"] if "gear_slots" in row.keys() else None
             )
-            vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+            vault = persist_user_vault(conn, telegram_id, row["vault"] if "vault" in row.keys() else None, now)
             balance = int(row["balance"] if "balance" in row.keys() else 0)
             vending_spins = int(row["vending_spins"] if "vending_spins" in row.keys() else 0)
             owned_skins = parse_owned_skins(
                 row["owned_skins"] if "owned_skins" in row.keys() else None,
                 row["skin"],
             )
-            if balance == 0 and row["skin"] is None:
-                conn.execute(
-                    """
-                    UPDATE users SET balance = ?, updated_at = ?
-                    WHERE telegram_id = ? AND balance = 0
-                    """,
-                    (STARTING_BALANCE, now, telegram_id),
-                )
-                balance = STARTING_BALANCE
             user_pin = row["pin"] if "pin" in row.keys() else None
             backfill_quest_triggers(conn, telegram_id)
             row_after = conn.execute(
@@ -1479,7 +1601,7 @@ def save_skin():
             return jsonify(
                 {
                     "success": False,
-                    "error": f"Send {cost:,} $KINS from your wallet to unlock this avatar.",
+                    "error": f"Send {cost:,} $POKEQUEST from your wallet to unlock this avatar.",
                     "requires_kins_payment": True,
                     "cost": cost,
                 }
@@ -1752,14 +1874,14 @@ def poketab_battle_opponents_api():
                 "SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,)
             ).fetchone()
             my_balance = int(balance["balance"] or 0) if balance else 0
-            from poketab_battle import MAX_DAILY_BATTLES_PER_CARD, eligible_battle_cards
-
             my_eligible = len(eligible_battle_cards(conn, telegram_id, set(catalog.keys())))
+            my_vault = len(_user_vault_ids(conn, telegram_id, set(catalog.keys())))
         return jsonify({
             "success": True,
             "opponents": opponents,
             "balance": my_balance,
             "eligible_cards": my_eligible,
+            "vault_cards": my_vault,
             "daily_battles_per_card": MAX_DAILY_BATTLES_PER_CARD,
         })
     except Exception:
@@ -1821,11 +1943,24 @@ def poketab_battle_respond_api():
     if not result.get("ok"):
         return jsonify({"success": False, "error": result.get("error", "Could not respond")}), 400
     if row and result.get("started"):
-        _notify_poketab_player(
-            row["challenger_id"],
-            "battle_start",
-            {"invite_id": invite_id, "game_id": result.get("game_id")},
-        )
+        challenger_id = str(row["challenger_id"])
+        accepter_id = telegram_id
+        game_id = result.get("game_id")
+        for uid in (challenger_id, accepter_id):
+            with get_db() as conn:
+                status = poketab_battle_status(conn, uid, catalog)
+            battle = status.get("battle")
+            if uid == accepter_id and battle and not result.get("battle"):
+                result["battle"] = battle
+            _notify_poketab_player(
+                uid,
+                "battle_start",
+                {
+                    "invite_id": invite_id,
+                    "game_id": game_id,
+                    "battle": battle,
+                },
+            )
     elif row and result.get("accepted") is False:
         _notify_poketab_player(
             row["challenger_id"],
@@ -2205,6 +2340,7 @@ def fishing_cast_start():
             "success": True,
             "session_id": result["session_id"],
             "duration_ms": result["duration_ms"],
+            "resolve_at_ms": result.get("resolve_at_ms", result["duration_ms"]),
             "status_label": result["status_label"],
             "wrong_mode": bool(result.get("wrong_mode")),
             "quest_key": result.get("quest_key"),
@@ -2266,7 +2402,9 @@ def vending_spin():
     now = int(time.time())
     with get_db() as conn:
         row = conn.execute(
-            "SELECT balance, vending_spins FROM users WHERE telegram_id = ?",
+            """
+            SELECT balance, vending_spins, vault FROM users WHERE telegram_id = ?
+            """,
             (telegram_id,),
         ).fetchone()
         if row is None:
@@ -2295,14 +2433,17 @@ def vending_spin():
         if not card_id:
             return jsonify({"success": False, "error": "Draw failed."}), 500
 
+        vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+        vault, added = add_card_to_vault(vault, card_id, source="vending")
+
         new_balance = balance - cost
         new_spins = spins + 1
         conn.execute(
             """
-            UPDATE users SET balance = ?, vending_spins = ?, updated_at = ?
+            UPDATE users SET balance = ?, vending_spins = ?, vault = ?, updated_at = ?
             WHERE telegram_id = ?
             """,
-            (new_balance, new_spins, now, telegram_id),
+            (new_balance, new_spins, json.dumps(vault), now, telegram_id),
         )
 
     return jsonify(
@@ -2310,10 +2451,13 @@ def vending_spin():
             "success": True,
             "card_id": card_id,
             "card": winner,
+            "added": added,
             "balance": new_balance,
             "vending_spins": new_spins,
             "spin_cost": cost,
             "next_spin_cost": vending_spin_cost(new_spins),
+            "vault": vault_card_ids(vault),
+            "vault_detail": vault,
         }
     )
 

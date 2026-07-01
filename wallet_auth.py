@@ -212,7 +212,7 @@ def wallet_kins_balance(wallet_address: str) -> tuple[float, str]:
         with urllib.request.urlopen(req, timeout=12) as resp:
             body = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-        return 0.0, f"Could not verify $KINS balance ({exc}). Try again."
+        return 0.0, f"Could not verify $POKEQUEST balance ({exc}). Try again."
 
     accounts = body.get("result", {}).get("value") or []
     total = 0.0
@@ -234,7 +234,7 @@ def wallet_holds_kins_token(wallet_address: str) -> tuple[bool, str]:
     if total >= MIN_TOKEN_UI_AMOUNT:
         return True, ""
     min_display = int(MIN_TOKEN_UI_AMOUNT) if MIN_TOKEN_UI_AMOUNT == int(MIN_TOKEN_UI_AMOUNT) else MIN_TOKEN_UI_AMOUNT
-    return False, f"Wallet must hold at least {min_display:,} $KINS to enter the realm."
+    return False, f"Wallet must hold at least {min_display:,} $POKEQUEST to enter the realm."
 
 
 def issue_wallet_session(wallet_address: str) -> str:
@@ -306,7 +306,7 @@ def verify_wallet_login(
     if not verify_solana_signature(wallet_address, message, signature_b64):
         return False, "Signature verification failed. Try connecting again.", None
 
-    # Token gate (min $KINS hold) — disabled for now; uncomment to re-enable at launch.
+    # Token gate (min $POKEQUEST hold) — disabled for now; uncomment to re-enable at launch.
     # if require_token:
     #     ok, err = wallet_holds_kins_token(wallet_address)
     #     if not ok:

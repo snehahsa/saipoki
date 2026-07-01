@@ -10,8 +10,8 @@ from typing import Optional
 DEFAULT_SKIN = "009"
 SKINS = [f"{i:03d}" for i in range(1, 84)]
 
-STARTING_BALANCE = int(os.getenv("STARTING_BALANCE", os.getenv("START_BALANCE", "5000")))
-TEST_STARTING_BALANCE = int(os.getenv("TEST_STARTING_BALANCE", str(STARTING_BALANCE)))
+STARTING_BALANCE = int(os.getenv("STARTING_BALANCE", os.getenv("START_BALANCE", "0")))
+TEST_STARTING_BALANCE = int(os.getenv("TEST_STARTING_BALANCE", "5000"))
 VENDING_SPIN_FIRST_COST = int(os.getenv("VENDING_SPIN_FIRST_COST", "1000"))
 VENDING_SPIN_REPEAT_COST = int(os.getenv("VENDING_SPIN_REPEAT_COST", "2000"))
 

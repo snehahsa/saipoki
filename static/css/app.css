@@ -2635,8 +2635,8 @@ button::selection,
 
 .quest-sub {
     display: grid;
-    grid-template-columns: 28px 1fr;
-    gap: 6px;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
     align-items: start;
     padding: 5px 0;
     border-bottom: 1px solid rgba(139, 90, 43, 0.2);
@@ -2650,23 +2650,17 @@ button::selection,
     font-family: silkscreen, monospace;
     font-size: calc(7px * var(--ui-scale));
     color: #8b5a2b;
-    background: rgba(196, 165, 116, 0.35);
-    border: 2px solid #a0724a;
-    padding: 2px 0;
-    text-align: center;
+    min-width: 1.6em;
+    text-align: left;
     line-height: 1.4;
 }
 
 .quest-sub--current .quest-sub-id {
     color: #0d4a28;
-    background: #b8ffd4;
-    border-color: #1a8a4a;
 }
 
 .quest-sub--done .quest-sub-id {
     color: #1a5a8a;
-    background: #c8e8ff;
-    border-color: #2a6a9e;
 }
 
 .quest-sub--done .quest-sub-name {
@@ -2782,6 +2776,19 @@ button::selection,
 
 .quests-back-btn {
     flex-shrink: 0;
+}
+
+#quests-screen .screen-nav .quests-back-btn {
+    padding: 4px 8px;
+    font-size: calc(7px * var(--ui-scale));
+    letter-spacing: 0.02em;
+    min-height: 0;
+    line-height: 1.3;
+}
+
+#quests-screen .screen-nav {
+    margin: -6px 0 8px;
+    padding-bottom: 6px;
 }
 
 .screen-nav .quests-back-btn,
@@ -3747,6 +3754,13 @@ body.poketab-open {
     z-index: 1;
     --pt-scale: 0.78;
     --pt-ui-font-mul: 1.45;
+    --pt-left-rail: calc(184px * var(--pt-scale));
+    --pt-right-rail: calc(260px * var(--pt-scale));
+    --pt-btn-w: calc(148px * var(--pt-scale));
+    --pt-btn-h: calc(54px * var(--pt-scale));
+    --pt-btn-gap: calc(10px * var(--pt-scale));
+    --pt-btn-font: calc(8px * var(--pt-ui-font-mul));
+    --pt-led-size: calc(10px * var(--pt-scale));
     --pt-monitor-height: min(calc(90vh * var(--pt-scale)), calc(760px * var(--pt-scale)));
     --pt-monitor-min-height: calc(640px * var(--pt-scale));
     --pt-monitor-max-height: calc(920px * var(--pt-scale));
@@ -3766,8 +3780,10 @@ body.poketab-open {
 
 .poketab-console {
     display: grid;
-    grid-template-columns: calc(52px * var(--pt-scale, 0.78)) minmax(0, 1fr) calc(200px * var(--pt-scale, 0.78));
+    grid-template-columns: var(--pt-left-rail) minmax(0, 1fr) var(--pt-right-rail);
     gap: 0;
+    align-items: stretch;
+    min-height: calc(720px * var(--pt-scale));
     position: relative;
     overflow: hidden;
     background:
@@ -3800,6 +3816,38 @@ body.poketab-open {
 .poketab-rail-left {
     border-right: 3px solid #0e2030;
     box-shadow: inset -3px 0 0 rgba(255, 255, 255, 0.06);
+    align-items: center;
+    justify-content: center;
+    gap: calc(12px * var(--pt-scale));
+    padding: calc(14px * var(--pt-scale)) calc(10px * var(--pt-scale));
+    min-width: 0;
+}
+
+.poketab-left-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pt-btn-gap);
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    padding: calc(6px * var(--pt-scale)) 0;
+}
+
+.poketab-left-btn {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(6px * var(--pt-scale));
+    width: var(--pt-btn-w);
+    height: var(--pt-btn-h);
+    min-height: var(--pt-btn-h);
+    max-height: var(--pt-btn-h);
+    flex-shrink: 0;
+    padding: calc(8px * var(--pt-scale)) calc(6px * var(--pt-scale));
 }
 
 .poketab-rail-right {
@@ -3904,7 +3952,14 @@ body.poketab-open {
     flex-direction: column;
     gap: 0;
     min-width: 0;
-    padding: calc(12px * var(--pt-scale, 1.3)) calc(10px * var(--pt-scale, 1.3)) calc(14px * var(--pt-scale, 1.3));
+    min-height: 0;
+    padding: calc(12px * var(--pt-scale)) calc(10px * var(--pt-scale)) calc(10px * var(--pt-scale));
+}
+
+.poketab-main-footer {
+    flex-shrink: 0;
+    margin-top: auto;
+    padding-top: calc(8px * var(--pt-scale));
 }
 
 .poketab-top-panel {
@@ -3967,7 +4022,9 @@ body.poketab-open {
 }
 
 .poketab-monitor-wrap {
-    margin-bottom: 10px;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 0;
 }
 
 .poketab-monitor-bezel {
@@ -4106,29 +4163,27 @@ body.poketab-open {
     50% { opacity: 0; }
 }
 
-.poketab-control-deck {
+.poketab-tab-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-}
-
-.poketab-tab-row {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: calc(3px * var(--pt-scale, 1.3));
+    gap: var(--pt-btn-gap);
+    width: 100%;
 }
 
 .poketab-tab {
     position: relative;
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: calc(2px * var(--pt-scale, 1.3));
-    min-height: calc(27px * var(--pt-scale, 0.78) * var(--pt-ui-font-mul, 1.45));
-    padding: calc(3px * var(--pt-scale, 1.3)) calc(3px * var(--pt-scale, 1.3));
+    gap: calc(6px * var(--pt-scale));
+    width: var(--pt-btn-w);
+    height: var(--pt-btn-h);
+    min-height: var(--pt-btn-h);
+    max-height: var(--pt-btn-h);
+    padding: calc(8px * var(--pt-scale)) calc(6px * var(--pt-scale));
     font-family: silkscreen, monospace;
-    font-size: calc(4px * var(--pt-scale, 0.78) * var(--pt-ui-font-mul, 1.45));
+    font-size: var(--pt-btn-font);
     letter-spacing: 0.04em;
     color: #d8f0ff;
     cursor: pointer;
@@ -4170,30 +4225,37 @@ body.poketab-open {
 }
 
 .poketab-tab-led {
-    width: 5px;
-    height: 5px;
+    width: var(--pt-led-size);
+    height: var(--pt-led-size);
     border: 1px solid #142838;
     background: #2a4a58;
     flex-shrink: 0;
+    box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .poketab-tab-label {
-    display: inline-flex;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 2px;
-    line-height: 1;
+    justify-content: center;
+    gap: calc(3px * var(--pt-scale));
+    width: 100%;
+    line-height: 1.15;
     text-align: center;
+    letter-spacing: 0.03em;
 }
 
 .poketab-tab-badge {
     display: inline-block;
-    min-width: 10px;
-    padding: 0 2px;
-    font-size: calc(5px * var(--pt-ui-font-mul, 1.45));
-    line-height: 9px;
+    min-width: calc(12px * var(--pt-scale));
+    padding: 0 calc(3px * var(--pt-scale));
+    font-size: calc(7px * var(--pt-ui-font-mul));
+    line-height: calc(11px * var(--pt-scale));
     background: #e83838;
     color: #fff;
     border: 1px solid #881818;
+    flex-shrink: 0;
 }
 
 .poketab-tab-badge.hidden {
@@ -4202,9 +4264,10 @@ body.poketab-open {
 
 .poketab-exit {
     width: 100%;
-    padding: 9px;
+    box-sizing: border-box;
+    padding: calc(10px * var(--pt-scale));
     font-family: silkscreen, monospace;
-    font-size: calc(8px * var(--pt-ui-font-mul, 1.45));
+    font-size: calc(9px * var(--pt-ui-font-mul));
     letter-spacing: 0.1em;
     color: #ffc8d8;
     cursor: pointer;
@@ -4221,10 +4284,19 @@ body.poketab-open {
 /* ── PokéTab Battle ── */
 .poketab-battle-btn {
     position: relative;
-    width: 100%;
-    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(6px * var(--pt-scale));
+    width: var(--pt-btn-w);
+    height: var(--pt-btn-h);
+    min-height: var(--pt-btn-h);
+    max-height: var(--pt-btn-h);
+    box-sizing: border-box;
+    padding: calc(8px * var(--pt-scale)) calc(6px * var(--pt-scale));
     font-family: silkscreen, monospace;
-    font-size: calc(11px * var(--pt-ui-font-mul, 1.45));
+    font-size: var(--pt-btn-font);
     letter-spacing: 0.14em;
     color: #2a1800;
     cursor: pointer;
@@ -4262,9 +4334,29 @@ body.poketab-open {
 .poketab-battle-btn-shine {
     position: absolute;
     inset: 0;
-    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%);
-    animation: poketab-battle-shine 3s linear infinite;
+    z-index: 0;
+    background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+    transform: translateX(-120%);
+    animation: poketab-battle-shine 3.2s ease-in-out infinite;
     pointer-events: none;
+}
+
+.poketab-battle-btn .poketab-tab-label,
+.poketab-battle-btn .poketab-tab-led {
+    position: relative;
+    z-index: 1;
+}
+
+.poketab-battle-btn .poketab-tab-led {
+    background: #a86808;
+    border-color: #142838;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.poketab-battle-btn-alert .poketab-tab-led {
+    background: #ff4050;
+    box-shadow: 0 0 8px #ff4050;
+    animation: poketab-led-blink 0.4s steps(2) infinite;
 }
 
 @keyframes poketab-battle-shine {

@@ -12,6 +12,8 @@ export type NpcFlow = {
     grantGear?: string
     takeGear?: string
     fishingQuest?: string
+    grantBalance?: number
+    grantBalanceId?: string
     questStep?: string
     questId?: string
 }

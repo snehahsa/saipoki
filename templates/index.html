@@ -137,10 +137,10 @@
             decoding="async"
         >
         <p class="play-kicker">
-            BATTLE · FLIP ITEMS · CRUSH QUESTS · CLEAR GYMS · RAID BOSSES · STACK $KINS
+            BATTLE · FLIP ITEMS · CRUSH QUESTS · CLEAR GYMS · RAID BOSSES · STACK $POKEQUEST
         </p>
         <p class="play-tagline">
-            The isometric MMO built to pay you. Grind the map, buy and sell for $KINS,
+            The isometric MMO built to pay you. Grind the map, buy and sell for $POKEQUEST,
             chain quests with your squad, and own every run you clear.
         </p>
         <div class="play-actions">
@@ -422,7 +422,7 @@
 
         <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Buy and sell Chips">
             <p class="profile-section-title">Chips Exchange</p>
-            <p class="profile-section-note">1 $KINS = 1 Chip. Buy sends on-chain to treasury; sell debits Chips and queues $KINS to your wallet.</p>
+            <p class="profile-section-note">1 $POKEQUEST = 1 Chip. Buy sends on-chain to treasury; sell debits Chips and queues $POKEQUEST to your wallet.</p>
             <div class="profile-chips-actions">
                 <button class="profile-chips-btn profile-chips-btn--buy" id="profile-deposit-btn" type="button" data-kins-buy>Buy Chips</button>
                 <button class="profile-chips-btn profile-chips-btn--sell" id="profile-withdraw-btn" type="button">Sell Chips</button>
@@ -946,13 +946,37 @@
     <div class="poketab-backdrop" id="poketab-scrim" role="button" tabindex="-1" aria-label="Close PokéTab"></div>
     <div class="poketab-room">
         <div class="poketab-console" id="poketab-machine" data-led-state="ready" role="dialog" aria-labelledby="poketab-title" aria-modal="true">
-            <aside class="poketab-rail poketab-rail-left" aria-hidden="true">
-                <div class="poketab-grip"></div>
-                <div class="poketab-rail-vents">
-                    <span></span><span></span><span></span><span></span>
+            <aside class="poketab-rail poketab-rail-left" aria-label="PokéTab controls">
+                <nav class="poketab-left-nav" id="poketab-tab-row" aria-label="PokéTab sections">
+                    <button type="button" class="poketab-battle-btn poketab-left-btn" id="poketab-battle-btn" aria-label="Open battle arena">
+                        <span class="poketab-battle-btn-shine" aria-hidden="true"></span>
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">BATTLE</span>
+                    </button>
+                    <button type="button" class="poketab-tab poketab-left-btn active" data-go="menu">
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">HOME</span>
+                    </button>
+                    <button type="button" class="poketab-tab poketab-left-btn poketab-tab-online" data-go="online">
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">ONLINE</span>
+                    </button>
+                    <button type="button" class="poketab-tab poketab-left-btn poketab-tab-requests" data-go="requests">
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">REQUESTS<span id="poketab-tab-requests-count" class="poketab-tab-badge hidden">0</span></span>
+                    </button>
+                    <button type="button" class="poketab-tab poketab-left-btn poketab-tab-friends" data-go="friends">
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">FRIENDS<span id="poketab-tab-friends-count" class="poketab-tab-badge hidden">0</span></span>
+                    </button>
+                    <button type="button" class="poketab-tab poketab-left-btn poketab-tab-messages" data-go="messages">
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">MSGS<span id="poketab-tab-messages-count" class="poketab-tab-badge hidden">0</span></span>                    </button>
+                </nav>
+                <div class="poketab-rail-vents" aria-hidden="true">
+                    <span></span><span></span><span></span>
                 </div>
-                <div class="poketab-rail-bolt"></div>
-                <div class="poketab-rail-bolt poketab-rail-bolt-b"></div>
+                <div class="poketab-rail-bolt poketab-rail-bolt-b" aria-hidden="true"></div>
             </aside>
 
             <div class="poketab-main">
@@ -978,7 +1002,7 @@
                                     <p class="poketab-crt-line" id="poketab-crt-new-friends">&gt; NEW FRIENDS: 0</p>
                                     <p class="poketab-crt-line" id="poketab-crt-messages">&gt; UNREAD MSGS: 0</p>
                                     <p class="poketab-crt-line" id="poketab-crt-battles">&gt; BATTLE ALERTS: 0</p>
-                                    <p class="poketab-crt-line poketab-crt-hint">&gt; USE BUTTONS BELOW</p>
+                                    <p class="poketab-crt-line poketab-crt-hint">&gt; USE BUTTONS LEFT</p>
                                     <p class="poketab-crt-cursor" aria-hidden="true">█</p>
                                 </div>
                                 <div class="poketab-view" data-poketab-view="online">
@@ -1028,34 +1052,8 @@
                     </div>
                 </div>
 
-                <div class="poketab-control-deck">
-                    <button type="button" class="poketab-battle-btn" id="poketab-battle-btn" aria-label="Open battle arena">
-                        <span class="poketab-battle-btn-shine" aria-hidden="true"></span>
-                        ⚔ BATTLE
-                    </button>
-                    <div class="poketab-tab-row" id="poketab-tab-row" aria-label="PokéTab sections">
-                        <button type="button" class="poketab-tab active" data-go="menu">
-                            <span class="poketab-tab-led" aria-hidden="true"></span>
-                            <span class="poketab-tab-label">HOME</span>
-                        </button>
-                        <button type="button" class="poketab-tab poketab-tab-online" data-go="online">
-                            <span class="poketab-tab-led" aria-hidden="true"></span>
-                            <span class="poketab-tab-label">ONLINE</span>
-                        </button>
-                        <button type="button" class="poketab-tab poketab-tab-requests" data-go="requests">
-                            <span class="poketab-tab-led" aria-hidden="true"></span>
-                            <span class="poketab-tab-label">REQ<span id="poketab-tab-requests-count" class="poketab-tab-badge hidden">0</span></span>
-                        </button>
-                        <button type="button" class="poketab-tab poketab-tab-friends" data-go="friends">
-                            <span class="poketab-tab-led" aria-hidden="true"></span>
-                            <span class="poketab-tab-label">FRND<span id="poketab-tab-friends-count" class="poketab-tab-badge hidden">0</span></span>
-                        </button>
-                        <button type="button" class="poketab-tab poketab-tab-messages" data-go="messages">
-                            <span class="poketab-tab-led" aria-hidden="true"></span>
-                            <span class="poketab-tab-label">MSG<span id="poketab-tab-messages-count" class="poketab-tab-badge hidden">0</span></span>
-                        </button>
-                    </div>
-                    <button type="button" class="poketab-exit" id="poketab-close">CLOSE POKÉTAB</button>
+                <div class="poketab-main-footer">
+                    <button type="button" class="poketab-exit" id="poketab-close">EXIT POKÉTAB</button>
                 </div>
             </div>
 
@@ -1102,6 +1100,7 @@
         uiUnlocks: {{ ui_unlocks|tojson }},
         avatarCosts: {{ avatar_costs|tojson }},
         startingBalance: {{ starting_balance|tojson }},
+        minWithdrawKins: {{ min_withdraw_kins|tojson }},
         vendingSpinFirstCost: {{ vending_spin_first_cost|tojson }},
         vendingSpinRepeatCost: {{ vending_spin_repeat_cost|tojson }},
         xpLevels: {{ xp_levels|tojson }},

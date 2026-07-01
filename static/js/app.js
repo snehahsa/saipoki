@@ -10,7 +10,8 @@ const GEAR_CATALOG = window.APP_CONFIG.gearCatalog || {}
 const FISHING_CATALOG = window.APP_CONFIG.fishingCatalog || {}
 const UI_UNLOCKS = window.APP_CONFIG.uiUnlocks || {}
 const AVATAR_COSTS = window.APP_CONFIG.avatarCosts || {}
-const STARTING_BALANCE = Number(window.APP_CONFIG.startingBalance) || 5000
+const STARTING_BALANCE = Number(window.APP_CONFIG.startingBalance) || 0
+const MIN_WITHDRAW_KINS = Number(window.APP_CONFIG.minWithdrawKins) || 5000
 const VENDING_SPIN_FIRST_COST = Number(window.APP_CONFIG.vendingSpinFirstCost) || 1000
 const VENDING_SPIN_REPEAT_COST = Number(window.APP_CONFIG.vendingSpinRepeatCost) || 2000
 const GAME_JS_URL = window.APP_CONFIG.assets?.gameJs || "/static/game/game.js"
@@ -47,6 +48,7 @@ let gearModeMenuPinned = false
 let suppressQuickbarSlotUntil = 0
 let fishingCastActive = false
 let fishingCastAbort = null
+let fishingRetryPromptPromise = null
 
 const tg = window.Telegram?.WebApp
 const PLAY_MODE = Boolean(window.APP_CONFIG?.playMode)
@@ -470,6 +472,10 @@ function bindGameEvents() {
         if (item) grantHold(item, source || "")
     })
 
+    window.TelegramGame.onGameEvent("grantBalance", ({ grant_id, source }) => {
+        if (grant_id) void grantNpcBalance(grant_id, source || "")
+    })
+
     window.TelegramGame.onGameEvent("grantGear", ({ item, source }) => {
         if (item) grantGear(item, source || "")
     })
@@ -524,7 +530,7 @@ function updateSkinPreview(skin, prefix = "skin") {
     const zoom = prefix === "profile" ? SKIN_PROFILE_ZOOM : SKIN_HERO_ZOOM
 
     applySpritePreview(el, skin, SKIN_FRAME, zoom)
-    if (counter) counter.textContent = `${sortedSkins.indexOf(skin) + 1} / ${sortedSkins.length}`
+    if (counter) counter.textContent = `${SKINS.indexOf(skin) + 1} / ${SKINS.length}`
 }
 
 function readMenuAvatarLayout(el) {
@@ -626,6 +632,7 @@ function setSkinSetupStep(step) {
             document.getElementById("skin-player-name-input")?.focus()
         })
     } else {
+        if (!session?.has_skin) skinIndex = 0
         updateBalanceDisplays()
         updateSkinPreview(sortedSkins[skinIndex])
     }
@@ -681,10 +688,10 @@ function sortSkinsByPrice(skins) {
     return [...skins].sort(compareSkinsByPrice)
 }
 
-let sortedSkins = sortSkinsByPrice(SKINS)
+let sortedSkins = [...SKINS]
 
 function refreshSortedSkins() {
-    sortedSkins = sortSkinsByPrice(SKINS)
+    sortedSkins = [...SKINS]
 }
 
 function isAvatarOwned(skin) {
@@ -709,7 +716,7 @@ function syncWalletEconomyLabels() {
     const kins = requiresKinsPayments()
     const profileLabel = document.querySelector(".profile-balance-label")
     if (profileLabel) {
-        profileLabel.textContent = kins ? " balance (1 $KINS = 1 Chip)" : " Chips"
+        profileLabel.textContent = kins ? " balance (1 $POKEQUEST = 1 Chip)" : " Chips"
     }
     const skinBalanceLabel = document.querySelector("#skin-screen .skin-economy-row .skin-economy-label")
     if (skinBalanceLabel && kins) {
@@ -855,6 +862,10 @@ async function handleGameHudChipsSubmit() {
 
     const submitBtn = document.getElementById("game-hud-chips-submit")
     const isSell = gameHudChipsMode === "sell"
+    if (isSell && amount < MIN_WITHDRAW_KINS) {
+        showGameHudChipsToast(`Minimum sell amount is ${formatChipsAmount(MIN_WITHDRAW_KINS)} Chips.`, "error")
+        return
+    }
     if (submitBtn) submitBtn.disabled = true
     if (window.KinsWallet?.isPaymentPending?.()) {
         showGameHudChipsToast("A wallet payment is already in progress.", "error")
@@ -871,7 +882,7 @@ async function handleGameHudChipsSubmit() {
         if (input) input.value = ""
         showGameHudChipsToast(
             isSell
-                ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"} — $KINS payout queued.`
+                ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"} — $POKEQUEST payout queued.`
                 : `Bought ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"}!`,
             "success",
         )
@@ -915,9 +926,14 @@ async function handleProfileChipsAction(mode) {
     }
 
     const isSell = mode === "sell"
+    if (isSell && amount < MIN_WITHDRAW_KINS) {
+        status.textContent = `Minimum sell amount is ${formatChipsAmount(MIN_WITHDRAW_KINS)} Chips.`
+        status.classList.add("error")
+        return
+    }
     status.textContent = isSell
         ? "Selling Chips..."
-        : "Approve $KINS transfer in your wallet..."
+        : "Approve $POKEQUEST transfer in your wallet..."
     status.classList.remove("error")
 
     try {
@@ -930,7 +946,7 @@ async function handleProfileChipsAction(mode) {
         if (input) input.value = ""
         closeProfileChipsForm()
         status.textContent = isSell
-            ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chips — $KINS payout queued.`
+            ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chips — $POKEQUEST payout queued.`
             : `Bought ${formatChipsAmount(data.amountKins || amount)} Chips!`
     } catch (error) {
         status.textContent = error.message
@@ -995,7 +1011,7 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
     } else if (price === 0) {
         tag.textContent = "FREE"
     } else if (kinsPay) {
-        tag.textContent = `${formatChipsAmount(price)} $KINS`
+        tag.textContent = `${formatChipsAmount(price)} $POKEQUEST`
     } else {
         tag.textContent = formatChipsAmount(price)
         if (cost > balance) tag.classList.add("is-expensive")
@@ -1005,7 +1021,7 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         if (kinsPay) {
             saveBtn.setAttribute("data-kins-buy", "")
             saveBtn.classList.remove("is-unaffordable")
-            saveBtn.textContent = `Buy — ${formatChipsAmount(price)} $KINS`
+            saveBtn.textContent = `Buy — ${formatChipsAmount(price)} $POKEQUEST`
         } else {
             saveBtn.removeAttribute("data-kins-buy")
             saveBtn.classList.toggle("is-unaffordable", cost > balance)
@@ -1019,9 +1035,9 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
 
     if (hint && prefix === "skin") {
         if (kinsPay) {
-            hint.textContent = `Sends ${formatChipsAmount(price)} $KINS on-chain to unlock this avatar.`
-        } else if (!session?.has_skin && STARTING_BALANCE > 0 && !requiresKinsPayments()) {
-            hint.textContent = `New trainers start with ${formatChipsAmount(STARTING_BALANCE)} Chips — pick your look wisely.`
+            hint.textContent = `Sends ${formatChipsAmount(price)} $POKEQUEST on-chain to unlock this avatar.`
+        } else if (!session?.has_skin && !requiresKinsPayments()) {
+            hint.textContent = "New trainers start with 0 Chips — meet Cristy on the waterfront for a vending trial bonus."
         } else if (cost > balance && cost > 0) {
             hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips for this avatar.`
         } else if (cost > 0) {
@@ -1037,7 +1053,7 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         } else if (isAvatarOwned(skin)) {
             hint.textContent = "Tap Equip to wear this owned avatar."
         } else if (kinsPay) {
-            hint.textContent = `Sends ${formatChipsAmount(price)} $KINS on-chain to unlock this avatar.`
+            hint.textContent = `Sends ${formatChipsAmount(price)} $POKEQUEST on-chain to unlock this avatar.`
         } else if (cost > balance && cost > 0) {
             hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips to unlock this avatar.`
         } else if (cost > 0) {
@@ -1113,7 +1129,7 @@ function updateProfileActionButton(skin) {
         btn.removeAttribute("data-kins-buy")
     } else if (kinsPay) {
         btn.setAttribute("data-kins-buy", "")
-        btn.textContent = `Buy — ${formatChipsAmount(cost)} $KINS`
+        btn.textContent = `Buy — ${formatChipsAmount(cost)} $POKEQUEST`
         btn.disabled = false
     } else if (cost > balance) {
         btn.textContent = "Not enough Chips"
@@ -1147,7 +1163,7 @@ function buildProfileSkinButton(skin, { shop = false } = {}) {
     const kinsPay = requiresKinsPayments() && shop && cost > 0
     const costClass = shop && !kinsPay && cost > balance && cost > 0 ? " is-expensive" : ""
     const costLabel = shop
-        ? (price === 0 ? "FREE" : kinsPay ? `${formatChipsAmount(price)} $KINS` : formatChipsAmount(price))
+        ? (price === 0 ? "FREE" : formatChipsAmount(price))
         : ""
 
     return `
@@ -1460,7 +1476,23 @@ function normalizeHolds(raw) {
 }
 
 function normalizeVault(raw) {
-    return Array.isArray(raw) ? raw.filter(Boolean) : []
+    if (!Array.isArray(raw)) return []
+    return raw
+        .map((entry) => {
+            if (typeof entry === "string") return entry.trim()
+            if (entry && typeof entry === "object") {
+                return String(entry.card_id || entry.id || "").trim()
+            }
+            return ""
+        })
+        .filter(Boolean)
+}
+
+function applyVaultFromServer(vault) {
+    if (!session || !Array.isArray(vault)) return
+    session.vault = normalizeVault(vault)
+    renderBagGrid()
+    renderGameVaultGrid()
 }
 
 function catalogCard(cardId) {
@@ -1655,17 +1687,30 @@ function playFishingCatchFanfare() {
     setTimeout(() => document.body.classList.remove("encounter-flash"), 520)
 }
 
-async function animateFishingProgress(durationMs, label, signal) {
+async function animateFishingProgress(durationMs, resolveAtMs, label, signal, onResolve) {
+    const totalMs = Math.max(1, Number(durationMs) || 60000)
+    const biteMs = Math.min(Math.max(1, Number(resolveAtMs) || totalMs), totalMs)
     const started = performance.now()
+    let resolved = false
+
     showFishingHud(label, 0)
     while (true) {
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+
         const elapsed = performance.now() - started
-        const pct = Math.min(100, (elapsed / durationMs) * 100)
+        const pct = Math.min(100, (elapsed / totalMs) * 100)
         showFishingHud(label, pct)
-        if (elapsed >= durationMs) break
+
+        if (!resolved && elapsed >= biteMs && onResolve) {
+            resolved = true
+            const stopEarly = await onResolve()
+            if (stopEarly) break
+        }
+
+        if (elapsed >= totalMs) break
         await sleep(50)
     }
+
     showFishingHud(label, 100)
 }
 
@@ -1684,10 +1729,16 @@ async function completeFishingCastSession(sessionId) {
 }
 
 function promptFishingRetry({ title, message }) {
-    return new Promise((resolve) => {
+    if (fishingRetryPromptPromise) return fishingRetryPromptPromise
+
+    fishingRetryPromptPromise = new Promise((resolve) => {
+        let settled = false
         const finish = (yes) => {
+            if (settled) return
+            settled = true
             window.removeEventListener("fishing-retry-choice", onChoice)
-            hideSignModal()
+            fishingRetryPromptPromise = null
+            hideSignModal({ skipAudioSync: true })
             resolve(yes)
         }
         const onChoice = (event) => {
@@ -1706,6 +1757,8 @@ function promptFishingRetry({ title, message }) {
         })
         document.getElementById("sign-modal-close")?.classList.add("hidden")
     })
+
+    return fishingRetryPromptPromise
 }
 
 async function performFishingCastAttempt(gearId, questKey, quest) {
@@ -1731,10 +1784,25 @@ async function performFishingCastAttempt(gearId, questKey, quest) {
     }
 
     const durationMs = Number(startData.duration_ms) || 60000
+    const resolveAtMs = Number(startData.resolve_at_ms) || durationMs
     const label = startData.status_label || "Fishing…"
-    await animateFishingProgress(durationMs, label, fishingCastAbort.signal)
+    let result = null
 
-    const result = await completeFishingCastSession(startData.session_id)
+    await animateFishingProgress(
+        durationMs,
+        resolveAtMs,
+        label,
+        fishingCastAbort.signal,
+        async () => {
+            result = await completeFishingCastSession(startData.session_id)
+            return Boolean(result?.caught)
+        },
+    )
+
+    if (!result) {
+        result = await completeFishingCastSession(startData.session_id)
+    }
+
     hideFishingHud()
 
     if (!result.success) {
@@ -1801,7 +1869,7 @@ async function runFishingCast(gearId) {
                 return true
             }
 
-            if (result.show_retry_prompt) {
+            if (result.show_retry_prompt && !result.caught) {
                 const retry = await promptFishingRetry({
                     title: result.retry_prompt_title || quest.retry_prompt_title || "Try again?",
                     message: result.retry_prompt_message
@@ -1815,7 +1883,7 @@ async function runFishingCast(gearId) {
             break
         }
 
-        if (lastResult?.message) {
+        if (lastResult?.message && !lastResult?.show_retry_prompt) {
             showQuickbarHint(lastResult.message)
         } else {
             showQuickbarHint("Nothing this time.")
@@ -2313,6 +2381,8 @@ function itemGetSpecForHold(holdId) {
 
 function finishItemGetPopup() {
     const popup = document.getElementById("item-get-popup")
+    const iconEl = document.getElementById("item-get-icon")
+    if (iconEl) iconEl.hidden = true
     if (popup && !popup.classList.contains("hidden")) {
         popup.classList.add("hidden")
     }
@@ -2320,6 +2390,37 @@ function finishItemGetPopup() {
         itemGetCloseResolve()
         itemGetCloseResolve = null
     }
+}
+
+function preloadItemGetIcon(iconEl, icon, title) {
+    if (!iconEl) return Promise.resolve()
+    if (!icon) {
+        iconEl.removeAttribute("src")
+        iconEl.alt = ""
+        iconEl.hidden = true
+        return Promise.resolve()
+    }
+
+    iconEl.hidden = true
+    iconEl.alt = title || "Item"
+
+    const current = iconEl.getAttribute("src") || ""
+    if (current === icon) {
+        iconEl.hidden = false
+        return Promise.resolve()
+    }
+
+    return new Promise((resolve) => {
+        const finish = () => {
+            iconEl.onload = null
+            iconEl.onerror = null
+            iconEl.hidden = false
+            resolve()
+        }
+        iconEl.onload = finish
+        iconEl.onerror = finish
+        iconEl.src = icon
+    })
 }
 
 function hideItemGetPopup() {
@@ -2344,20 +2445,9 @@ function showItemGetPopup(metaOrSpec) {
         nameEl.textContent = spec.title || "Item"
         msgEl.textContent = spec.message || ""
 
-        if (iconEl) {
-            const icon = spec.icon || ""
-            if (icon) {
-                iconEl.src = icon
-                iconEl.alt = spec.title || "Item"
-                iconEl.hidden = false
-            } else {
-                iconEl.removeAttribute("src")
-                iconEl.alt = ""
-                iconEl.hidden = true
-            }
-        }
-
-        popup.classList.remove("hidden")
+        preloadItemGetIcon(iconEl, spec.icon || "", spec.title || "Item").then(() => {
+            popup.classList.remove("hidden")
+        })
     })
 
     itemGetQueue = itemGetQueue.then(run, run)
@@ -2372,9 +2462,33 @@ function bindItemGetPopup() {
 }
 
 function showHoldPickupPopup(meta) {
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => showItemGetPopup(meta))
-    })
+    showItemGetPopup(meta)
+}
+
+async function grantNpcBalance(grantId, source = "") {
+    if (!isSignedIn() || !grantId) return
+
+    try {
+        const response = await fetch("/api/economy/npc-grant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(apiAuthBody({ grantId, source })),
+        })
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+            console.warn("Could not grant balance:", data.error || grantId)
+            return
+        }
+        if (Number.isFinite(data.balance)) {
+            session.balance = data.balance
+            updateBalanceDisplays()
+        }
+        if (!data.already_granted && Number(data.amount) > 0) {
+            showQuickbarHint(`+${formatChipsAmount(data.amount)} Chips!`)
+        }
+    } catch (error) {
+        console.warn("Could not grant balance:", error)
+    }
 }
 
 function completeHoldQuestFromMeta(meta) {
@@ -2401,9 +2515,7 @@ async function addCardToVault(cardId, source = "unknown") {
     })
     const data = await response.json()
     if (response.ok && data.success && session) {
-        session.vault = normalizeVault(data.vault)
-        renderBagGrid()
-        renderGameVaultGrid()
+        applyVaultFromServer(data.vault)
     }
     return data
 }
@@ -3415,6 +3527,7 @@ async function enterGame() {
             quest_progress: normalizeQuestProgress(fresh.quest_progress),
             holds: normalizeHolds(fresh.holds),
             gear_slots: normalizeGearSlots(fresh.gear_slots),
+            vault: normalizeVault(fresh.vault),
         }
     } catch (error) {
         setGameLoading("", false)
@@ -3693,7 +3806,9 @@ async function vendingConfirmEquip() {
     vendingBeep(1100, 0.08, 0.07)
     vendingBeep(1320, 0.1, 0.08)
 
-    await addCardToVault(winner.id, "vending")
+    const item = resolveCardItem(winner)
+    if (item) await showItemGetPopup(itemGetSpecForBagItem(item))
+
     await completeQuestStep("collect_first_card", "week1_vault_trail", {
         bagItem: winner,
         cardId: winner.id,
@@ -3932,6 +4047,7 @@ async function vendingPerformDraw() {
             session.balance = Number(data.balance) || 0
             session.vending_spins = Number(data.vending_spins) || 0
             updateBalanceDisplays()
+            applyVaultFromServer(data.vault)
         }
         winner = resolveCardItem(data.card_id) || data.card
         if (!winner) throw new Error("Draw failed")
@@ -4019,9 +4135,7 @@ async function handleInteractionFlow(code, context = {}) {
     }
 
     const questSteps = new Set([
-        "verify_wallet",
         "collect_first_card",
-        "list_card_sale",
     ])
     if (questSteps.has(code)) {
         completeQuestStep(code, "week1_vault_trail")
@@ -4424,7 +4538,7 @@ function applySessionFromAuth(data) {
     if (session.skin) {
         skinIndex = Math.max(0, sortedSkins.indexOf(session.skin))
     } else {
-        skinIndex = Math.max(0, sortedSkins.indexOf(DEFAULT_SKIN))
+        skinIndex = 0
     }
 
     populateMenu()
@@ -4572,7 +4686,7 @@ async function init() {
                             updateBalanceDisplays()
                         }
                         if (Array.isArray(data.vault)) {
-                            session.vault = normalizeVault(data.vault)
+                            applyVaultFromServer(data.vault)
                         }
                         if (data.trainer_stats) {
                             applyTrainerStats(data.trainer_stats)
@@ -4721,7 +4835,7 @@ async function init() {
             renderProfileScreen()
             window.TelegramGame?.switchGameSkin?.(skin)
             if (requiresKinsPayments() && cost > 0) {
-                status.textContent = `Purchased with ${formatChipsAmount(cost)} $KINS!`
+                status.textContent = `Purchased with ${formatChipsAmount(cost)} $POKEQUEST!`
             } else {
                 status.textContent = cost > 0 ? `Saved! −${formatChipsAmount(cost)} Chips` : "Equipped!"
             }

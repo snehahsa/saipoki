@@ -117,6 +117,12 @@ export class PlayApp extends App {
 
     override async loadRoom(index: number) {
         this.currentRoomIndex = index
+        for (const remote of Object.values(this.players)) {
+            if (this.layers.object.children.includes(remote.parent)) {
+                this.layers.object.removeChild(remote.parent)
+            }
+            remote.destroy()
+        }
         this.players = {}
         this.destroyNpcs()
         this.activeNpcDialogue = null
@@ -254,6 +260,13 @@ export class PlayApp extends App {
                 signal.emit('questStep', {
                     step_id: flow.questStep,
                     quest_id: flow.questId || 'week1_vault_trail',
+                })
+            }
+            if (flow.grantBalanceId && Number(flow.grantBalance) > 0) {
+                signal.emit('grantBalance', {
+                    grant_id: flow.grantBalanceId,
+                    amount: flow.grantBalance,
+                    source: `npc:${npc.id}`,
                 })
             }
             return
@@ -947,7 +960,6 @@ export class PlayApp extends App {
             this.moveCameraToPlayer()
         } else {
             this.teleportLocation = { x, y }
-            this.currentRoomIndex = roomIndex
             this.player.changeAnimationState('idle_down')
             await this.loadRoom(roomIndex)
         }

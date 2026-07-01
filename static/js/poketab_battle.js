@@ -191,6 +191,12 @@
         return modal && !modal.classList.contains("hidden")
     }
 
+    function ensurePoketabOpen() {
+        if (!isPoketabOpen()) {
+            window.PoketabSocial?.open?.()
+        }
+    }
+
     function syncBattleFromStatus(data, { forceOpen = false } = {}) {
         const battle = data?.battle
         const autoOpen = forceOpen || (isPoketabOpen() && (isBattleViewActive() || isInArena()))
@@ -330,14 +336,21 @@
         const el = document.getElementById("poketab-battle-eligible")
         if (!el) return
         const eligible = Number(data?.eligible_cards)
+        const vaultCards = Number(data?.vault_cards)
         const daily = Number(data?.daily_battles_per_card) || MAX_DAILY_BATTLES_PER_CARD
         if (!Number.isFinite(eligible)) {
             el.textContent = ""
             return
         }
-        el.textContent = eligible > 0
-            ? `> ${eligible} CARD${eligible === 1 ? "" : "S"} READY TODAY (${daily}/CARD/DAY)`
-            : `> NO CARDS LEFT TODAY (${daily} FIGHTS PER CARD)`
+        if (eligible > 0) {
+            el.textContent = `> ${eligible} CARD${eligible === 1 ? "" : "S"} READY TODAY (${daily}/CARD/DAY)`
+            return
+        }
+        if (Number.isFinite(vaultCards) && vaultCards < 1) {
+            el.textContent = "> ADD A POKÉCARD TO YOUR VAULT TO BATTLE"
+            return
+        }
+        el.textContent = `> NO CARDS LEFT TODAY (${daily} FIGHTS PER CARD)`
     }
 
     async function loadOpponents() {
@@ -452,6 +465,7 @@
             })
             if (accept) {
                 activeInviteId = inviteId
+                ensurePoketabOpen()
                 setView("battle")
                 if (data.battle) {
                     showToast(data.my_card
@@ -539,6 +553,7 @@
 
     function openArena(battle) {
         if (!battle) return
+        ensurePoketabOpen()
         document.getElementById("poketab-battle-lobby")?.classList.add("hidden")
         const overlay = document.getElementById("poketab-battle-overlay")
         const monitorInner = document.querySelector(".poketab-monitor-inner")
@@ -760,7 +775,8 @@
         }
     }
 
-    async function refreshStatus(silent) {
+    async function refreshStatus(silent, opts = {}) {
+        const forceOpen = Boolean(opts.forceOpen)
         try {
             const data = await apiPost("/api/poketab/battle/status")
             statusCache = data
@@ -771,7 +787,7 @@
             }
             updateAlertPanel(data.incoming_invites, data.outgoing_invites, data.battle_alerts)
             if (data.invite?.id) activeInviteId = data.invite.id
-            syncBattleFromStatus(data, { forceOpen: !silent })
+            syncBattleFromStatus(data, { forceOpen: forceOpen || !silent })
             if (!isInArena() && isBattleViewActive()) {
                 applyOutgoingToOpponentButtons()
             }
@@ -796,21 +812,25 @@
         const ev = payload.event
         if (ev === "battle_invite") {
             showToast("⚔ Battle challenge incoming!")
-            refreshStatus()
+            refreshStatus(false, { forceOpen: false })
             refreshSummary()
         } else if (ev === "battle_update" || ev === "battle_start") {
             const data = payload.data || {}
+            if (ev === "battle_start") ensurePoketabOpen()
             if (applyRealtimeBattle(data)) {
+                ensurePoketabOpen()
                 if (data.ended) {
                     onBalanceUpdate()
                     refreshSummary()
                 }
             }
-            refreshStatus(true).then(() => {
+            refreshStatus(true, { forceOpen: true }).then(() => {
                 syncBattleFromStatus(statusCache || {}, { forceOpen: true })
-                if (ev === "battle_start" && !statusCache?.battle) {
-                    window.setTimeout(() => refreshStatus(true).then(() => {
-                        syncBattleFromStatus(statusCache || {}, { forceOpen: true })
+                if (ev === "battle_start" && statusCache?.battle) {
+                    openArena(statusCache.battle)
+                } else if (ev === "battle_start" && !statusCache?.battle) {
+                    window.setTimeout(() => refreshStatus(true, { forceOpen: true }).then(() => {
+                        if (statusCache?.battle) openArena(statusCache.battle)
                     }), 500)
                 }
             })

@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="SaiPoke Realm — explore a pixel world, collect PokéCards, battle trainers, and climb the leaderboard on Telegram.">
-    <title>SaiPoke Realm — Pixel Adventure on Telegram</title>
+    <meta name="description" content="Pokecards Quest — explore a pixel world, collect PokéCards, battle trainers, and climb the leaderboard online.">
+    <title>Pokecards Quest — Pixel Adventure Online</title>
     <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
     <link rel="stylesheet" href="/static/css/landing.css?v={{ asset_v.landing_css }}">
@@ -14,7 +14,7 @@
         <img
             class="landing-load-logo"
             src="/static/imgs/titles.png?v={{ asset_v.titles }}"
-            alt="SaiPoke Realm"
+            alt="Pokecards Quest"
             width="230"
             height="83"
             decoding="async"
@@ -33,32 +33,61 @@
 
     <div class="landing-wrap">
         <header class="landing-header">
-            <a class="landing-brand" href="#top" aria-label="SaiPoke Realm home">
-                <img src="/static/imgs/titles.png?v={{ asset_v.titles }}" width="190" height="69" alt="SaiPoke Realm">
-            </a>
-            <nav class="landing-nav" aria-label="Site sections">
+            <button
+                type="button"
+                class="landing-menu-btn"
+                id="landing-menu-btn"
+                aria-expanded="false"
+                aria-controls="landing-nav-drawer"
+                aria-label="Open menu"
+            >
+                <span class="landing-menu-btn__bar" aria-hidden="true"></span>
+                <span class="landing-menu-btn__bar" aria-hidden="true"></span>
+                <span class="landing-menu-btn__bar" aria-hidden="true"></span>
+            </button>
+            <nav class="landing-nav landing-nav--header" aria-label="Site sections">
                 <a href="#intro">Intro</a>
                 <a href="#play">Play</a>
                 <a href="#stats">Stats</a>
+                <a href="#roadmap">Roadmap</a>
                 <a href="#socials">Socials</a>
-                <button
-                    type="button"
-                    class="landing-audio-toggle"
-                    id="landing-audio-toggle"
-                    aria-pressed="true"
-                    aria-label="Turn music off"
-                    title="Music"
-                >
-                    <span class="landing-audio-toggle__icon" aria-hidden="true">🔊</span>
-                </button>
             </nav>
         </header>
 
+        <div class="landing-nav-drawer" id="landing-nav-drawer" aria-hidden="true">
+            <button type="button" class="landing-nav-scrim" id="landing-nav-scrim" aria-label="Close menu" tabindex="-1"></button>
+            <aside class="landing-nav-panel" role="dialog" aria-modal="true" aria-label="Site menu">
+                <div class="landing-nav-panel-head">
+                    <span class="landing-nav-panel-title">Explore</span>
+                    <button type="button" class="landing-nav-close" id="landing-nav-close" aria-label="Close menu">×</button>
+                </div>
+                <nav class="landing-nav landing-nav--drawer" aria-label="Site sections">
+                    <a href="#intro">Intro</a>
+                    <a href="#play">Play</a>
+                    <a href="#stats">Stats</a>
+                    <a href="#roadmap">Roadmap</a>
+                    <a href="#socials">Socials</a>
+                </nav>
+            </aside>
+        </div>
+
         <main id="top">
             <section class="landing-hero" aria-labelledby="hero-title">
-                <p class="landing-hero-tag" id="hero-title">
-                    A retro pixel realm on Telegram — wander, quest, wager battles, and build your PokéCard vault.
-                </p>
+                <div class="landing-hero-intro">
+                    <a class="landing-hero-logo-link" href="#top" aria-label="Pokecards Quest home">
+                        <img
+                            class="landing-hero-logo"
+                            src="/static/imgs/titles.png?v={{ asset_v.titles }}"
+                            width="280"
+                            height="101"
+                            alt="Pokecards Quest"
+                            decoding="async"
+                        >
+                    </a>
+                    <p class="landing-hero-tag" id="hero-title">
+                        A live Pokémon-inspired MMO — battle trainers with wagers, quest for Pokéitems and rare PokéCards, and enter gym brackets in World Cup–style knockout rounds until one champion remains.
+                    </p>
+                </div>
 
                 <div class="landing-party" aria-hidden="true">
                     <div class="landing-sprite landing-sprite--walk landing-sprite--bob" id="trainer-a"></div>
@@ -66,89 +95,111 @@
                     <div class="landing-sprite landing-sprite--walk landing-sprite--delay2" id="trainer-c"></div>
                 </div>
 
-                <figure class="landing-gif-slot landing-gif-slot--hero" id="gif-slot-2">
-                    {% if gif_url %}
-                    <img src="{{ gif_url }}" alt="Realm highlight" loading="lazy">
+                <figure class="landing-gif-slot landing-gif-slot--hero" id="hero-media">
+                    {% if hero_media_url %}
+                    <img src="{{ hero_media_url }}" alt="Pokecards Quest gameplay" loading="lazy">
                     {% else %}
-                    <div class="landing-gif-placeholder landing-gif-placeholder--wide" aria-hidden="true"><span>2</span></div>
+                    <div class="landing-gif-placeholder landing-gif-placeholder--wide" aria-hidden="true"><span>▶</span></div>
                     {% endif %}
                 </figure>
 
-                <div class="landing-cta-row">
-                    <a class="landing-btn landing-btn--pulse" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">Play Now on Telegram</a>
+                <div class="landing-ca-wrap landing-ca-wrap--hero">
+                    <button
+                        type="button"
+                        class="landing-copyable"
+                        data-copy="xxxxxxxx.xxxxxx"
+                        aria-label="Copy contract address"
+                    >
+                        <span class="landing-copyable-label">CA</span>
+                        <code class="landing-copyable-value">xxxxxxxx.xxxxxx</code>
+                        <span class="landing-copyable-meta">click to copy</span>
+                    </button>
+                    <p class="landing-copy-toast hidden" id="landing-copy-toast" role="status" aria-live="polite">Copied!</p>
                 </div>
             </section>
 
-            <section class="landing-panel" id="intro" aria-labelledby="intro-title">
+            <section class="landing-panel landing-panel--intro" id="intro" aria-labelledby="intro-title">
                 <h2 class="landing-section-title" id="intro-title">
                     INTRO
                     <span>Welcome to the realm</span>
                 </h2>
-                <p class="landing-copy">
-                    SaiPoke Realm is a Pokémon-inspired social game inside Telegram. Create your trainer, explore a live multiplayer map, talk to NPCs, complete quests, and collect rare PokéCards from vending machines.
-                </p>
-                <p class="landing-copy">
-                    Battle other players for $POKECARD tokens in the group, track your rank on the leaderboard, and grow your vault. Every trainer starts with free Chips to unlock their first avatar.
-                </p>
+                <div class="landing-intro-dialog" id="landing-intro-dialog">
+                    <p class="landing-intro-type" id="landing-intro-type" aria-live="polite">
+                        <span class="landing-intro-type-text" id="landing-intro-type-text"></span>
+                    </p>
+                    <span class="landing-intro-cursor hidden" id="landing-intro-cursor" aria-hidden="true">▼</span>
+                    <script type="application/json" id="landing-intro-lines">{{ [
+                        "Pokecards Quest is a Pokémon-inspired social MMO in your browser. Connect a Solana wallet, create your trainer, explore a live multiplayer map, meet Live Trainers, complete quests, and collect PokéCards from vending machines.",
+                        "Wager battles through PokéTab, track your rank on the leaderboard, and grow your vault. New trainers start with 0 Chips — earn more from quests, battles, and vending spins."
+                    ] | tojson }}</script>
+                </div>
             </section>
 
             <section class="landing-panel landing-panel--play" id="play" aria-labelledby="play-title">
                 <h2 class="landing-section-title" id="play-title">
                     HOW TO PLAY
-                    <span>Explore · loot · battle</span>
+                    <span>Quest · battle · earn</span>
                 </h2>
 
                 <div class="landing-play-steps-box" aria-labelledby="steps-title">
                     <div class="landing-play-steps-head">
                         <span class="landing-play-steps-badge" aria-hidden="true">▶</span>
-                        <div>
-                            <h3 class="landing-play-steps-title" id="steps-title">Quick start</h3>
-                            <p class="landing-play-steps-lead">
-                                Step into a live pixel realm on Telegram. Walk the map, crack hidden quests, fill your bag, and wager PokéCards against other trainers.
-                            </p>
-                        </div>
+                        <h3 class="landing-play-steps-title" id="steps-title">Quick start</h3>
+                        <p class="landing-play-steps-lead">
+                            {{ play_lead }}
+                        </p>
                     </div>
-                    <ol class="landing-play-line-list">
+                    <ol class="landing-play-steps">
                         {% for step in play_steps %}
-                        <li class="landing-play-line">
-                            <div class="landing-play-line-frame landing-play-step-icon landing-play-step-icon--{{ step.icon }}" aria-hidden="true"></div>
-                            <div class="landing-play-line-body">
-                                <strong>{{ step.title }}</strong>
-                                <span>{{ step.text }}</span>
-                            </div>
+                        <li class="landing-play-step">
+                            <span class="landing-play-step-title">{{ step.title }}</span>
+                            <span class="landing-play-step-desc">{{ step.text }}</span>
                         </li>
                         {% endfor %}
                     </ol>
                 </div>
 
+                <div class="landing-play-skins-box" aria-labelledby="skins-title">
+                    <div class="landing-play-steps-head">
+                        <span class="landing-play-skins-badge" aria-hidden="true">✦</span>
+                        <h3 class="landing-play-steps-title" id="skins-title">Exclusive skins</h3>
+                        <p class="landing-play-steps-lead">
+                            Exclusive avatars for trainers who want to stand out — the rarest skins in the realm, unlocked in the Profile shop.
+                        </p>
+                    </div>
+                    <ul class="landing-skin-showcase" id="landing-skin-showcase">
+                        {% for skin in exclusive_skins %}
+                        <li class="profile-skin-item profile-skin-item--tier-{{ skin.tier }} landing-skin-pick" role="listitem" aria-label="Skin {{ skin.skin }}, {{ skin.price }} Chips">
+                            <span class="profile-skin-thumb" style="{{ skin.thumb_style }}" aria-hidden="true"></span>
+                            <span class="profile-skin-id">{{ skin.skin }}</span>
+                            <span class="profile-skin-cost">{{ "{:,}".format(skin.price) }} Chips</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
                 <div class="landing-play-loot-box" aria-labelledby="loot-title">
                     <div class="landing-play-loot-head">
                         <span class="landing-play-loot-badge" aria-hidden="true">?</span>
-                        <div>
-                            <h3 class="landing-play-loot-title" id="loot-title">Hidden items</h3>
-                            <p class="landing-play-loot-lead">
-                                Quest gear is tucked across the map — NPCs, crates, and secret spots. Collect all three to unlock the full trainer kit.
-                            </p>
-                        </div>
+                        <h3 class="landing-play-loot-title" id="loot-title">Hidden items</h3>
+                        <p class="landing-play-loot-lead">
+                            Quest gear is tucked across the map — Live Trainers, crates, and secret spots. Collect all three to unlock the full trainer kit.
+                        </p>
                     </div>
-                    <ul class="landing-play-line-list">
+                    <ul class="landing-play-steps landing-play-steps--items">
                         {% for item in hold_items %}
-                        <li class="landing-play-line">
-                            <div class="landing-play-line-frame">
-                                <img src="{{ item.src }}" alt="" width="32" height="32" loading="lazy" decoding="async">
-                            </div>
-                            <div class="landing-play-line-body">
-                                <strong>{{ item.label }}</strong>
-                                <span>{{ item.text }}</span>
-                            </div>
+                        <li class="landing-play-step landing-play-step--item">
+                            <span class="landing-play-step-icon" aria-hidden="true">
+                                <img src="{{ item.src }}" alt="" width="64" height="64" loading="lazy" decoding="async">
+                            </span>
+                            <span class="landing-play-step-title">{{ item.label }}</span>
+                            <span class="landing-play-step-desc">{{ item.text }}</span>
                         </li>
                         {% endfor %}
-                        <li class="landing-play-line landing-play-line--more">
-                            <span class="landing-play-line-more" aria-hidden="true">+</span>
-                            <div class="landing-play-line-body">
-                                <strong>And many more</strong>
-                                <span>Keys, tools, and quest rewards tucked across NPCs, crates, and secret map spots.</span>
-                            </div>
+                        <li class="landing-play-step landing-play-step--item landing-play-step--more">
+                            <span class="landing-play-step-icon landing-play-step-icon--more" aria-hidden="true">+</span>
+                            <span class="landing-play-step-title">And many more</span>
+                            <span class="landing-play-step-desc">Keys, tools, and quest rewards tucked near Live Trainers, crates, and secret map spots.</span>
                         </li>
                     </ul>
                 </div>
@@ -156,18 +207,17 @@
                 <div class="landing-play-cards-box" aria-labelledby="collect-title">
                     <div class="landing-play-loot-head">
                         <span class="landing-play-cards-badge" aria-hidden="true">★</span>
-                        <div>
-                            <h3 class="landing-play-loot-title" id="collect-title">Collect PokéCards</h3>
-                            <p class="landing-play-loot-lead">
-                                Hit vending machines, win battles, and stash originals in your vault — every card is custom pixel art.
-                            </p>
-                        </div>
+                        <h3 class="landing-play-loot-title" id="collect-title">Collect PokéCards</h3>
+                        <p class="landing-play-loot-lead">
+                            Buy from vending machines, sell cards back for Chips, wager them in PvP battles,
+                            win them as quest rewards, and trade with other trainers.
+                        </p>
                     </div>
                     <ul class="landing-play-loot-row landing-play-loot-row--cards">
                         {% for card in showcase_cards %}
                         <li class="landing-play-loot-item landing-play-card-item" style="--loot-i: {{ loop.index0 }}">
                             <div class="landing-play-card-frame">
-                                <img src="{{ card.src }}" alt="{{ card.name }}" width="34" height="48" loading="lazy" decoding="async">
+                                <img src="{{ card.src }}" alt="{{ card.name }}" width="68" height="96" loading="lazy" decoding="async">
                             </div>
                             <span class="landing-play-chip-label">{{ card.name }}</span>
                         </li>
@@ -178,10 +228,6 @@
                         </li>
                     </ul>
                 </div>
-
-                <div class="landing-cta-row">
-                    <a class="landing-btn landing-btn--pulse" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">Play Now on Telegram</a>
-                </div>
             </section>
 
             <section class="landing-panel" id="cards" aria-labelledby="cards-title">
@@ -189,8 +235,8 @@
                     CARD POOL
                     <span>{{ pool_cards|length }} cards in the draw pool</span>
                 </h2>
-                <p class="landing-cards-tagline">Custom-made pixel art cards — original fan designs built for SaiPoke Realm.</p>
-                <p class="landing-cards-disclaimer" role="note">Unofficial fan parody — not affiliated with Nintendo, The Pokémon Company, Creatures, or Game Freak.</p>
+                <p class="landing-cards-tagline">Custom-made pixel art cards — original fan designs built for Pokecards Quest.</p>
+                <p class="landing-cards-disclaimer" role="note">Unofficial fan art — not affiliated with Nintendo, The Pokémon Company, Creatures, or Game Freak.</p>
 
                 <div class="landing-cards-stage">
                     <div class="landing-card-show" aria-live="polite">
@@ -243,7 +289,7 @@
                         </div>
                         <div class="landing-rev-stat-box">
                             <span class="landing-rev-box-val" id="rev-holders">—</span>
-                            <span class="landing-rev-box-label">0.01% Holders</span>
+                            <span class="landing-rev-box-label">0.05% Holders</span>
                         </div>
                     </div>
 
@@ -251,7 +297,7 @@
                         <ul class="landing-rev-list">
                             <li>Earn points by completing weekly quests</li>
                             <li>Earn points from PvP battles and wagers</li>
-                            <li>Top 0.01% supply holders get daily rewards in SOL</li>
+                            <li>Top 0.05% supply holders get daily rewards in SOL</li>
                         </ul>
                     </div>
 
@@ -325,7 +371,7 @@
                         <div>
                             <p class="landing-road-phase">Phase 1</p>
                             <h3>Realm &amp; Avatars</h3>
-                            <p>Multiplayer hub, NPC patrols, avatar shop, PIN login, and Chips economy.</p>
+                            <p>Multiplayer hub, Live Trainer patrols, avatar shop, PIN login, and Chips economy.</p>
                         </div>
                     </article>
                     <article class="landing-road-item">
@@ -333,7 +379,7 @@
                         <div>
                             <p class="landing-road-phase">Phase 2</p>
                             <h3>Battles &amp; Vault</h3>
-                            <p>Telegram PvP wagering, PokéCard vending, vault collection, and battle stats.</p>
+                            <p>PokéTab PvP wagering, PokéCard vending, vault collection, and battle stats.</p>
                         </div>
                     </article>
                     <article class="landing-road-item">
@@ -341,7 +387,7 @@
                         <div>
                             <p class="landing-road-phase">Phase 3</p>
                             <h3>Quests &amp; Events</h3>
-                            <p>Weekly quest trails, world triggers, seasonal NPC stories, and reward loops.</p>
+                            <p>Weekly quest trails, world triggers, seasonal Live Trainer stories, and reward loops.</p>
                         </div>
                     </article>
                     <article class="landing-road-item">
@@ -369,43 +415,33 @@
                     <span>Join the community</span>
                 </h2>
                 <div class="landing-socials">
-                    <a class="landing-social-card" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">
-                        <strong>@{{ bot_username }}</strong>
-                        <span>DM the bot, tap Start, then open Play to enter the realm.</span>
+                    <a class="landing-social-card" href="https://x.com/pokecards" target="_blank" rel="noopener noreferrer">
+                        <strong>X</strong>
+                        <span>x.com/pokecards</span>
                     </a>
-                    <a class="landing-social-card" href="https://t.me/pokecardssolitems" target="_blank" rel="noopener noreferrer">
-                        <strong>Card Drops</strong>
-                        <span>Follow PokéCard news and item reveals on Telegram.</span>
+                    <a class="landing-social-card" href="https://t.me/pokecards" target="_blank" rel="noopener noreferrer">
+                        <strong>Telegram</strong>
+                        <span>t.me/pokecards</span>
                     </a>
-                </div>
-                <div class="landing-cta-row">
-                    <a class="landing-btn landing-btn--pulse" href="{{ play_url }}" target="_blank" rel="noopener noreferrer">Play Now</a>
                 </div>
             </section>
         </main>
 
         <footer class="landing-footer">
-            SaiPoke Realm · Pixel trainers, real battles · {{ starting_balance }} starter Chips for new trainers
+            Pokecards Quest · Pixel trainers, real battles · Stack vault cards · Climb the leaderboard
         </footer>
     </div>
     </div>
 
-    <audio id="landing-audio-unlock" preload="auto" autoplay loop muted playsinline hidden aria-hidden="true"
-        src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="></audio>
-    <script>
-        (function () {
-            const el = document.getElementById("landing-audio-unlock")
-            if (el) void el.play().catch(function () {})
-        })();
-    </script>
     <script>
         window.LANDING_POOL = {{ pool_cards | tojson }};
+        window.LANDING_EXCLUSIVE_SKINS = {{ exclusive_skins | tojson }};
         window.LANDING_BOOT = {
             titles: "/static/imgs/titles.png?v={{ asset_v.titles }}",
-            gif: {{ gif_url|tojson }}
+            heroMedia: {{ hero_media_url|tojson }},
+            exclusiveSkins: {{ exclusive_skins | map(attribute='sprite_url') | list | tojson }}
         };
     </script>
-    <script src="/static/js/retro-audio.js?v={{ asset_v.retro_audio_js }}" defer></script>
     <script src="/static/js/landing.js?v={{ asset_v.landing_js }}" defer></script>
 </body>
 </html>

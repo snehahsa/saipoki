@@ -1,4 +1,4 @@
-"""On-chain $KINS payment intents and Solana transaction verification."""
+"""On-chain $POKEQUEST payment intents and Solana transaction verification."""
 
 from __future__ import annotations
 
@@ -17,11 +17,12 @@ KINS_TREASURY_WALLET = os.getenv(
     "6b2RVgU36yVdGQmAEswVyBxNeWZ6MBPH1WxrfMwHAWZA",
 ).strip()
 
-# $KINS is a pump.fun Token-2022 mint — not the legacy SPL Token program.
+# $POKEQUEST is a pump.fun Token-2022 mint — not the legacy SPL Token program.
 TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 
 PAYMENT_INTENT_TTL_SEC = int(os.getenv("KINS_PAYMENT_INTENT_TTL_SEC", "600"))
 MIN_DEPOSIT_KINS = int(os.getenv("KINS_MIN_DEPOSIT", "1"))
+MIN_WITHDRAW_KINS = int(os.getenv("KINS_MIN_WITHDRAW", "5000"))
 MAX_DEPOSIT_KINS = int(os.getenv("KINS_MAX_DEPOSIT", "1000000"))
 
 
@@ -95,7 +96,7 @@ def treasury_kins_ata_exists() -> bool:
 
 
 TREASURY_NOT_READY_ERROR = (
-    "Treasury $KINS account is not set up yet. "
+    "Treasury $POKEQUEST account is not set up yet. "
     "The first deposit will create it automatically (small one-time SOL fee)."
 )
 
@@ -180,10 +181,10 @@ def create_withdrawal(
 ) -> tuple[bool, str, dict[str, Any]]:
     ensure_kins_withdrawals_schema(conn)
     amount_kins = int(amount_kins)
-    if amount_kins < MIN_DEPOSIT_KINS or amount_kins > MAX_DEPOSIT_KINS:
+    if amount_kins < MIN_WITHDRAW_KINS or amount_kins > MAX_DEPOSIT_KINS:
         return (
             False,
-            f"Enter between {MIN_DEPOSIT_KINS:,} and {MAX_DEPOSIT_KINS:,} Chips.",
+            f"Enter between {MIN_WITHDRAW_KINS:,} and {MAX_DEPOSIT_KINS:,} Chips.",
             {},
         )
 
@@ -349,10 +350,10 @@ def verify_kins_transfer(
     sent = -_token_delta_for_owner(meta, sender_wallet, mint)
 
     if received + 1e-9 < min_amount_kins:
-        return False, f"Treasury received {received:.4f} $KINS — expected at least {min_amount_kins}.", 0.0
+        return False, f"Treasury received {received:.4f} $POKEQUEST — expected at least {min_amount_kins}.", 0.0
 
     if sent + 1e-9 < min_amount_kins:
-        return False, "Sender wallet did not transfer the required $KINS.", 0.0
+        return False, "Sender wallet did not transfer the required $POKEQUEST.", 0.0
 
     return True, "", min(received, sent)
 

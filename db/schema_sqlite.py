@@ -106,6 +106,9 @@ def init_sqlite_schema(conn: Any) -> None:
             "ALTER TABLE users ADD COLUMN gear_slots TEXT NOT NULL DEFAULT "
             "'[null,null,null]'"
         ),
+        "npc_grants": (
+            "ALTER TABLE users ADD COLUMN npc_grants TEXT NOT NULL DEFAULT '[]'"
+        ),
     }
     for col, ddl in migrations.items():
         if col not in user_cols:

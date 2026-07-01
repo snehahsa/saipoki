@@ -63,7 +63,7 @@
         const response = await fetch("/api/kins/config")
         const data = await response.json()
         if (!response.ok || !data.success) {
-            throw new Error(data.error || "Could not load $KINS config.")
+            throw new Error(data.error || "Could not load $POKEQUEST config.")
         }
         return data
     }
@@ -98,7 +98,7 @@
     function resolveTransferPlan(transfer, config) {
         const amountKins = Math.trunc(Number(transfer?.amountKins))
         if (!Number.isFinite(amountKins) || amountKins <= 0) {
-            throw new Error("Invalid $KINS payment amount.")
+            throw new Error("Invalid $POKEQUEST payment amount.")
         }
 
         const decimals = Number.isFinite(transfer?.decimals)
@@ -144,7 +144,7 @@
         const config = await fetchKinsConfig()
         const plan = resolveTransferPlan(transfer, config)
         if (!plan.tokenProgram || !plan.mint || !plan.treasuryWallet) {
-            throw new Error("Missing $KINS transfer configuration.")
+            throw new Error("Missing $POKEQUEST transfer configuration.")
         }
 
         const { web3, spl } = await loadSolanaModules()
@@ -183,7 +183,7 @@
             const ownerInfo = await connection.getAccountInfo(ownerAta)
             if (!ownerInfo) {
                 throw new Error(
-                    `No $KINS token account found in this wallet. You need at least ${plan.amountKins} $KINS.`,
+                    `No $POKEQUEST token account found in this wallet. You need at least ${plan.amountKins} $POKEQUEST.`,
                 )
             }
 
@@ -191,7 +191,7 @@
             const walletAmount = Number(balance?.value?.uiAmountString || 0)
             if (walletAmount + 1e-9 < plan.amountKins) {
                 throw new Error(
-                    `Wallet balance is ${walletAmount} $KINS — need at least ${plan.amountKins}.`,
+                    `Wallet balance is ${walletAmount} $POKEQUEST — need at least ${plan.amountKins}.`,
                 )
             }
         }
@@ -271,7 +271,7 @@
             })
             const intent = await intentResponse.json()
             if (!intentResponse.ok || !intent.success) {
-                throw new Error(intent.error || "Could not start $KINS payment.")
+                throw new Error(intent.error || "Could not start $POKEQUEST payment.")
             }
 
             const transfer = intent.transfer || { amountKins: intent.amountKins }

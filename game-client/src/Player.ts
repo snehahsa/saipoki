@@ -105,6 +105,7 @@ export class Player {
 
         if (!this.animatedSprite) {
             this.animatedSprite = new PIXI.AnimatedSprite(this.sheet.animations['idle_down'])
+            this.animatedSprite.anchor.set(0.5, 1)
             this.animatedSprite.animationSpeed = this.animationSpeed
             this.animatedSprite.play()
             if (!this.initialized) {

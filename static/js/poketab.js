@@ -496,6 +496,10 @@
             else if (payload.event === "friend_accepted") showToast("Friend request accepted!")
             else if (payload.event === "message") showToast("New PokéTab message!")
             else if (payload.event === "battle_invite") showToast("Battle challenge on PokéTab!")
+            else if (payload.event === "battle_start") {
+                showToast("⚔ Battle started — opening PokéTab!")
+                window.PoketabSocial?.open?.()
+            }
         })
         if (modalClosed) return
         if (payload.event === "friend_request" && currentView === "requests") loadRequests()

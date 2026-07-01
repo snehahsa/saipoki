@@ -17,6 +17,7 @@ def _default_fishing_state() -> dict[str, Any]:
         "win_trial": 0,
         "salvage_casts": 0,
         "found": False,
+        "retry_prompt_shown": False,
         "session": None,
     }
 
@@ -36,6 +37,7 @@ def parse_fishing_bucket(raw: Any) -> dict[str, Any]:
     except (TypeError, ValueError):
         state["salvage_casts"] = 0
     state["found"] = bool(raw.get("found"))
+    state["retry_prompt_shown"] = bool(raw.get("retry_prompt_shown"))
     session = raw.get("session")
     if isinstance(session, dict) and session.get("id"):
         state["session"] = {
@@ -43,6 +45,8 @@ def parse_fishing_bucket(raw: Any) -> dict[str, Any]:
             "mode": str(session.get("mode") or ""),
             "started_at": int(session.get("started_at") or 0),
             "ends_at": int(session.get("ends_at") or 0),
+            "resolve_at": int(session.get("resolve_at") or session.get("ends_at") or 0),
+            "will_catch": bool(session.get("will_catch")),
             "quest_id": str(session.get("quest_id") or ""),
         }
     return state
@@ -154,11 +158,32 @@ def start_fishing_cast(
     duration = int(quest.get("cast_duration_sec") or FISHING_CAST_DURATION_SEC)
     now = int(time.time())
     session_id = secrets.token_hex(12)
+
+    will_catch = False
+    resolve_offset_sec = duration
+    if mode == win_mode and not state.get("found") and reward_gear not in slots:
+        import random
+
+        if not state.get("win_trial"):
+            tmin = int(quest.get("trials_min") or 1)
+            tmax = int(quest.get("trials_max") or 3)
+            state["win_trial"] = random.randint(tmin, tmax)
+
+        next_cast = int(state.get("salvage_casts") or 0) + 1
+        will_catch = next_cast == int(state["win_trial"])
+        if will_catch:
+            pct = random.uniform(0.35, 0.90)
+        else:
+            pct = random.uniform(0.50, 0.95)
+        resolve_offset_sec = max(3, int(duration * pct))
+
     state["session"] = {
         "id": session_id,
         "mode": mode,
         "started_at": now,
         "ends_at": now + duration,
+        "resolve_at": now + resolve_offset_sec,
+        "will_catch": will_catch,
         "quest_id": quest_key,
     }
     fishing[quest_key] = state
@@ -175,6 +200,7 @@ def start_fishing_cast(
         "ok": True,
         "session_id": session_id,
         "duration_ms": duration * 1000,
+        "resolve_at_ms": resolve_offset_sec * 1000,
         "status_label": status_label,
         "wrong_mode": mode != win_mode,
         "quest_key": quest_key,
@@ -215,8 +241,13 @@ def complete_fishing_cast(
     session = state["session"]
     now = int(time.time())
     ends_at = int(session.get("ends_at") or 0)
-    if now + 1 < ends_at:
-        return {"ok": False, "error": "Cast still in progress", "wait_ms": (ends_at - now) * 1000}
+    resolve_at = int(session.get("resolve_at") or ends_at)
+    if now + 1 < resolve_at:
+        return {
+            "ok": False,
+            "error": "Cast still in progress",
+            "wait_ms": max(0, (resolve_at - now) * 1000),
+        }
 
     mode = str(session.get("mode") or "")
     win_mode = str(quest.get("win_mode") or "salvage")
@@ -229,16 +260,19 @@ def complete_fishing_cast(
     salvage_casts = int(state.get("salvage_casts") or 0)
 
     if mode == win_mode and not state.get("found") and reward_gear not in slots:
-        import random
+        will_catch = session.get("will_catch")
+        if will_catch is None:
+            import random
 
-        if not state.get("win_trial"):
-            tmin = int(quest.get("trials_min") or 1)
-            tmax = int(quest.get("trials_max") or 3)
-            state["win_trial"] = random.randint(tmin, tmax)
+            if not state.get("win_trial"):
+                tmin = int(quest.get("trials_min") or 1)
+                tmax = int(quest.get("trials_max") or 3)
+                state["win_trial"] = random.randint(tmin, tmax)
+            will_catch = (salvage_casts + 1) == int(state["win_trial"])
 
         state["salvage_casts"] = salvage_casts + 1
         salvage_casts = state["salvage_casts"]
-        if salvage_casts == state["win_trial"]:
+        if will_catch:
             slots, newly_granted = grant_gear_to_slots(slots, reward_gear)
             if newly_granted or reward_gear in slots:
                 caught = True
@@ -266,7 +300,13 @@ def complete_fishing_cast(
         mode == win_mode
         and not caught
         and salvage_casts == 1
+        and not state.get("retry_prompt_shown")
     )
+    if show_retry_prompt:
+        state["retry_prompt_shown"] = True
+        fishing[matched_key] = state
+        progress = merge_quest_progress_fishing(progress, fishing)
+        _save_progress(conn, telegram_id, progress)
 
     return {
         "ok": True,

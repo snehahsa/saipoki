@@ -7,8 +7,7 @@ QUEST_CATALOG = [
         "title": "The Vault Trail",
         "blurb": (
             "Dr. Ray charted your first week in the realm — meet the professor, "
-            "grab your trainer bag, claim your vault, prove your wallet, catch your first Pokémon, "
-            "help the PokéHub Manager recover his lost key, collect your PokéTab, battle, and debut on the market."
+            "gear up, fill your vault, help the PokéHub Manager, and earn your first battle."
         ),
         "prize": "Revenue share slice + Starter Vault badge",
         "unlock_after": None,
@@ -16,67 +15,52 @@ QUEST_CATALOG = [
             {
                 "id": "meet_dr_ray",
                 "name": "Meet Dr. Ray",
-                "hint": "Find Dr. Ray on patrol in the park and hear his welcome briefing",
+                "hint": "Someone in the park has a briefing for new trainers.",
             },
             {
                 "id": "collect_trainer_bag",
                 "name": "Claim Your Trainer Bag",
-                "hint": "Find the box east of the spawn plaza and take your trainer bag",
+                "hint": "You'll need gear before you wander far.",
             },
             {
                 "id": "collect_card_vault",
                 "name": "Claim Your Card Vault",
-                "hint": "Return to Dr. Ray with your bag — he will give you a PokéCard Vault",
-            },
-            {
-                "id": "verify_wallet",
-                "name": "Verify Your Wallet",
-                "hint": "Link and verify your wallet so the realm knows it's you",
+                "hint": "The professor may have more once you're equipped.",
             },
             {
                 "id": "collect_first_card",
                 "name": "Catch Your First Pokémon",
-                "hint": "Draw your first card from the vending machine (1,000 $POKE) into your vault",
+                "hint": "Cards don't collect themselves.",
             },
             {
                 "id": "meet_pokehub_manager",
                 "name": "Meet the PokéHub Manager",
-                "hint": "Take the portal to the PokéHub and talk to the Manager on the ground floor",
+                "hint": "There's a hub beyond the portal worth visiting.",
             },
             {
                 "id": "manager_lost_key",
                 "name": "The Manager's Lost Key",
-                "hint": "Hear the Manager's story — he'll lend you his Pro Fishing Rod",
+                "hint": "The Manager has a problem — and a proposition.",
             },
             {
                 "id": "fish_for_hub_key",
                 "name": "Fish for the Lost Key",
-                "hint": "Equip the rod, choose Salvage, and cast by the canal water outside the PokéHub",
+                "hint": "Something valuable sank near the water.",
             },
             {
                 "id": "collect_hub_key",
                 "name": "Hook the PokéHub Key",
-                "hint": "Keep Salvage fishing by the canal until you snag the Manager's key",
+                "hint": "Patience and the right spot matter.",
             },
             {
                 "id": "collect_poketab",
                 "name": "Collect Your PokéTab",
-                "hint": "Return the key to the Manager — he'll give you his PokéTab",
-            },
-            {
-                "id": "meet_cristy",
-                "name": "Meet Cristy (optional)",
-                "hint": "Find Cristy patrolling near the Nova City waterfront for fishing tips",
+                "hint": "A debt repaid sometimes earns a reward.",
             },
             {
                 "id": "battle_game",
                 "name": "Fight Your First Battle",
-                "hint": "In the battle group, post /battle 50 and finish the match",
-            },
-            {
-                "id": "list_card_sale",
-                "name": "List a Card for Sale",
-                "hint": "Pin a PokéCard to the market board and set your price",
+                "hint": "Find a worthy opponent and see it through.",
             },
         ],
     },
