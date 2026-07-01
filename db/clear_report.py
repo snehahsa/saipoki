@@ -26,6 +26,43 @@ def _row_val(row: Any, key: str, default: Any = None) -> Any:
         return default
 
 
+def _to_unix_ts(value: Any) -> int:
+    """Normalize created_at/updated_at from unix int or SQLite datetime text."""
+    if value is None or value == "":
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, datetime):
+        dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+
+    text = str(value).strip()
+    if not text:
+        return 0
+    if text.isdigit():
+        return int(text)
+
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except ValueError:
+        pass
+
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            dt = datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+            return int(dt.timestamp())
+        except ValueError:
+            continue
+
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _wallet_from_user_id(telegram_id: str) -> str:
     tid = str(telegram_id or "")
     if tid.startswith("wallet:"):
@@ -160,8 +197,8 @@ def build_clear_snapshot(conn: Any) -> dict[str, Any]:
                     "skins": _owned_skin_count(_row_val(row, "owned_skins")),
                     "skin": str(_row_val(row, "skin", "") or ""),
                     "vending_spins": int(_row_val(row, "vending_spins", 0) or 0),
-                    "created_at": int(_row_val(row, "created_at", 0) or 0),
-                    "updated_at": int(_row_val(row, "updated_at", 0) or 0),
+                    "created_at": _to_unix_ts(_row_val(row, "created_at", 0)),
+                    "updated_at": _to_unix_ts(_row_val(row, "updated_at", 0)),
                 }
             )
 
