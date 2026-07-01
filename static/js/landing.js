@@ -9,7 +9,9 @@
     const bootCfg = window.LANDING_BOOT || {}
 
     const BOOT_MAX_MS = 9000
+    const BOOT_VIDEO_MAX_MS = 22000
     const ASSET_TIMEOUT_MS = 4000
+    const HERO_VIDEO_TIMEOUT_MS = 20000
 
     const SKIN_IDS = Array.from({ length: 83 }, (_, i) => String(i + 1).padStart(3, "0"))
     const DEFAULT_SKIN = "009"
@@ -133,6 +135,60 @@
         )
     }
 
+    function isHeroVideo() {
+        return bootCfg.heroMediaType === "video" && Boolean(bootCfg.heroMedia)
+    }
+
+    function preloadHeroVideo() {
+        const video = document.getElementById("hero-media-video")
+        if (!video || !bootCfg.heroMedia) return Promise.resolve(null)
+
+        if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+            return Promise.resolve(video)
+        }
+
+        return withTimeout(
+            new Promise((resolve) => {
+                let settled = false
+                const finish = (result) => {
+                    if (settled) return
+                    settled = true
+                    cleanup()
+                    resolve(result)
+                }
+                const onReady = () => finish(video)
+                const onErr = () => finish(null)
+                const cleanup = () => {
+                    video.removeEventListener("canplaythrough", onReady)
+                    video.removeEventListener("canplay", onReady)
+                    video.removeEventListener("error", onErr)
+                }
+
+                video.addEventListener("canplaythrough", onReady, { once: true })
+                video.addEventListener("canplay", onReady, { once: true })
+                video.addEventListener("error", onErr, { once: true })
+
+                if (!video.getAttribute("src")) {
+                    video.src = bootCfg.heroMedia
+                }
+                video.load()
+            }),
+            HERO_VIDEO_TIMEOUT_MS,
+            null
+        )
+    }
+
+    function startHeroVideo() {
+        const video = document.getElementById("hero-media-video")
+        if (!video) return
+        video.muted = true
+        video.playsInline = true
+        const playAttempt = video.play()
+        if (playAttempt && typeof playAttempt.catch === "function") {
+            playAttempt.catch(() => {})
+        }
+    }
+
     async function preloadFont() {
         if (!document.fonts?.load) return
         await withTimeout(document.fonts.load("10px silkscreen"), 2000).catch(() => null)
@@ -170,7 +226,9 @@
         const heroMedia = bootCfg.heroMedia || bootCfg.gif || (
             Array.isArray(bootCfg.gifs) ? bootCfg.gifs.find(Boolean) : null
         )
-        if (heroMedia) {
+        if (heroMedia && isHeroVideo()) {
+            steps.push({ pct: 48, run: () => preloadHeroVideo() })
+        } else if (heroMedia) {
             steps.push({ pct: 48, run: () => preloadImage(heroMedia) })
         }
 
@@ -226,6 +284,7 @@
         }
 
         setTimeout(() => splash?.remove(), 400)
+        startHeroVideo()
     }
 
     function finishBoot() {
@@ -309,7 +368,7 @@
     async function bootLanding() {
         void renderExclusiveSkins()
         const bootDone = preloadLandingAssets().catch(() => null)
-        const bootCap = delay(BOOT_MAX_MS)
+        const bootCap = delay(isHeroVideo() ? BOOT_VIDEO_MAX_MS : BOOT_MAX_MS)
 
         await Promise.race([bootDone, bootCap])
         setLoadProgress(100)

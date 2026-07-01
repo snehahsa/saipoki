@@ -8,6 +8,9 @@
     <link rel="icon" href="/static/imgs/favicon.png?v={{ asset_v.favicon }}" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/static/imgs/apple-touch-icon.png?v={{ asset_v.favicon }}">
     <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
+    {% if hero_media_type == 'video' and hero_media_url %}
+    <link rel="preload" href="{{ hero_media_url }}" as="video" type="video/mp4">
+    {% endif %}
     <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
     <link rel="stylesheet" href="/static/css/landing.css?v={{ asset_v.landing_css }}">
 </head>
@@ -99,8 +102,20 @@
                 </div>
 
                 <figure class="landing-gif-slot landing-gif-slot--hero" id="hero-media">
-                    {% if hero_media_url %}
-                    <img src="{{ hero_media_url }}" alt="Pokecards Quest gameplay" loading="lazy">
+                    {% if hero_media_url and hero_media_type == 'video' %}
+                    <video
+                        id="hero-media-video"
+                        class="landing-hero-video"
+                        src="{{ hero_media_url }}"
+                        muted
+                        loop
+                        playsinline
+                        preload="auto"
+                        disablepictureinpicture
+                        aria-label="Pokecards Quest gameplay"
+                    ></video>
+                    {% elif hero_media_url %}
+                    <img src="{{ hero_media_url }}" alt="Pokecards Quest gameplay" decoding="async" fetchpriority="high">
                     {% else %}
                     <div class="landing-gif-placeholder landing-gif-placeholder--wide" aria-hidden="true"><span>▶</span></div>
                     {% endif %}
@@ -521,6 +536,7 @@
         window.LANDING_BOOT = {
             titles: "/static/imgs/titles.png?v={{ asset_v.titles }}",
             heroMedia: {{ hero_media_url|tojson }},
+            heroMediaType: {{ hero_media_type|tojson }},
             exclusiveSkins: {{ exclusive_skins | map(attribute='sprite_url') | list | tojson }}
         };
     </script>

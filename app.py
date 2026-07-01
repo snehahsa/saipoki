@@ -672,6 +672,12 @@ def telegram_play_url() -> str:
 
 
 GIF_EXTENSIONS = (".gif", ".webp", ".png", ".jpg", ".jpeg", ".mp4")
+VIDEO_EXTENSIONS = (".mp4", ".webm", ".mov")
+
+
+def _static_media_url(path: Path) -> str:
+    rel = path.relative_to(Path(app.root_path))
+    return f"/{rel.as_posix()}?v={int(path.stat().st_mtime)}"
 
 
 def landing_gif_url(slot: str = "2") -> Optional[str]:
@@ -680,13 +686,44 @@ def landing_gif_url(slot: str = "2") -> Optional[str]:
     for ext in GIF_EXTENSIONS:
         path = gif_dir / f"{slot}{ext}"
         if path.is_file():
-            return f"/static/giffiles/{slot}{ext}?v={int(path.stat().st_mtime)}"
+            return _static_media_url(path)
     return None
 
 
+def landing_video_url() -> Optional[str]:
+    """Hero demo video from /static/video/ (demo.* preferred)."""
+    video_dir = Path(app.root_path) / "static" / "video"
+    if not video_dir.is_dir():
+        return None
+    for stem in ("demo", "hero", "1"):
+        for ext in VIDEO_EXTENSIONS:
+            path = video_dir / f"{stem}{ext}"
+            if path.is_file():
+                return _static_media_url(path)
+    for path in sorted(video_dir.iterdir()):
+        if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS:
+            return _static_media_url(path)
+    return None
+
+
+def landing_hero_media() -> tuple[Optional[str], str]:
+    """Return (url, media_type) where media_type is 'video' or 'image'."""
+    video = landing_video_url()
+    if video:
+        return video, "video"
+    url = landing_gif_url("1") or landing_gif_url("2")
+    if not url:
+        return None, "image"
+    ext = Path(url.split("?")[0]).suffix.lower()
+    if ext in VIDEO_EXTENSIONS:
+        return url, "video"
+    return url, "image"
+
+
 def landing_hero_media_url() -> Optional[str]:
-    """Hero media — /static/giffiles/1.* preferred, then 2.*."""
-    return landing_gif_url("1") or landing_gif_url("2")
+    """Hero media — /static/video/* preferred, then /static/giffiles/1.* or 2.*."""
+    url, _ = landing_hero_media()
+    return url
 
 
 def landing_pool_cards() -> list:
@@ -892,6 +929,7 @@ def play_page():
 
 
 def _render_landing_page():
+    hero_media_url, hero_media_type = landing_hero_media()
     return render_template(
         "landing.html",
         starting_balance=STARTING_BALANCE,
@@ -901,12 +939,13 @@ def _render_landing_page():
         exclusive_skins=landing_exclusive_skins(),
         play_steps=landing_play_steps(),
         play_lead=landing_play_lead(),
-        hero_media_url=landing_hero_media_url(),
+        hero_media_url=hero_media_url,
+        hero_media_type=hero_media_type,
         asset_v={
             "landing_css": asset_version("static/css/landing.css"),
             "landing_js": asset_version("static/js/landing.js"),
             "titles": asset_version("static/imgs/titles.png"),
-        "favicon": asset_version("static/imgs/favicon.png"),
+            "favicon": asset_version("static/imgs/favicon.png"),
         },
     )
 

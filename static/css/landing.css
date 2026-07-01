@@ -587,13 +587,21 @@ a.play-btn {
     min-width: 0;
 }
 
-.landing-gif-slot img,
-.landing-gif-slot video {
+.landing-gif-slot img {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
     image-rendering: pixelated;
+}
+
+.landing-gif-slot video,
+.landing-hero-video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #0a0c10;
 }
 
 .landing-gif-slot--hero {
