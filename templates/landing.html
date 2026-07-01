@@ -129,7 +129,7 @@
                         aria-label="Copy contract address"
                     >
                         <span class="landing-copyable-label">CA</span>
-                        <code class="landing-copyable-value">{{ token_ca }}</code>
+                        <code class="landing-copyable-value">{{ token_ca | short_ca }}</code>
                         <span class="landing-copyable-meta">click to copy</span>
                     </button>
                     <p class="landing-copy-toast hidden" id="landing-copy-toast" role="status" aria-live="polite">Copied!</p>

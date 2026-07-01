@@ -128,6 +128,17 @@ load_dotenv(_WEBP_ENV)  # optional local overrides
 
 app = Flask(__name__)
 
+
+def short_contract_address(addr: str, prefix: int = 13, suffix: int = 12) -> str:
+    """Display CA as start.....end (full value still used for copy)."""
+    value = (addr or "").strip()
+    if len(value) <= prefix + suffix + 5:
+        return value
+    return f"{value[:prefix]}.....{value[-suffix:]}"
+
+
+app.jinja_env.filters["short_ca"] = short_contract_address
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 TEST_PLAYER_TELEGRAM_ID = "999999001"
 TEST_PLAYER_USER = {
