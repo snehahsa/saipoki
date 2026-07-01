@@ -473,6 +473,15 @@ body.landing-body.landing-nav-open {
     overflow-wrap: anywhere;
 }
 
+.landing-hero-cta {
+    margin: 16px 0 0;
+    padding: 0 10px;
+}
+
+.landing-hero-cta .landing-btn {
+    text-decoration: none;
+}
+
 .landing-ca-wrap--hero {
     width: fit-content;
     max-width: min(100%, 320px);

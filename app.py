@@ -12,7 +12,7 @@ from typing import Optional
 from urllib.parse import parse_qsl
 
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_from_directory
 
 from flow_catalog import (
     HOLD_ITEMS,
@@ -880,7 +880,46 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
 
 @app.route("/play")
 def play_page():
+    test_slug = parse_test_slug_from_query_args(request.args)
+    if test_slug is not None:
+        return _render_game_app(
+            play_mode=False,
+            test_mode=True,
+            test_player_slug=test_slug,
+        )
     return _render_game_app(play_mode=True)
+
+
+def _render_landing_page():
+    return render_template(
+        "landing.html",
+        starting_balance=STARTING_BALANCE,
+        pool_cards=landing_pool_cards(),
+        showcase_cards=landing_pool_cards()[:3],
+        hold_items=landing_hold_items(),
+        exclusive_skins=landing_exclusive_skins(),
+        play_steps=landing_play_steps(),
+        play_lead=landing_play_lead(),
+        hero_media_url=landing_hero_media_url(),
+        asset_v={
+            "landing_css": asset_version("static/css/landing.css"),
+            "landing_js": asset_version("static/js/landing.js"),
+            "titles": asset_version("static/imgs/titles.png"),
+        },
+    )
+
+
+@app.route("/")
+def home():
+    if parse_test_slug_from_query_args(request.args) is not None:
+        qs = request.query_string.decode()
+        return redirect(f"/play?{qs}" if qs else "/play", code=302)
+    return _render_landing_page()
+
+
+@app.route("/landing")
+def landing_page():
+    return redirect("/", code=301)
 
 
 @app.route("/api/wallet/challenge", methods=["GET", "POST"])
@@ -1283,36 +1322,6 @@ def kins_confirm_api():
             )
 
         return jsonify({"success": False, "error": "Unknown payment purpose."}), 400
-
-
-@app.route("/landing")
-def landing_page():
-    return render_template(
-        "landing.html",
-        starting_balance=STARTING_BALANCE,
-        pool_cards=landing_pool_cards(),
-        showcase_cards=landing_pool_cards()[:3],
-        hold_items=landing_hold_items(),
-        exclusive_skins=landing_exclusive_skins(),
-        play_steps=landing_play_steps(),
-        play_lead=landing_play_lead(),
-        hero_media_url=landing_hero_media_url(),
-        asset_v={
-            "landing_css": asset_version("static/css/landing.css"),
-            "landing_js": asset_version("static/js/landing.js"),
-            "titles": asset_version("static/imgs/titles.png"),
-        },
-    )
-
-
-@app.route("/")
-def home():
-    test_slug = parse_test_slug_from_query_args(request.args)
-    return _render_game_app(
-        play_mode=False,
-        test_mode=test_slug is not None,
-        test_player_slug=test_slug if test_slug is not None else "",
-    )
 
 
 @app.route("/api/world")

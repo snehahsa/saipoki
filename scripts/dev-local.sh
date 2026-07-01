@@ -116,7 +116,7 @@ if is_port_listening "$PORT"; then
   exit 1
 fi
 
-echo "Flask:       http://127.0.0.1:${PORT}  (/?alice, /?bob, /?alive)"
+echo "Flask:       http://127.0.0.1:${PORT}  (/ landing, /play?alice, /play?bob)"
 echo "Game server: http://127.0.0.1:${GAME_PORT}"
 echo "Press Ctrl+C to stop both."
 ensure_python_deps
@@ -163,6 +163,6 @@ if ! is_port_listening "$PORT"; then
   exit 1
 fi
 
-echo "Game ready → http://127.0.0.1:${PORT}/?alice"
+echo "Game ready → http://127.0.0.1:${PORT}/play?alice"
 
 wait "$FLASK_PID" "$GAME_PID"
