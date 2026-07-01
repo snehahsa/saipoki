@@ -1466,9 +1466,9 @@ a.play-btn {
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    border: 2px solid var(--panel-border);
+    border: 3px solid var(--panel-border);
     border-radius: 10px;
-    box-shadow: 2px 2px 0 var(--pixel-shadow);
+    box-shadow: none;
 }
 
 .landing-play-steps-badge {
@@ -1483,7 +1483,6 @@ a.play-btn {
     line-height: 1;
     color: #3d2a00;
     background: radial-gradient(circle at 35% 28%, #fff6c8 0%, #f0d050 45%, #c9940f 100%);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .landing-play-loot-badge {
