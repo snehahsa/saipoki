@@ -6,6 +6,8 @@
     <meta name="format-detection" content="telephone=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>{% if play_mode %}PokeQuest — Play Now{% else %}SaiPoke Realm{% endif %}</title>
+    <link rel="icon" href="/static/imgs/favicon.png?v={{ asset_v.favicon }}" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/static/imgs/apple-touch-icon.png?v={{ asset_v.favicon }}">
     <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="/static/imgs/titles.png?v={{ asset_v.titles }}" as="image">
     {% if play_mode %}

@@ -833,6 +833,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         "game_js": asset_version("static/game/game.js"),
         "world": world_map_version(),
         "titles": asset_version("static/imgs/titles.png"),
+        "favicon": asset_version("static/imgs/favicon.png"),
         "bag_icon": asset_version("static/menuitems/bag.png"),
         "dex_icon": asset_version("static/menuitems/dex.png"),
         "phone_icon": asset_version("static/menuitems/phone.png"),
@@ -905,6 +906,7 @@ def _render_landing_page():
             "landing_css": asset_version("static/css/landing.css"),
             "landing_js": asset_version("static/js/landing.js"),
             "titles": asset_version("static/imgs/titles.png"),
+        "favicon": asset_version("static/imgs/favicon.png"),
         },
     )
 
@@ -920,6 +922,15 @@ def home():
 @app.route("/landing")
 def landing_page():
     return redirect("/", code=301)
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        Path(app.root_path) / "static" / "imgs",
+        "favicon.png",
+        mimetype="image/png",
+    )
 
 
 @app.route("/api/wallet/challenge", methods=["GET", "POST"])
