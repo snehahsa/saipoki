@@ -1431,7 +1431,8 @@ a.play-btn {
 .landing-play-steps-box,
 .landing-play-skins-box,
 .landing-play-loot-box,
-.landing-play-cards-box {
+.landing-play-cards-box,
+.landing-play-revenue-box {
     margin-bottom: 14px;
     padding: 14px 14px 12px;
     background: linear-gradient(180deg, #fff8ea 0%, #f0e4c8 100%);
@@ -1460,7 +1461,8 @@ a.play-btn {
 .landing-play-steps-badge,
 .landing-play-skins-badge,
 .landing-play-loot-badge,
-.landing-play-cards-badge {
+.landing-play-cards-badge,
+.landing-play-revenue-badge {
     width: 40px;
     height: 40px;
     display: grid;
@@ -1491,6 +1493,14 @@ a.play-btn {
     line-height: 1;
     color: #fff8ea;
     background: radial-gradient(circle at 35% 30%, #9c7bff, #5c3d99);
+}
+
+.landing-play-revenue-badge {
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1;
+    color: #14532d;
+    background: radial-gradient(circle at 35% 28%, #e8ffe8 0%, #86efac 52%, #3d8f52 100%);
 }
 
 .landing-play-steps-title,
@@ -2161,7 +2171,8 @@ a.play-btn {
     .landing-play-steps-box,
     .landing-play-skins-box,
     .landing-play-loot-box,
-    .landing-play-cards-box {
+    .landing-play-cards-box,
+    .landing-play-revenue-box {
         padding: 12px 10px;
         min-width: 0;
     }
@@ -2179,7 +2190,8 @@ a.play-btn {
     .landing-play-steps-badge,
     .landing-play-skins-badge,
     .landing-play-loot-badge,
-    .landing-play-cards-badge {
+    .landing-play-cards-badge,
+    .landing-play-revenue-badge {
         width: 34px;
         height: 34px;
         border-radius: 8px;
@@ -2195,6 +2207,10 @@ a.play-btn {
 
     .landing-play-loot-badge {
         font-size: 13px;
+    }
+
+    .landing-play-revenue-badge {
+        font-size: 15px;
     }
 
     .landing-play-steps-title,
@@ -2296,7 +2312,8 @@ a.play-btn {
     .landing-play-steps-badge,
     .landing-play-skins-badge,
     .landing-play-loot-badge,
-    .landing-play-cards-badge {
+    .landing-play-cards-badge,
+    .landing-play-revenue-badge {
         width: 44px;
         height: 44px;
         border-radius: 10px;
@@ -2312,6 +2329,10 @@ a.play-btn {
 
     .landing-play-loot-badge {
         font-size: 16px;
+    }
+
+    .landing-play-revenue-badge {
+        font-size: 20px;
     }
 
     .landing-play-steps-lead,
