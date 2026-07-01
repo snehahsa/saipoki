@@ -530,7 +530,10 @@ function updateSkinPreview(skin, prefix = "skin") {
     const zoom = prefix === "profile" ? SKIN_PROFILE_ZOOM : SKIN_HERO_ZOOM
 
     applySpritePreview(el, skin, SKIN_FRAME, zoom)
-    if (counter) counter.textContent = `${SKINS.indexOf(skin) + 1} / ${SKINS.length}`
+    if (counter) {
+        const idx = sortedSkins.indexOf(skin)
+        counter.textContent = `${idx >= 0 ? idx + 1 : SKINS.indexOf(skin) + 1} / ${sortedSkins.length}`
+    }
 }
 
 function readMenuAvatarLayout(el) {
@@ -681,6 +684,8 @@ function skinPriceTier(price) {
 function compareSkinsByPrice(a, b) {
     const diff = avatarListPrice(a) - avatarListPrice(b)
     if (diff !== 0) return diff
+    if (a === "006") return -1
+    if (b === "006") return 1
     return a.localeCompare(b, undefined, { numeric: true })
 }
 
@@ -688,10 +693,10 @@ function sortSkinsByPrice(skins) {
     return [...skins].sort(compareSkinsByPrice)
 }
 
-let sortedSkins = [...SKINS]
+let sortedSkins = sortSkinsByPrice(SKINS)
 
 function refreshSortedSkins() {
-    sortedSkins = [...SKINS]
+    sortedSkins = sortSkinsByPrice(SKINS)
 }
 
 function isAvatarOwned(skin) {
@@ -1018,14 +1023,18 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
     }
 
     if (saveBtn && prefix === "skin") {
-        if (kinsPay) {
+        if (cost === 0) {
+            saveBtn.removeAttribute("data-kins-buy")
+            saveBtn.classList.remove("is-unaffordable")
+            saveBtn.textContent = "Equip"
+        } else if (kinsPay) {
             saveBtn.setAttribute("data-kins-buy", "")
             saveBtn.classList.remove("is-unaffordable")
             saveBtn.textContent = `Buy — ${formatChipsAmount(price)} $POKEQUEST`
         } else {
             saveBtn.removeAttribute("data-kins-buy")
             saveBtn.classList.toggle("is-unaffordable", cost > balance)
-            saveBtn.textContent = cost > balance && cost > 0 ? "Not enough Chips" : "Buy"
+            saveBtn.textContent = cost > balance ? "Not enough Chips" : "Buy"
         }
     }
 
@@ -1136,12 +1145,12 @@ function updateProfileActionButton(skin) {
         btn.disabled = true
         btn.removeAttribute("data-kins-buy")
         btn.classList.add("is-unaffordable")
-    } else if (cost > 0) {
-        btn.textContent = `Purchase · ${formatChipsAmount(cost)}`
+    } else if (cost === 0) {
+        btn.textContent = "Equip"
         btn.disabled = false
         btn.removeAttribute("data-kins-buy")
     } else {
-        btn.textContent = "Claim Free"
+        btn.textContent = "Buy"
         btn.disabled = false
         btn.removeAttribute("data-kins-buy")
     }
