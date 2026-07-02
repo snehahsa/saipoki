@@ -1,5 +1,5 @@
 (function () {
-    const WALLET_CHECK = Boolean(window.APP_CONFIG?.walletCheck)
+    const WALLET_CHECK = Number(window.APP_CONFIG?.walletCheck ?? 1)
     const STORAGE_KEY = "pokequest_wallet_session"
     const WALLET_ADDRESS_KEY = "pokequest_wallet_address"
     const CONNECT_TIMEOUT_MS = 45000
@@ -20,6 +20,10 @@
     const walletBar = document.getElementById("play-wallet-bar")
     const walletBarLabel = document.getElementById("play-wallet-bar-label")
     const walletDisconnectBtn = document.getElementById("play-wallet-disconnect")
+
+    function walletRequired() {
+        return WALLET_CHECK !== 0
+    }
 
     function setLandingStatus(text, kind) {
         if (!statusEl) return
@@ -493,32 +497,27 @@
         }
     }
 
-    function bootGuestPlay() {
-        if (walletBusy) return
-        setBusy(true)
-        setLandingStatus("Loading trainer…", "success")
-        window.SaiPokePlay?.bootAfterWallet?.()
-            .then((ok) => {
-                if (!ok) {
-                    setLandingStatus("Could not load your trainer profile.", "error")
-                } else {
-                    setLandingStatus("")
-                }
-            })
-            .catch((error) => {
-                setLandingStatus(error.message || "Could not sign in.", "error")
-            })
-            .finally(() => setBusy(false))
-    }
-
     function bindLanding() {
         if (landingBound) return
         landingBound = true
 
         playBtn?.addEventListener("click", () => {
             if (walletBusy) return
-            if (!WALLET_CHECK) {
-                bootGuestPlay()
+            if (!walletRequired()) {
+                setBusy(true)
+                setLandingStatus("Loading your trainer…", "success")
+                window.SaiPokePlay?.bootAfterWallet?.()
+                    .then((ok) => {
+                        if (!ok) {
+                            setLandingStatus("Could not load your trainer profile.", "error")
+                        } else {
+                            setLandingStatus("")
+                        }
+                    })
+                    .catch((error) => {
+                        setLandingStatus(error.message || "Could not sign in.", "error")
+                    })
+                    .finally(() => setBusy(false))
                 return
             }
             const existing = sessionStorage.getItem(STORAGE_KEY)
@@ -549,26 +548,27 @@
             if (!walletBusy) void disconnectWallet()
         })
 
-        document.getElementById("play-wallet-close")?.addEventListener("click", closeWalletModal)
-        walletModal?.addEventListener("click", (event) => {
-            if (event.target === walletModal) closeWalletModal()
-        })
-
-        document.querySelectorAll("[data-wallet]").forEach((btn) => {
-            btn.addEventListener("click", (event) => {
-                event.preventDefault()
-                onWalletButtonClick(btn.getAttribute("data-wallet"))
-            })
-        })
-
         document.getElementById("exit-spectate-btn")?.addEventListener("click", () => {
             document.getElementById("leave-game-btn")?.click()
         })
 
-        void waitForWalletInject().then(() => syncWalletOptionDetection())
-        if (WALLET_CHECK) {
+        if (walletRequired()) {
+            document.getElementById("play-wallet-close")?.addEventListener("click", closeWalletModal)
+            walletModal?.addEventListener("click", (event) => {
+                if (event.target === walletModal) closeWalletModal()
+            })
+
+            document.querySelectorAll("[data-wallet]").forEach((btn) => {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault()
+                    onWalletButtonClick(btn.getAttribute("data-wallet"))
+                })
+            })
+
+            void waitForWalletInject().then(() => syncWalletOptionDetection())
             prefetchChallenge()
         }
+
         syncWalletConnectedUi()
     }
 

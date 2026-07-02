@@ -52,7 +52,7 @@ let fishingRetryPromptPromise = null
 
 const tg = window.Telegram?.WebApp
 const PLAY_MODE = Boolean(window.APP_CONFIG?.playMode)
-const WALLET_CHECK = Boolean(window.APP_CONFIG?.walletCheck)
+const WALLET_CHECK = Number(window.APP_CONFIG?.walletCheck ?? 1)
 const WALLET_STORAGE_KEY = "pokequest_wallet_session"
 const GUEST_STORAGE_KEY = "pokequest_guest_id"
 let playSpectatorMode = false
@@ -96,6 +96,22 @@ function detectTestMode() {
 
 const TEST_MODE = detectTestMode()
 const TEST_PLAYER_SLUG = TEST_MODE ? (parseTestPlayerSlug() ?? "") : ""
+
+function walletRequired() {
+    return WALLET_CHECK !== 0
+}
+
+function getOrCreateGuestId() {
+    let id = localStorage.getItem(GUEST_STORAGE_KEY)
+    if (!id) {
+        const uuid = typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID().replace(/-/g, "")
+            : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+        id = `guest:${uuid}`
+        localStorage.setItem(GUEST_STORAGE_KEY, id)
+    }
+    return id
+}
 
 function questTitleForId(questId) {
     const quest = QUEST_CATALOG.find((item) => item.quest_id === questId)
@@ -183,19 +199,10 @@ function applyTrainerStats(stats, meta = {}) {
     }
 }
 
-function ensureGuestId() {
-    let id = localStorage.getItem(GUEST_STORAGE_KEY)
-    if (!id) {
-        id = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")
-        localStorage.setItem(GUEST_STORAGE_KEY, id)
-    }
-    return id
-}
-
 function isSignedIn() {
     if (TEST_MODE) return true
     if (tg?.initData) return true
-    if (PLAY_MODE && !WALLET_CHECK) return true
+    if (PLAY_MODE && !walletRequired()) return true
     if (PLAY_MODE && sessionStorage.getItem(WALLET_STORAGE_KEY)) return true
     if (PLAY_MODE && playSpectatorMode) return true
     return false
@@ -209,11 +216,11 @@ function apiAuthBody(extra = {}) {
     } else if (tg?.initData) {
         body.initData = tg.initData
     } else if (PLAY_MODE) {
-        if (!WALLET_CHECK) {
-            body.guestId = ensureGuestId()
-        } else {
+        if (walletRequired()) {
             const walletSession = sessionStorage.getItem(WALLET_STORAGE_KEY)
             if (walletSession) body.walletSession = walletSession
+        } else {
+            body.guestId = getOrCreateGuestId()
         }
         if (playSpectatorMode) body.spectator = true
     }
@@ -730,7 +737,7 @@ function formatChipsAmount(n) {
 }
 
 function requiresKinsPayments() {
-    if (!WALLET_CHECK) return false
+    if (!walletRequired()) return false
     return Boolean(session?.requires_kins_payments || session?.wallet_address)
 }
 
@@ -1063,7 +1070,9 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         if (kinsPay) {
             hint.textContent = `Sends ${formatChipsAmount(price)} $POKEQUEST on-chain to unlock this avatar.`
         } else if (!session?.has_skin && !requiresKinsPayments()) {
-            hint.textContent = "New trainers start with 0 Chips — meet Cristy on the waterfront for a vending trial bonus."
+            hint.textContent = walletRequired()
+                ? "New trainers start with 0 Chips — meet Cristy on the waterfront for a vending trial bonus."
+                : `New trainers start with ${formatChipsAmount(STARTING_BALANCE)} Chips.`
         } else if (cost > balance && cost > 0) {
             hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips for this avatar.`
         } else if (cost > 0) {
@@ -2835,7 +2844,9 @@ async function authenticate() {
         dismissBootSplash()
         showError(
             PLAY_MODE
-                ? (WALLET_CHECK ? "Connect your wallet to continue." : "Could not start your session.")
+                ? (walletRequired()
+                    ? "Connect your wallet to continue."
+                    : "Could not start play session.")
                 : "Please open this app from Telegram."
         )
         return null
@@ -2873,7 +2884,7 @@ async function authenticate() {
         showError(
             data.error
                 || (PLAY_MODE
-                    ? (WALLET_CHECK
+                    ? (walletRequired()
                         ? "Authentication failed. Connect your wallet and try again."
                         : "Authentication failed. Refresh and try again.")
                     : "Authentication failed. Open the app from the PokéCards bot — send /start and tap Open Web App.")
@@ -4573,16 +4584,18 @@ function applySessionFromAuth(data) {
     updateSkinPreview(sortedSkins[skinIndex])
     renderBagGrid()
     session.has_pin = Boolean(session.has_pin)
-    if (data.wallet_address) {
+    if (walletRequired() && data.wallet_address) {
         session.wallet_address = data.wallet_address
         session.requires_kins_payments = Boolean(data.requires_kins_payments)
         session.kins_treasury = data.kins_treasury || window.APP_CONFIG?.kinsTreasury || null
-        if (data.wallet_address) {
-            sessionStorage.setItem("pokequest_wallet_address", data.wallet_address)
-        }
+        sessionStorage.setItem("pokequest_wallet_address", data.wallet_address)
+    } else {
+        session.wallet_address = null
+        session.requires_kins_payments = false
     }
     syncWalletEconomyLabels()
     syncGameHudDepositUi()
+    syncProfileKinsDepositUi()
     window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
 
@@ -4649,7 +4662,7 @@ async function init() {
     if (PLAY_MODE) {
         dismissBootSplash()
         window.SaiPokePlay?.bindLanding?.()
-        if (WALLET_CHECK) {
+        if (walletRequired()) {
             window.SaiPokePlay?.warmWallet?.()
         }
     } else {

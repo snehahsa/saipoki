@@ -52,37 +52,11 @@ CHALLENGE_TTL_SEC = int(os.getenv("WALLET_CHALLENGE_TTL_SEC", "600"))
 SESSION_TTL_SEC = int(os.getenv("WALLET_SESSION_TTL_SEC", str(24 * 3600)))
 MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "1000"))
 
-# --- Play /auth gate — edit here when wallet sign-in is required again ---
-# 0 = guest play: no wallet connect, no token gate; new guests get GUEST_STARTING_BALANCE chips
-# 1 = require Phantom/Solflare wallet connect + signed message on /play
-WALLET_CHECK = 0
-GUEST_STARTING_BALANCE = 50_000
+# 0 = no wallet connect / token gating (guest play with free Chips); 1 = require wallet
+WALLET_CHECK = int(os.getenv("WALLET_CHECK", "0"))
+GUEST_STARTING_BALANCE = int(os.getenv("GUEST_STARTING_BALANCE", "50000"))
 
-
-def wallet_check_enabled() -> bool:
-    """True when WALLET_CHECK is non-zero (wallet connect + token gate on /play)."""
-    return WALLET_CHECK != 0
-
-
-def is_guest_user_id(telegram_id: str) -> bool:
-    return str(telegram_id or "").startswith("guest:")
-
-
-def resolve_guest_user(data: Optional[dict] = None) -> Optional[dict[str, Any]]:
-    if wallet_check_enabled():
-        return None
-    guest_id = str((data or {}).get("guestId") or "").strip()
-    if not guest_id or len(guest_id) > 64:
-        return None
-    if not re.fullmatch(r"[a-fA-F0-9]{16,64}", guest_id):
-        return None
-    label = f"Trainer-{guest_id[:4].upper()}"
-    return {
-        "id": f"guest:{guest_id}",
-        "username": "",
-        "first_name": label,
-        "last_name": "",
-    }
+_GUEST_ID_RE = re.compile(r"^guest:[a-f0-9\-]{8,}$", re.IGNORECASE)
 
 _lock = threading.Lock()
 _sessions: dict[str, dict[str, Any]] = {}
@@ -132,6 +106,30 @@ def _purge_expired_sessions() -> None:
 
 def wallet_telegram_id(wallet_address: str) -> str:
     return f"wallet:{wallet_address}"
+
+
+def wallet_payments_enabled() -> bool:
+    return WALLET_CHECK != 0
+
+
+def is_guest_user_id(telegram_id: str) -> bool:
+    return bool(_GUEST_ID_RE.match(str(telegram_id or "")))
+
+
+def resolve_guest_user(data: Optional[dict] = None) -> Optional[dict[str, Any]]:
+    if WALLET_CHECK:
+        return None
+    payload = data or {}
+    guest_id = str(payload.get("guestId") or "").strip()
+    if not _GUEST_ID_RE.match(guest_id):
+        return None
+    short = f"{guest_id[6:10]}…{guest_id[-4:]}"
+    return {
+        "id": guest_id,
+        "username": "",
+        "first_name": short,
+        "last_name": "",
+    }
 
 
 def create_wallet_challenge() -> dict[str, Any]:

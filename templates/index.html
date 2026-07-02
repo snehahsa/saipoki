@@ -101,12 +101,14 @@
     <div class="retro-pixel-grass-strip"></div>
 </div>
 
+{% if wallet_check %}
 <div id="kins-wallet-pending" class="kins-wallet-pending hidden" aria-live="polite" aria-busy="true">
     <div class="kins-wallet-pending-card">
         <div class="kins-wallet-pending-spinner" aria-hidden="true"></div>
     </div>
     <p class="kins-wallet-pending-label" id="kins-wallet-pending-label">Waiting for wallet…</p>
 </div>
+{% endif %}
 
 {% if play_mode %}
 <div class="play-bg" aria-hidden="true">
@@ -192,6 +194,7 @@
 
 <p class="play-spectate-badge" aria-hidden="true">SPECTATING LIVE REALM · DRAG MAP · SCROLL / PINCH ZOOM</p>
 <button type="button" class="play-exit-spectate" id="exit-spectate-btn">Back</button>
+{% endif %}
 
 {% if not play_mode %}
 <div id="tg-boot-splash" class="tg-boot-splash" aria-live="polite">
@@ -1114,7 +1117,6 @@
         testPlayerSlug: {{ test_player_slug|tojson }},
         playMode: {{ play_mode|tojson }},
         walletCheck: {{ wallet_check|tojson }},
-        guestStartingBalance: {{ guest_starting_balance|tojson }},
         kinsTokenMint: {{ kins_token_mint|tojson }},
         kinsTreasury: {{ kins_treasury|tojson }},
         kinsMinHold: {{ kins_min_hold|tojson }},
@@ -1127,7 +1129,9 @@
 {% if play_mode %}
 <script src="/static/js/play.js?v={{ asset_v.play_js }}"></script>
 {% endif %}
+{% if wallet_check %}
 <script src="/static/js/kins-wallet.js?v={{ asset_v.kins_wallet_js }}"></script>
+{% endif %}
 <script src="/static/js/poketab.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/poketab_battle.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/app.js?v={{ asset_v.app_js }}"></script>

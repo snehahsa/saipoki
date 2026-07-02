@@ -51,13 +51,14 @@ from wallet_auth import (
     KINS_TOKEN_MINT,
     MIN_TOKEN_UI_AMOUNT,
     SOLANA_RPC_URL,
+    WALLET_CHECK,
     create_wallet_challenge,
     is_guest_user_id,
     issue_wallet_session,
     resolve_guest_user,
     verify_wallet_login,
     verify_wallet_session,
-    wallet_check_enabled,
+    wallet_payments_enabled,
     wallet_telegram_id,
     clear_wallet_sessions,
 )
@@ -486,18 +487,14 @@ def resolve_spectator_user() -> dict:
 
 def resolve_auth_user(data: Optional[dict] = None) -> Optional[dict]:
     payload = data or {}
-    if not wallet_check_enabled():
-        guest = resolve_guest_user(payload)
-        if guest:
-            return guest
-        if payload.get("spectator"):
-            return resolve_spectator_user()
-        if request_is_test_mode(payload):
-            return resolve_test_user(payload) or build_test_user("")
-        return None
-    wallet_user = resolve_wallet_user(payload)
-    if wallet_user:
-        return wallet_user
+    if wallet_payments_enabled():
+        wallet_user = resolve_wallet_user(payload)
+        if wallet_user:
+            return wallet_user
+    else:
+        guest_user = resolve_guest_user(payload)
+        if guest_user:
+            return guest_user
     if payload.get("spectator"):
         return resolve_spectator_user()
     if request_is_test_mode(payload):
@@ -509,10 +506,14 @@ def resolve_auth_user(data: Optional[dict] = None) -> Optional[dict]:
     return None
 
 
-def _invalid_session_error() -> str:
-    if not wallet_check_enabled():
-        return "Invalid session. Refresh and try again."
-    return "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
+def auth_session_error_message() -> str:
+    if wallet_payments_enabled():
+        return "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
+    return "Invalid session. Refresh /play and try again."
+
+
+def wallet_payments_disabled_response():
+    return jsonify({"success": False, "error": "Wallet payments are disabled."}), 403
 
 
 def request_is_test_mode(data: Optional[dict] = None) -> bool:
@@ -917,9 +918,10 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
     return render_template(
         "index.html",
         play_mode=play_mode,
-        kins_token_mint=KINS_TOKEN_MINT if play_mode else "",
+        kins_token_mint=KINS_TOKEN_MINT if play_mode and wallet_payments_enabled() else "",
         kins_treasury=KINS_TREASURY_WALLET,
         kins_min_hold=int(MIN_TOKEN_UI_AMOUNT),
+        wallet_check=WALLET_CHECK,
         game_server_url="",
         game_socket_url=GAME_SOCKET_URL,
         test_mode=test_mode,
@@ -938,9 +940,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         gear_slot_count=GEAR_SLOT_COUNT,
         ui_unlocks=ui_unlocks_for_client(),
         avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
-        starting_balance=STARTING_BALANCE,
-        wallet_check=wallet_check_enabled(),
-        guest_starting_balance=GUEST_STARTING_BALANCE,
+        starting_balance=GUEST_STARTING_BALANCE if WALLET_CHECK == 0 else STARTING_BALANCE,
         min_withdraw_kins=MIN_WITHDRAW_KINS,
         vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
         vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
@@ -1007,14 +1007,14 @@ def favicon():
 
 @app.route("/api/wallet/challenge", methods=["GET", "POST"])
 def wallet_challenge_api():
-    if not wallet_check_enabled():
+    if not wallet_payments_enabled():
         return jsonify({"ok": False, "error": "Wallet sign-in is disabled."}), 403
     return jsonify(create_wallet_challenge())
 
 
 @app.route("/api/wallet/verify", methods=["POST"])
 def wallet_verify_api():
-    if not wallet_check_enabled():
+    if not wallet_payments_enabled():
         return jsonify({"success": False, "error": "Wallet sign-in is disabled."}), 403
     data = request.get_json(silent=True) or {}
     ok, error, session_token = verify_wallet_login(
@@ -1119,6 +1119,8 @@ def _apply_skin_to_user(
 
 @app.route("/api/kins/config", methods=["GET"])
 def kins_config_api():
+    if not wallet_payments_enabled():
+        return wallet_payments_disabled_response()
     try:
         decimals = get_mint_decimals()
     except (RuntimeError, OSError, ValueError, TypeError):
@@ -1143,6 +1145,8 @@ def kins_config_api():
 
 @app.route("/api/kins/blockhash", methods=["GET"])
 def kins_blockhash_api():
+    if not wallet_payments_enabled():
+        return wallet_payments_disabled_response()
     try:
         block = get_latest_blockhash()
     except (RuntimeError, OSError, TimeoutError, ValueError, TypeError) as exc:
@@ -1211,6 +1215,8 @@ def clear_saved_data():
 
 @app.route("/api/kins/deposit-intent", methods=["POST"])
 def kins_deposit_intent_api():
+    if not wallet_payments_enabled():
+        return wallet_payments_disabled_response()
     telegram_id, wallet, err = _auth_wallet_context()
     if err:
         return err
@@ -1242,6 +1248,8 @@ def kins_deposit_intent_api():
 
 @app.route("/api/kins/withdraw", methods=["POST"])
 def kins_withdraw_api():
+    if not wallet_payments_enabled():
+        return wallet_payments_disabled_response()
     telegram_id, wallet, err = _auth_wallet_context()
     if err:
         return err
@@ -1288,6 +1296,8 @@ def npc_balance_grant_api():
 
 @app.route("/api/kins/skin-intent", methods=["POST"])
 def kins_skin_intent_api():
+    if not wallet_payments_enabled():
+        return wallet_payments_disabled_response()
     telegram_id, wallet, err = _auth_wallet_context()
     if err:
         return err
@@ -1337,6 +1347,8 @@ def kins_skin_intent_api():
 
 @app.route("/api/kins/confirm", methods=["POST"])
 def kins_confirm_api():
+    if not wallet_payments_enabled():
+        return wallet_payments_disabled_response()
     telegram_id, wallet, err = _auth_wallet_context()
     if err:
         return err
@@ -1434,7 +1446,7 @@ def auth():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return jsonify({"success": False, "error": _invalid_session_error()}), 401
+        return jsonify({"success": False, "error": auth_session_error_message()}), 401
     telegram_id = str(user["id"])
     is_wallet = is_wallet_user_id(telegram_id)
     display_name = "" if is_wallet else display_name_from_user(user)
@@ -1449,11 +1461,15 @@ def auth():
         if row is None:
             is_test = request_is_test_mode(data)
             is_spectator = telegram_id.startswith("spectator:")
-            is_wallet = is_wallet_user_id(telegram_id)
+            is_guest = is_guest_user_id(telegram_id)
+            is_wallet = is_wallet_user_id(telegram_id) if wallet_payments_enabled() else False
             auto_profile = is_test or is_spectator
-            starting_balance = TEST_STARTING_BALANCE if is_test else 0
-            if is_guest_user_id(telegram_id):
+            if is_guest:
                 starting_balance = GUEST_STARTING_BALANCE
+            elif is_test:
+                starting_balance = TEST_STARTING_BALANCE
+            else:
+                starting_balance = 0
             starter_vault = json.dumps(test_starter_vault_entries()) if is_test else "[]"
             conn.execute(
                 """
@@ -1574,7 +1590,11 @@ def auth():
             except Exception as err:
                 app.logger.exception("trainer_stats_row failed for %s: %s", telegram_id, err)
 
-    wallet_address = user.get("wallet") if is_wallet_user_id(telegram_id) else None
+    wallet_address = (
+        user.get("wallet")
+        if wallet_payments_enabled() and is_wallet_user_id(telegram_id)
+        else None
+    )
 
     return jsonify(
         {
@@ -1602,8 +1622,7 @@ def auth():
             "trainer_stats": trainer_stats,
             "level": trainer_stats["level"] if trainer_stats else 0,
             "wallet_address": wallet_address,
-            "requires_kins_payments": bool(wallet_address) if wallet_check_enabled() else False,
-            "wallet_check": wallet_check_enabled(),
+            "requires_kins_payments": bool(wallet_address),
             "kins_treasury": KINS_TREASURY_WALLET if wallet_address else None,
             "kins_min_hold": int(MIN_TOKEN_UI_AMOUNT),
         }
@@ -1664,7 +1683,7 @@ def save_skin():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return jsonify({"success": False, "error": _invalid_session_error()}), 401
+        return jsonify({"success": False, "error": auth_session_error_message()}), 401
 
     skin = data.get("skin")
     display_name_raw = data.get("displayName")
@@ -1692,7 +1711,7 @@ def save_skin():
         owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
         cost = purchase_cost(skin, owned_skins, avatar_costs)
 
-        if is_wallet_user_id(telegram_id) and cost > 0:
+        if wallet_payments_enabled() and is_wallet_user_id(telegram_id) and cost > 0:
             return jsonify(
                 {
                     "success": False,
@@ -1715,7 +1734,7 @@ def _auth_user_from_request():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return None, (jsonify({"success": False, "error": _invalid_session_error()}), 401)
+        return None, (jsonify({"success": False, "error": auth_session_error_message()}), 401)
     return str(user["id"]), None
 
 
