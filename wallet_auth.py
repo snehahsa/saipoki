@@ -51,13 +51,17 @@ def solana_rpc_urls() -> list[str]:
 CHALLENGE_TTL_SEC = int(os.getenv("WALLET_CHALLENGE_TTL_SEC", "600"))
 SESSION_TTL_SEC = int(os.getenv("WALLET_SESSION_TTL_SEC", str(24 * 3600)))
 MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "1000"))
-GUEST_STARTING_BALANCE = int(os.getenv("GUEST_STARTING_BALANCE", "50000"))
+
+# --- Play /auth gate — edit here when wallet sign-in is required again ---
+# 0 = guest play: no wallet connect, no token gate; new guests get GUEST_STARTING_BALANCE chips
+# 1 = require Phantom/Solflare wallet connect + signed message on /play
+WALLET_CHECK = 0
+GUEST_STARTING_BALANCE = 50_000
 
 
 def wallet_check_enabled() -> bool:
-    """When False (WALLET_CHECK=0), web play uses guest ids — no wallet or token gate."""
-    raw = str(os.getenv("WALLET_CHECK", "0")).strip().lower()
-    return raw not in ("", "0", "false", "no", "off")
+    """True when WALLET_CHECK is non-zero (wallet connect + token gate on /play)."""
+    return WALLET_CHECK != 0
 
 
 def is_guest_user_id(telegram_id: str) -> bool:
