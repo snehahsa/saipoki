@@ -47,13 +47,17 @@ from quest_engine import (
     parse_quest_progress,
 )
 from wallet_auth import (
+    GUEST_STARTING_BALANCE,
     KINS_TOKEN_MINT,
     MIN_TOKEN_UI_AMOUNT,
     SOLANA_RPC_URL,
     create_wallet_challenge,
+    is_guest_user_id,
     issue_wallet_session,
+    resolve_guest_user,
     verify_wallet_login,
     verify_wallet_session,
+    wallet_check_enabled,
     wallet_telegram_id,
     clear_wallet_sessions,
 )
@@ -482,6 +486,15 @@ def resolve_spectator_user() -> dict:
 
 def resolve_auth_user(data: Optional[dict] = None) -> Optional[dict]:
     payload = data or {}
+    if not wallet_check_enabled():
+        guest = resolve_guest_user(payload)
+        if guest:
+            return guest
+        if payload.get("spectator"):
+            return resolve_spectator_user()
+        if request_is_test_mode(payload):
+            return resolve_test_user(payload) or build_test_user("")
+        return None
     wallet_user = resolve_wallet_user(payload)
     if wallet_user:
         return wallet_user
@@ -494,6 +507,12 @@ def resolve_auth_user(data: Optional[dict] = None) -> Optional[dict]:
     if validated and "user" in validated:
         return validated["user"]
     return None
+
+
+def _invalid_session_error() -> str:
+    if not wallet_check_enabled():
+        return "Invalid session. Refresh and try again."
+    return "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
 
 
 def request_is_test_mode(data: Optional[dict] = None) -> bool:
@@ -920,6 +939,8 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         ui_unlocks=ui_unlocks_for_client(),
         avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
         starting_balance=STARTING_BALANCE,
+        wallet_check=wallet_check_enabled(),
+        guest_starting_balance=GUEST_STARTING_BALANCE,
         min_withdraw_kins=MIN_WITHDRAW_KINS,
         vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
         vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
@@ -986,11 +1007,15 @@ def favicon():
 
 @app.route("/api/wallet/challenge", methods=["GET", "POST"])
 def wallet_challenge_api():
+    if not wallet_check_enabled():
+        return jsonify({"ok": False, "error": "Wallet sign-in is disabled."}), 403
     return jsonify(create_wallet_challenge())
 
 
 @app.route("/api/wallet/verify", methods=["POST"])
 def wallet_verify_api():
+    if not wallet_check_enabled():
+        return jsonify({"success": False, "error": "Wallet sign-in is disabled."}), 403
     data = request.get_json(silent=True) or {}
     ok, error, session_token = verify_wallet_login(
         str(data.get("walletAddress") or ""),
@@ -1409,9 +1434,7 @@ def auth():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return jsonify({"success": False, "error": (
-                "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
-            )}), 401
+        return jsonify({"success": False, "error": _invalid_session_error()}), 401
     telegram_id = str(user["id"])
     is_wallet = is_wallet_user_id(telegram_id)
     display_name = "" if is_wallet else display_name_from_user(user)
@@ -1429,6 +1452,8 @@ def auth():
             is_wallet = is_wallet_user_id(telegram_id)
             auto_profile = is_test or is_spectator
             starting_balance = TEST_STARTING_BALANCE if is_test else 0
+            if is_guest_user_id(telegram_id):
+                starting_balance = GUEST_STARTING_BALANCE
             starter_vault = json.dumps(test_starter_vault_entries()) if is_test else "[]"
             conn.execute(
                 """
@@ -1577,7 +1602,8 @@ def auth():
             "trainer_stats": trainer_stats,
             "level": trainer_stats["level"] if trainer_stats else 0,
             "wallet_address": wallet_address,
-            "requires_kins_payments": bool(wallet_address),
+            "requires_kins_payments": bool(wallet_address) if wallet_check_enabled() else False,
+            "wallet_check": wallet_check_enabled(),
             "kins_treasury": KINS_TREASURY_WALLET if wallet_address else None,
             "kins_min_hold": int(MIN_TOKEN_UI_AMOUNT),
         }
@@ -1638,9 +1664,7 @@ def save_skin():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return jsonify({"success": False, "error": (
-                "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
-            )}), 401
+        return jsonify({"success": False, "error": _invalid_session_error()}), 401
 
     skin = data.get("skin")
     display_name_raw = data.get("displayName")
@@ -1691,9 +1715,7 @@ def _auth_user_from_request():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return None, (jsonify({"success": False, "error": (
-                "Invalid session. Connect your wallet on /play or open from the PokéCards bot."
-            )}), 401)
+        return None, (jsonify({"success": False, "error": _invalid_session_error()}), 401)
     return str(user["id"]), None
 
 

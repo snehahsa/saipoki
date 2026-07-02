@@ -1,4 +1,5 @@
 (function () {
+    const WALLET_CHECK = Boolean(window.APP_CONFIG?.walletCheck)
     const STORAGE_KEY = "pokequest_wallet_session"
     const WALLET_ADDRESS_KEY = "pokequest_wallet_address"
     const CONNECT_TIMEOUT_MS = 45000
@@ -492,12 +493,34 @@
         }
     }
 
+    function bootGuestPlay() {
+        if (walletBusy) return
+        setBusy(true)
+        setLandingStatus("Loading trainer…", "success")
+        window.SaiPokePlay?.bootAfterWallet?.()
+            .then((ok) => {
+                if (!ok) {
+                    setLandingStatus("Could not load your trainer profile.", "error")
+                } else {
+                    setLandingStatus("")
+                }
+            })
+            .catch((error) => {
+                setLandingStatus(error.message || "Could not sign in.", "error")
+            })
+            .finally(() => setBusy(false))
+    }
+
     function bindLanding() {
         if (landingBound) return
         landingBound = true
 
         playBtn?.addEventListener("click", () => {
             if (walletBusy) return
+            if (!WALLET_CHECK) {
+                bootGuestPlay()
+                return
+            }
             const existing = sessionStorage.getItem(STORAGE_KEY)
             if (existing) {
                 setBusy(true)
@@ -543,7 +566,9 @@
         })
 
         void waitForWalletInject().then(() => syncWalletOptionDetection())
-        prefetchChallenge()
+        if (WALLET_CHECK) {
+            prefetchChallenge()
+        }
         syncWalletConnectedUi()
     }
 

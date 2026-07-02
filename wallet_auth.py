@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -50,6 +51,34 @@ def solana_rpc_urls() -> list[str]:
 CHALLENGE_TTL_SEC = int(os.getenv("WALLET_CHALLENGE_TTL_SEC", "600"))
 SESSION_TTL_SEC = int(os.getenv("WALLET_SESSION_TTL_SEC", str(24 * 3600)))
 MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "1000"))
+GUEST_STARTING_BALANCE = int(os.getenv("GUEST_STARTING_BALANCE", "50000"))
+
+
+def wallet_check_enabled() -> bool:
+    """When False (WALLET_CHECK=0), web play uses guest ids — no wallet or token gate."""
+    raw = str(os.getenv("WALLET_CHECK", "0")).strip().lower()
+    return raw not in ("", "0", "false", "no", "off")
+
+
+def is_guest_user_id(telegram_id: str) -> bool:
+    return str(telegram_id or "").startswith("guest:")
+
+
+def resolve_guest_user(data: Optional[dict] = None) -> Optional[dict[str, Any]]:
+    if wallet_check_enabled():
+        return None
+    guest_id = str((data or {}).get("guestId") or "").strip()
+    if not guest_id or len(guest_id) > 64:
+        return None
+    if not re.fullmatch(r"[a-fA-F0-9]{16,64}", guest_id):
+        return None
+    label = f"Trainer-{guest_id[:4].upper()}"
+    return {
+        "id": f"guest:{guest_id}",
+        "username": "",
+        "first_name": label,
+        "last_name": "",
+    }
 
 _lock = threading.Lock()
 _sessions: dict[str, dict[str, Any]] = {}

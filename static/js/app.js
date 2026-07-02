@@ -52,7 +52,9 @@ let fishingRetryPromptPromise = null
 
 const tg = window.Telegram?.WebApp
 const PLAY_MODE = Boolean(window.APP_CONFIG?.playMode)
+const WALLET_CHECK = Boolean(window.APP_CONFIG?.walletCheck)
 const WALLET_STORAGE_KEY = "pokequest_wallet_session"
+const GUEST_STORAGE_KEY = "pokequest_guest_id"
 let playSpectatorMode = false
 const TEST_QUERY_RESERVED = new Set(["tgWebAppStartParam", "v", "_"])
 
@@ -181,9 +183,19 @@ function applyTrainerStats(stats, meta = {}) {
     }
 }
 
+function ensureGuestId() {
+    let id = localStorage.getItem(GUEST_STORAGE_KEY)
+    if (!id) {
+        id = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")
+        localStorage.setItem(GUEST_STORAGE_KEY, id)
+    }
+    return id
+}
+
 function isSignedIn() {
     if (TEST_MODE) return true
     if (tg?.initData) return true
+    if (PLAY_MODE && !WALLET_CHECK) return true
     if (PLAY_MODE && sessionStorage.getItem(WALLET_STORAGE_KEY)) return true
     if (PLAY_MODE && playSpectatorMode) return true
     return false
@@ -197,8 +209,12 @@ function apiAuthBody(extra = {}) {
     } else if (tg?.initData) {
         body.initData = tg.initData
     } else if (PLAY_MODE) {
-        const walletSession = sessionStorage.getItem(WALLET_STORAGE_KEY)
-        if (walletSession) body.walletSession = walletSession
+        if (!WALLET_CHECK) {
+            body.guestId = ensureGuestId()
+        } else {
+            const walletSession = sessionStorage.getItem(WALLET_STORAGE_KEY)
+            if (walletSession) body.walletSession = walletSession
+        }
         if (playSpectatorMode) body.spectator = true
     }
     return body
@@ -714,6 +730,7 @@ function formatChipsAmount(n) {
 }
 
 function requiresKinsPayments() {
+    if (!WALLET_CHECK) return false
     return Boolean(session?.requires_kins_payments || session?.wallet_address)
 }
 
@@ -2818,7 +2835,7 @@ async function authenticate() {
         dismissBootSplash()
         showError(
             PLAY_MODE
-                ? "Connect your wallet to continue."
+                ? (WALLET_CHECK ? "Connect your wallet to continue." : "Could not start your session.")
                 : "Please open this app from Telegram."
         )
         return null
@@ -2856,7 +2873,9 @@ async function authenticate() {
         showError(
             data.error
                 || (PLAY_MODE
-                    ? "Authentication failed. Connect your wallet and try again."
+                    ? (WALLET_CHECK
+                        ? "Authentication failed. Connect your wallet and try again."
+                        : "Authentication failed. Refresh and try again.")
                     : "Authentication failed. Open the app from the PokéCards bot — send /start and tap Open Web App.")
         )
         return null
@@ -4630,7 +4649,9 @@ async function init() {
     if (PLAY_MODE) {
         dismissBootSplash()
         window.SaiPokePlay?.bindLanding?.()
-        window.SaiPokePlay?.warmWallet?.()
+        if (WALLET_CHECK) {
+            window.SaiPokePlay?.warmWallet?.()
+        }
     } else {
         setBootMessage("Starting up...")
         await preloadEssentials()

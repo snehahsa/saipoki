@@ -123,10 +123,12 @@
     <div class="play-bg__grain"></div>
 </div>
 
+{% if wallet_check %}
 <div class="play-wallet-bar hidden" id="play-wallet-bar">
     <button type="button" class="play-wallet-bar-disconnect" id="play-wallet-disconnect">Disconnect</button>
     <div class="play-wallet-bar-address" id="play-wallet-bar-label" aria-label="Connected wallet"></div>
 </div>
+{% endif %}
 
 <section id="play-landing" aria-label="Enter PokeQuest">
     <div class="play-landing-inner">
@@ -149,10 +151,13 @@
             <button type="button" class="play-btn play-btn--ghost" id="spectate-btn">Spectate</button>
         </div>
         <p class="play-status" id="play-status" aria-live="polite"></p>
+        {% if wallet_check %}
         <p class="play-wallet-hint">Play Now requires Phantom or Solflare with a signed wallet connection.</p>
+        {% endif %}
     </div>
 </section>
 
+{% if wallet_check %}
 <div id="play-wallet-modal" class="play-wallet-modal hidden" role="dialog" aria-labelledby="play-wallet-title" aria-modal="true">
     <div class="play-wallet-panel">
         <p class="play-wallet-title" id="play-wallet-title">Connect Wallet</p>
@@ -183,10 +188,10 @@
         <button type="button" class="play-wallet-close" id="play-wallet-close">Cancel</button>
     </div>
 </div>
+{% endif %}
 
 <p class="play-spectate-badge" aria-hidden="true">SPECTATING LIVE REALM · DRAG MAP · SCROLL / PINCH ZOOM</p>
 <button type="button" class="play-exit-spectate" id="exit-spectate-btn">Back</button>
-{% endif %}
 
 {% if not play_mode %}
 <div id="tg-boot-splash" class="tg-boot-splash" aria-live="polite">
@@ -1108,6 +1113,8 @@
         testMode: {{ test_mode|tojson }},
         testPlayerSlug: {{ test_player_slug|tojson }},
         playMode: {{ play_mode|tojson }},
+        walletCheck: {{ wallet_check|tojson }},
+        guestStartingBalance: {{ guest_starting_balance|tojson }},
         kinsTokenMint: {{ kins_token_mint|tojson }},
         kinsTreasury: {{ kins_treasury|tojson }},
         kinsMinHold: {{ kins_min_hold|tojson }},
