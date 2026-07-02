@@ -3504,6 +3504,62 @@ body.kins-wallet-pending [data-kins-buy] {
     align-items: stretch;
 }
 
+.menu-audio-row {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    margin: 2px 0 10px;
+}
+
+.audio-mute-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 6px 12px;
+    border: 2px solid var(--panel-border);
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.18);
+    font-family: silkscreen, "Courier New", monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--text-dark);
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.audio-mute-btn--game {
+    width: 100%;
+}
+
+.audio-mute-btn:active,
+.audio-mute-btn.pressed {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+.audio-mute-btn.is-muted {
+    background: #f3ece2;
+    color: var(--text-muted);
+}
+
+.audio-mute-glyph {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.audio-mute-btn.is-muted .audio-mute-glyph {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.audio-mute-text {
+    text-transform: uppercase;
+}
+
 .game-quests-btn {
     padding: 8px 14px;
     font-family: silkscreen, monospace;

@@ -403,6 +403,20 @@
             </div>
         </div>
 
+        <div class="menu-audio-row">
+            <button
+                type="button"
+                class="audio-mute-btn"
+                id="menu-audio-mute-btn"
+                aria-label="Sound on"
+                aria-pressed="false"
+                title="Sound on"
+            >
+                <span class="audio-mute-glyph" aria-hidden="true">♪</span>
+                <span class="audio-mute-text">Sound</span>
+            </button>
+        </div>
+
         <div class="menu-grid menu-grid-pixel">
             <button class="btn btn-play" id="enter-btn" type="button">Enter the Realm</button>
             <button class="btn btn-quests" id="quests-btn" type="button">Quests</button>
@@ -643,6 +657,17 @@
         </div>
     </div>
     <div class="game-top-actions">
+        <button
+            type="button"
+            class="audio-mute-btn audio-mute-btn--game"
+            id="game-audio-mute-btn"
+            aria-label="Sound on"
+            aria-pressed="false"
+            title="Sound on"
+        >
+            <span class="audio-mute-glyph" aria-hidden="true">♪</span>
+            <span class="audio-mute-text">Sound</span>
+        </button>
         <button class="btn btn-leave" id="leave-game-btn" type="button">EXIT</button>
         <button class="btn btn-quests game-quests-btn" id="game-quests-btn" type="button">QUESTS</button>
     </div>

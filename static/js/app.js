@@ -406,7 +406,7 @@ const MENU_AUDIO_SCREENS = new Set([
 ])
 
 function syncRetroAudioForScreen(name) {
-    if (!window.RetroAudio) return
+    if (!window.RetroAudio || window.RetroAudio.isMuted?.()) return
     window.RetroAudio.resume()
     if (document.getElementById("vending-screen") && !document.getElementById("vending-screen").classList.contains("hidden")) {
         window.RetroAudio.setScene("silent")
@@ -420,7 +420,7 @@ function syncRetroAudioForScreen(name) {
 }
 
 function syncRetroAudioAfterDialogue() {
-    if (!window.RetroAudio) return
+    if (!window.RetroAudio || window.RetroAudio.isMuted?.()) return
     document.body.classList.remove("dialogue-active")
     if (document.getElementById("vending-screen") && !document.getElementById("vending-screen").classList.contains("hidden")) {
         window.RetroAudio.setScene("silent")
@@ -431,6 +431,35 @@ function syncRetroAudioAfterDialogue() {
     } else {
         window.RetroAudio.setScene("menu")
     }
+}
+
+function syncAudioMuteUi() {
+    const muted = Boolean(window.RetroAudio?.isMuted?.())
+    document.querySelectorAll(".audio-mute-btn").forEach((btn) => {
+        btn.classList.toggle("is-muted", muted)
+        btn.setAttribute("aria-pressed", muted ? "true" : "false")
+        btn.setAttribute("aria-label", muted ? "Sound off" : "Sound on")
+        btn.title = muted ? "Sound off — tap to unmute" : "Sound on — tap to mute"
+        const text = btn.querySelector(".audio-mute-text")
+        if (text) text.textContent = muted ? "Muted" : "Sound"
+    })
+}
+
+function toggleAudioMute() {
+    if (!window.RetroAudio?.toggleMuted) return
+    window.RetroAudio.toggleMuted()
+    syncAudioMuteUi()
+}
+
+function bindAudioMuteButtons() {
+    document.querySelectorAll(".audio-mute-btn").forEach((btn) => {
+        if (btn.dataset.audioMuteBound) return
+        btn.dataset.audioMuteBound = "1"
+        btn.addEventListener("click", () => {
+            toggleAudioMute()
+        })
+    })
+    syncAudioMuteUi()
 }
 
 function gameClientReady() {
@@ -4915,6 +4944,7 @@ async function init() {
     document.getElementById("sign-modal-next")?.addEventListener("click", advanceSignModal)
     document.getElementById("sign-modal-skip")?.addEventListener("click", skipSignModal)
 
+    bindAudioMuteButtons()
     bindNoSelectOnButtons()
     bindButtonPressAnimation()
     bindPadControls()

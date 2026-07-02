@@ -180,9 +180,10 @@
         async startWithMediaUnlock(name, mediaEl, opts = {}) {
             this.ensureContext()
             if (!this.ctx) return false
-            this.muted = false
             this._pendingScene = name
             this._fadeInSec = Number(opts.fadeIn) || 0
+            if (this.muted) return false
+            this.muted = false
             if (this.master) this.master.gain.value = 0.55
 
             if (mediaEl) {
@@ -331,12 +332,13 @@
         setScene(name, opts = {}) {
             const force = !!(opts && opts.restart)
             this._fadeInSec = Number(opts.fadeIn) || 0
+            this._pendingScene = name
+            if (this.muted) return
             this.ensureContext()
             if (!force && this.isMusicPlaying() && this.scene === name) {
                 void this.resume()
                 return
             }
-            this._pendingScene = name
             void this._tryStartPendingScene(force)
         }
 
@@ -409,6 +411,11 @@
 
         setMuted(muted) {
             this.muted = !!muted
+            try {
+                localStorage.setItem(AUDIO_MUTED_STORAGE_KEY, this.muted ? "1" : "0")
+            } catch {
+                /* ignore */
+            }
             if (this.muted) {
                 this.stopMusic()
                 if (this.master) this.master.gain.value = 0
@@ -435,8 +442,16 @@
         }
     }
 
+    const AUDIO_MUTED_STORAGE_KEY = "pokequest_audio_muted"
     const engine = new RetroAudioEngine()
     engine.bindUnlock()
+    try {
+        if (localStorage.getItem(AUDIO_MUTED_STORAGE_KEY) === "1") {
+            engine.setMuted(true)
+        }
+    } catch {
+        /* ignore */
+    }
 
     window.RetroAudio = {
         resume: () => engine.resume(),
