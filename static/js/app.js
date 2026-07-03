@@ -105,6 +105,18 @@ function walletRequired() {
     return WALLET_CHECK !== 0
 }
 
+function guestPlayMode() {
+    return PLAY_MODE && !walletRequired()
+}
+
+function syncWelcomeCopy() {
+    const footnote = document.querySelector(".welcome-footnote")
+    if (!footnote) return
+    footnote.textContent = guestPlayMode()
+        ? "Enter your trainer name & choose your avatar"
+        : "Set a PIN, enter your trainer name & choose your avatar"
+}
+
 function questTitleForId(questId) {
     const quest = QUEST_CATALOG.find((item) => item.quest_id === questId)
     return quest?.title || questId
@@ -2956,11 +2968,21 @@ function openPinScreen(mode) {
 }
 
 function pinUnlocked() {
-    if (TEST_MODE) return true
+    if (TEST_MODE || guestPlayMode()) return true
     return Boolean(session?.has_pin && pinVerified)
 }
 
 function routeAfterAuth() {
+    if (guestPlayMode()) {
+        if (!session.has_skin) {
+            syncWelcomeCopy()
+            showScreen("welcome")
+            return
+        }
+        showScreen("menu")
+        startMenuStats()
+        return
+    }
     if (session.has_pin && !pinVerified) {
         openPinScreen("login")
         return
@@ -4667,9 +4689,10 @@ async function completeSessionBootstrap() {
     }
 
     hidePlayLanding()
-    pinVerified = false
+    pinVerified = guestPlayMode()
 
     if (!session.has_skin) {
+        syncWelcomeCopy()
         showScreen("welcome")
     } else {
         session.skin = session.skin || sortedSkins[skinIndex]
@@ -4685,6 +4708,7 @@ async function completeSessionBootstrap() {
 async function init() {
     if (PLAY_MODE) {
         dismissBootSplash()
+        syncWelcomeCopy()
         window.SaiPokePlay?.bindLanding?.()
         if (walletRequired()) {
             window.SaiPokePlay?.warmWallet?.()

@@ -583,8 +583,10 @@ def normalize_pin(raw) -> Optional[str]:
     return pin
 
 
-def profile_setup_needs_pin(row) -> bool:
+def profile_setup_needs_pin(row, telegram_id: Optional[str] = None) -> bool:
     """First-time profile save requires a PIN (blocks API bypass of onboarding)."""
+    if telegram_id and is_guest_user_id(telegram_id):
+        return False
     if row is None:
         return False
     skin = row["skin"] if "skin" in row.keys() else None
@@ -1069,7 +1071,7 @@ def _apply_skin_to_user(
     if row is None:
         return None, (jsonify({"success": False, "error": "User not found"}), 404)
 
-    if profile_setup_needs_pin(row):
+    if profile_setup_needs_pin(row, telegram_id):
         return None, (
             jsonify({"success": False, "error": "Set a trainer PIN first."}),
             403,
@@ -1322,7 +1324,7 @@ def kins_skin_intent_api():
         ).fetchone()
         if row is None:
             return jsonify({"success": False, "error": "User not found"}), 404
-        if profile_setup_needs_pin(row):
+        if profile_setup_needs_pin(row, telegram_id):
             return jsonify({"success": False, "error": "Set a trainer PIN first."}), 403
         owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
         cost = purchase_cost(skin, owned_skins, avatar_costs)
