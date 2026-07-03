@@ -97,20 +97,12 @@ function detectTestMode() {
 const TEST_MODE = detectTestMode()
 const TEST_PLAYER_SLUG = TEST_MODE ? (parseTestPlayerSlug() ?? "") : ""
 
-function walletRequired() {
-    return WALLET_CHECK !== 0
+function getActiveGuestId() {
+    return String(localStorage.getItem(GUEST_STORAGE_KEY) || "").trim()
 }
 
-function getOrCreateGuestId() {
-    let id = localStorage.getItem(GUEST_STORAGE_KEY)
-    if (!id) {
-        const uuid = typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID().replace(/-/g, "")
-            : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
-        id = `guest:${uuid}`
-        localStorage.setItem(GUEST_STORAGE_KEY, id)
-    }
-    return id
+function walletRequired() {
+    return WALLET_CHECK !== 0
 }
 
 function questTitleForId(questId) {
@@ -202,9 +194,9 @@ function applyTrainerStats(stats, meta = {}) {
 function isSignedIn() {
     if (TEST_MODE) return true
     if (tg?.initData) return true
-    if (PLAY_MODE && !walletRequired()) return true
-    if (PLAY_MODE && sessionStorage.getItem(WALLET_STORAGE_KEY)) return true
     if (PLAY_MODE && playSpectatorMode) return true
+    if (PLAY_MODE && walletRequired() && sessionStorage.getItem(WALLET_STORAGE_KEY)) return true
+    if (PLAY_MODE && !walletRequired() && getActiveGuestId()) return true
     return false
 }
 
@@ -220,7 +212,8 @@ function apiAuthBody(extra = {}) {
             const walletSession = sessionStorage.getItem(WALLET_STORAGE_KEY)
             if (walletSession) body.walletSession = walletSession
         } else {
-            body.guestId = getOrCreateGuestId()
+            const guestId = getActiveGuestId()
+            if (guestId) body.guestId = guestId
         }
         if (playSpectatorMode) body.spectator = true
     }
@@ -237,6 +230,7 @@ function showPlayLanding() {
     document.getElementById("play-landing")?.classList.remove("is-hidden")
     document.body.classList.remove("play-in-app", "spectator-mode")
     Object.values(screens).forEach((el) => el?.classList.add("hidden"))
+    window.SaiPokePlay?.closeGuestProfileFlow?.()
     window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
 
@@ -4625,6 +4619,7 @@ function applySessionFromAuth(data) {
     syncWalletEconomyLabels()
     syncGameHudDepositUi()
     syncProfileKinsDepositUi()
+    window.SaiPokePlay?.syncGuestProfileMeta?.(data)
     window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
 
@@ -4830,6 +4825,7 @@ async function init() {
             const data = await saveSkinOrPay(skin, displayName)
             session.skin = skin
             session.display_name = data.display_name || displayName
+            window.SaiPokePlay?.syncGuestProfileMeta?.(session)
             session.has_skin = true
             if (Number.isFinite(data.balance)) session.balance = data.balance
             if (Array.isArray(data.owned_skins)) session.owned_skins = data.owned_skins
@@ -4959,6 +4955,13 @@ async function init() {
 }
 
 const playLandingBinder = window.SaiPokePlay?.bindLanding
+const playWarmWallet = window.SaiPokePlay?.warmWallet
+const playSyncWalletUi = window.SaiPokePlay?.syncWalletConnectedUi
+const playDisconnectWallet = window.SaiPokePlay?.disconnectWallet
+const openGuestProfileFlow = window.SaiPokePlay?.openGuestProfileFlow
+const closeGuestProfileFlow = window.SaiPokePlay?.closeGuestProfileFlow
+const syncGuestProfileMeta = window.SaiPokePlay?.syncGuestProfileMeta
+
 window.SaiPokePlay = {
     hidePlayLanding,
     showPlayLanding,
@@ -4973,6 +4976,12 @@ window.SaiPokePlay = {
     },
     onWalletDisconnect,
     bindLanding: playLandingBinder,
+    warmWallet: playWarmWallet,
+    syncWalletConnectedUi: playSyncWalletUi,
+    disconnectWallet: playDisconnectWallet,
+    openGuestProfileFlow,
+    closeGuestProfileFlow,
+    syncGuestProfileMeta,
 }
 
 init().catch((error) => {

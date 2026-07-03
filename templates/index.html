@@ -156,6 +156,43 @@
         {% if wallet_check %}
         <p class="play-wallet-hint">Play Now requires Phantom or Solflare with a signed wallet connection.</p>
         {% endif %}
+
+        <div id="play-profile-flow" class="play-profile-flow hidden" aria-label="Trainer profiles">
+            <div id="play-passcode-gate" class="play-profile-panel">
+                <p class="play-profile-title" id="play-passcode-title">Enter passcode</p>
+                <p class="play-profile-copy" id="play-passcode-subtitle">Unlock your saved trainers on this device.</p>
+                <div class="play-passcode-display" id="play-passcode-display" aria-live="polite">
+                    <span class="play-passcode-slot"></span>
+                    <span class="play-passcode-slot"></span>
+                    <span class="play-passcode-slot"></span>
+                </div>
+                <div class="play-passcode-keypad" id="play-passcode-keypad">
+                    <button type="button" class="play-passcode-key" data-digit="1">1</button>
+                    <button type="button" class="play-passcode-key" data-digit="2">2</button>
+                    <button type="button" class="play-passcode-key" data-digit="3">3</button>
+                    <button type="button" class="play-passcode-key" data-digit="4">4</button>
+                    <button type="button" class="play-passcode-key" data-digit="5">5</button>
+                    <button type="button" class="play-passcode-key" data-digit="6">6</button>
+                    <button type="button" class="play-passcode-key" data-digit="7">7</button>
+                    <button type="button" class="play-passcode-key" data-digit="8">8</button>
+                    <button type="button" class="play-passcode-key" data-digit="9">9</button>
+                    <button type="button" class="play-passcode-key play-passcode-key-muted" disabled aria-hidden="true"></button>
+                    <button type="button" class="play-passcode-key" data-digit="0">0</button>
+                    <button type="button" class="play-passcode-key play-passcode-key-back" data-action="back" aria-label="Backspace">⌫</button>
+                </div>
+                <p class="play-profile-status" id="play-passcode-status" aria-live="polite"></p>
+                <button type="button" class="play-btn play-btn--ghost play-profile-back" id="play-passcode-back">Back</button>
+            </div>
+
+            <div id="play-profile-picker" class="play-profile-panel hidden">
+                <p class="play-profile-title">Choose trainer</p>
+                <p class="play-profile-copy">Each profile saves progress in the cloud. Pick one to continue.</p>
+                <div id="play-profile-list" class="play-profile-list" role="list"></div>
+                <button type="button" class="play-btn play-btn--primary" id="play-profile-add-btn">+ Add new profile</button>
+                <p class="play-profile-status" id="play-profile-status" aria-live="polite"></p>
+                <button type="button" class="play-btn play-btn--ghost play-profile-back" id="play-profile-back">Back</button>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -1153,6 +1190,9 @@
 <script src="/static/js/retro-audio.js?v={{ asset_v.retro_audio_js }}"></script>
 {% if play_mode %}
 <script src="/static/js/play.js?v={{ asset_v.play_js }}"></script>
+{% if not wallet_check %}
+<script src="/static/js/play-profiles.js?v={{ asset_v.play_profiles_js }}"></script>
+{% endif %}
 {% endif %}
 {% if wallet_check %}
 <script src="/static/js/kins-wallet.js?v={{ asset_v.kins_wallet_js }}"></script>

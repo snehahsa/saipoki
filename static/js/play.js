@@ -504,6 +504,10 @@
         playBtn?.addEventListener("click", () => {
             if (walletBusy) return
             if (!walletRequired()) {
+                if (window.SaiPokePlay?.openGuestProfileFlow) {
+                    window.SaiPokePlay.openGuestProfileFlow()
+                    return
+                }
                 setBusy(true)
                 setLandingStatus("Loading your trainer…", "success")
                 window.SaiPokePlay?.bootAfterWallet?.()

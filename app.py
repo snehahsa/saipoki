@@ -911,6 +911,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         asset_v.update({
             "play_css": asset_version("static/css/play.css"),
             "play_js": asset_version("static/js/play.js"),
+            "play_profiles_js": asset_version("static/js/play-profiles.js"),
             "bg": asset_version("static/background/bg.png"),
             "phantom_logo": asset_version("static/logos/ph.svg"),
             "solflare_logo": asset_version("static/logos/sol.svg"),

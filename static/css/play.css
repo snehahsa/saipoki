@@ -219,6 +219,149 @@ body.play-body {
     background: #fffefb;
 }
 
+.play-profile-flow {
+    margin-top: 18px;
+    width: 100%;
+    max-width: 360px;
+    margin-inline: auto;
+}
+
+.play-profile-flow.hidden {
+    display: none;
+}
+
+.play-profile-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+}
+
+.play-profile-panel.hidden {
+    display: none;
+}
+
+.play-profile-title {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--play-glow);
+    text-shadow: 2px 2px 0 #123a24;
+}
+
+.play-profile-copy {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.65;
+    color: var(--play-muted);
+}
+
+.play-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: min(42vh, 280px);
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.play-profile-slot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-height: 48px;
+    text-transform: none;
+    letter-spacing: 0.04em;
+}
+
+.play-profile-slot-name {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: none;
+}
+
+.play-profile-slot-meta {
+    font-size: 10px;
+    color: var(--play-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.play-profile-empty {
+    margin: 0;
+    padding: 12px 10px;
+    border: 2px dashed rgba(201, 184, 150, 0.45);
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--play-muted);
+    text-align: center;
+}
+
+.play-profile-status {
+    margin: 0;
+    min-height: 1.2em;
+    font-size: 10px;
+    color: var(--play-muted);
+}
+
+.play-profile-status.is-error {
+    color: #ff9f9f;
+}
+
+.play-profile-back {
+    margin-top: 4px;
+}
+
+.play-passcode-display {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 4px 0 2px;
+}
+
+.play-passcode-slot {
+    width: 18px;
+    height: 18px;
+    border: 3px solid var(--play-border);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.play-passcode-slot.is-filled {
+    background: var(--play-glow);
+    box-shadow: 2px 2px 0 #1a8a4a, inset 0 0 0 2px #35c974;
+}
+
+.play-passcode-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.play-passcode-key {
+    min-height: 46px;
+    border: 3px solid var(--play-border);
+    background: rgba(255, 255, 255, 0.95);
+    color: #2a2218;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.play-passcode-key:active {
+    transform: translate(2px, 2px);
+}
+
+.play-passcode-key-muted {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.play-passcode-key-back {
+    font-size: 16px;
+}
+
 .play-wallet-bar {
     position: fixed;
     top: 14px;

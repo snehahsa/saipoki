@@ -1,0 +1,405 @@
+(function () {
+    const WALLET_CHECK = Number(window.APP_CONFIG?.walletCheck ?? 1)
+    const VAULT_KEY = "pokequest_profile_vault"
+    const GUEST_ID_KEY = "pokequest_guest_id"
+    const UNLOCK_KEY = "pokequest_vault_unlocked"
+    const MAX_PROFILES = 8
+
+    let passcodeBuffer = ""
+    let passcodeMode = "unlock" // unlock | create | confirm
+    let pendingCreateHash = ""
+    let flowBusy = false
+
+    const flowEl = document.getElementById("play-profile-flow")
+    const gateEl = document.getElementById("play-passcode-gate")
+    const pickerEl = document.getElementById("play-profile-picker")
+    const landingActions = document.querySelector(".play-actions")
+    const passcodeTitle = document.getElementById("play-passcode-title")
+    const passcodeSubtitle = document.getElementById("play-passcode-subtitle")
+    const passcodeStatus = document.getElementById("play-passcode-status")
+    const profileList = document.getElementById("play-profile-list")
+    const profileStatus = document.getElementById("play-profile-status")
+
+    function guestProfilesEnabled() {
+        return Boolean(window.APP_CONFIG?.playMode) && WALLET_CHECK === 0
+    }
+
+    function legacyProfilesForVault() {
+        const legacy = localStorage.getItem(GUEST_ID_KEY)
+        if (!legacy || !legacy.startsWith("guest:")) return []
+        return [{
+            guestId: legacy,
+            name: "Saved Trainer",
+            level: 0,
+            updatedAt: Date.now(),
+        }]
+    }
+
+    function readVault() {
+        try {
+            const raw = localStorage.getItem(VAULT_KEY)
+            if (!raw) return null
+            const data = JSON.parse(raw)
+            if (!data || typeof data !== "object" || !data.passcodeHash) return null
+            if (!Array.isArray(data.profiles)) data.profiles = []
+            return data
+        } catch {
+            return null
+        }
+    }
+
+    function writeVault(vault) {
+        localStorage.setItem(VAULT_KEY, JSON.stringify(vault))
+    }
+
+    async function hashPasscode(pin) {
+        const text = `pokequest-vault:${pin}`
+        if (!window.crypto?.subtle) {
+            return text
+        }
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
+        return Array.from(new Uint8Array(buf))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")
+    }
+
+    function setActiveGuestId(guestId) {
+        localStorage.setItem(GUEST_ID_KEY, guestId)
+    }
+
+    function createGuestId() {
+        const uuid = typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID().replace(/-/g, "")
+            : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+        return `guest:${uuid}`
+    }
+
+    function unlockSession(passcodeHash) {
+        sessionStorage.setItem(UNLOCK_KEY, passcodeHash)
+    }
+
+    function isVaultUnlocked(vault) {
+        if (!vault) return false
+        return sessionStorage.getItem(UNLOCK_KEY) === vault.passcodeHash
+    }
+
+    function profileLabel(profile) {
+        const name = String(profile?.name || "").trim()
+        if (name) return name
+        const id = String(profile?.guestId || "")
+        if (id.startsWith("guest:")) return `Trainer ${id.slice(6, 10)}`
+        return "Trainer"
+    }
+
+    function upsertProfileMeta(guestId, patch) {
+        const vault = readVault()
+        if (!vault || !guestId) return
+        const idx = vault.profiles.findIndex((p) => p.guestId === guestId)
+        const now = Date.now()
+        if (idx >= 0) {
+            vault.profiles[idx] = { ...vault.profiles[idx], ...patch, guestId, updatedAt: now }
+        } else if (vault.profiles.length < MAX_PROFILES) {
+            vault.profiles.push({
+                guestId,
+                name: patch.name || "New Trainer",
+                level: patch.level ?? 0,
+                updatedAt: now,
+            })
+        }
+        writeVault(vault)
+    }
+
+    function showFlowPanel(panel) {
+        flowEl?.classList.remove("hidden")
+        landingActions?.classList.add("hidden")
+        gateEl?.classList.toggle("hidden", panel !== "gate")
+        pickerEl?.classList.toggle("hidden", panel !== "picker")
+    }
+
+    function closeGuestProfileFlow() {
+        flowEl?.classList.add("hidden")
+        landingActions?.classList.remove("hidden")
+        clearPasscodeEntry()
+        if (profileStatus) profileStatus.textContent = ""
+    }
+
+    function clearPasscodeEntry() {
+        passcodeBuffer = ""
+        renderPasscodeDisplay()
+        if (passcodeStatus) {
+            passcodeStatus.textContent = ""
+            passcodeStatus.classList.remove("is-error")
+        }
+    }
+
+    function renderPasscodeDisplay() {
+        const slots = document.querySelectorAll("#play-passcode-display .play-passcode-slot")
+        slots.forEach((slot, index) => {
+            slot.classList.toggle("is-filled", index < passcodeBuffer.length)
+        })
+    }
+
+    function configurePasscodeGate(mode) {
+        passcodeMode = mode
+        clearPasscodeEntry()
+        if (mode === "create") {
+            if (passcodeTitle) passcodeTitle.textContent = "Create passcode"
+            if (passcodeSubtitle) {
+                passcodeSubtitle.textContent = "Pick a 3-digit code to protect profiles on this browser."
+            }
+        } else if (mode === "confirm") {
+            if (passcodeTitle) passcodeTitle.textContent = "Confirm passcode"
+            if (passcodeSubtitle) passcodeSubtitle.textContent = "Enter the same code again."
+        } else {
+            if (passcodeTitle) passcodeTitle.textContent = "Enter passcode"
+            if (passcodeSubtitle) {
+                passcodeSubtitle.textContent = "Unlock your saved trainers on this device."
+            }
+        }
+    }
+
+    async function submitPasscode(pin) {
+        const vault = readVault()
+        const hash = await hashPasscode(pin)
+
+        if (passcodeMode === "create") {
+            pendingCreateHash = hash
+            configurePasscodeGate("confirm")
+            return
+        }
+
+        if (passcodeMode === "confirm") {
+            if (hash !== pendingCreateHash) {
+                if (passcodeStatus) {
+                    passcodeStatus.textContent = "Codes did not match. Try again."
+                    passcodeStatus.classList.add("is-error")
+                }
+                configurePasscodeGate("create")
+                pendingCreateHash = ""
+                return
+            }
+            writeVault({ passcodeHash: hash, profiles: legacyProfilesForVault() })
+            unlockSession(hash)
+            renderProfilePicker()
+            return
+        }
+
+        if (!vault) {
+            configurePasscodeGate("create")
+            return
+        }
+
+        if (hash !== vault.passcodeHash) {
+            if (passcodeStatus) {
+                passcodeStatus.textContent = "Wrong passcode."
+                passcodeStatus.classList.add("is-error")
+            }
+            return
+        }
+
+        unlockSession(hash)
+        renderProfilePicker()
+    }
+
+    function onPasscodeDigit(digit) {
+        if (flowBusy || passcodeBuffer.length >= 3) return
+        passcodeBuffer += digit
+        renderPasscodeDisplay()
+        if (passcodeBuffer.length === 3) {
+            void submitPasscode(passcodeBuffer)
+        }
+    }
+
+    function onPasscodeBackspace() {
+        if (flowBusy) return
+        passcodeBuffer = passcodeBuffer.slice(0, -1)
+        renderPasscodeDisplay()
+        if (passcodeStatus) {
+            passcodeStatus.textContent = ""
+            passcodeStatus.classList.remove("is-error")
+        }
+    }
+
+    function renderProfilePicker() {
+        const vault = readVault()
+        if (!vault || !isVaultUnlocked(vault)) {
+            openGuestProfileFlow()
+            return
+        }
+
+        showFlowPanel("picker")
+        if (!profileList) return
+
+        const profiles = [...vault.profiles].sort(
+            (a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0),
+        )
+
+        if (!profiles.length) {
+            profileList.innerHTML = (
+                '<p class="play-profile-empty">No trainers yet — add your first profile.</p>'
+            )
+        } else {
+            profileList.innerHTML = profiles.map((profile) => {
+                const label = profileLabel(profile)
+                const level = Number(profile.level) > 0 ? ` · Lv.${profile.level}` : ""
+                return (
+                    `<button type="button" class="play-btn play-btn--ghost play-profile-slot" `
+                    + `data-guest-id="${encodeURIComponent(profile.guestId)}">`
+                    + `<span class="play-profile-slot-name">${escapeHtml(label)}</span>`
+                    + `<span class="play-profile-slot-meta">${escapeHtml(level)}</span>`
+                    + `</button>`
+                )
+            }).join("")
+        }
+
+        const addBtn = document.getElementById("play-profile-add-btn")
+        if (addBtn) {
+            const atCap = profiles.length >= MAX_PROFILES
+            addBtn.disabled = atCap
+            addBtn.textContent = atCap ? "Profile limit reached" : "+ Add new profile"
+        }
+    }
+
+    function escapeHtml(text) {
+        return String(text || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+    }
+
+    async function bootSelectedProfile(guestId) {
+        if (!guestId || flowBusy) return
+        flowBusy = true
+        if (profileStatus) {
+            profileStatus.textContent = "Loading trainer…"
+            profileStatus.classList.remove("is-error")
+        }
+
+        setActiveGuestId(guestId)
+        upsertProfileMeta(guestId, {})
+
+        try {
+            const ok = await window.SaiPokePlay?.bootAfterWallet?.()
+            if (!ok) {
+                if (profileStatus) {
+                    profileStatus.textContent = "Could not load trainer. Try again."
+                    profileStatus.classList.add("is-error")
+                }
+                return
+            }
+            closeGuestProfileFlow()
+            const status = document.getElementById("play-status")
+            if (status) status.textContent = ""
+        } catch (error) {
+            if (profileStatus) {
+                profileStatus.textContent = error?.message || "Could not sign in."
+                profileStatus.classList.add("is-error")
+            }
+        } finally {
+            flowBusy = false
+        }
+    }
+
+    function addNewProfile() {
+        const vault = readVault()
+        if (!vault || !isVaultUnlocked(vault)) return
+        if (vault.profiles.length >= MAX_PROFILES) return
+
+        const guestId = createGuestId()
+        const slot = vault.profiles.length + 1
+        vault.profiles.push({
+            guestId,
+            name: `Trainer ${slot}`,
+            level: 0,
+            updatedAt: Date.now(),
+        })
+        writeVault(vault)
+        void bootSelectedProfile(guestId)
+    }
+
+    function openGuestProfileFlow() {
+        if (!guestProfilesEnabled()) return
+
+        const vault = readVault()
+        if (!vault) {
+            showFlowPanel("gate")
+            configurePasscodeGate("create")
+            return
+        }
+
+        if (isVaultUnlocked(vault)) {
+            renderProfilePicker()
+            return
+        }
+
+        showFlowPanel("gate")
+        configurePasscodeGate("unlock")
+    }
+
+    function syncGuestProfileMeta(data) {
+        if (!guestProfilesEnabled()) return
+        const guestId = localStorage.getItem(GUEST_ID_KEY)
+        if (!guestId || !data) return
+
+        const name = String(data.display_name || "").trim()
+        const level = Number(data.level ?? data.trainer_stats?.level ?? 0)
+        upsertProfileMeta(guestId, {
+            name: name || undefined,
+            level,
+        })
+    }
+
+    function bindProfileUi() {
+        if (!guestProfilesEnabled()) return
+
+        document.getElementById("play-passcode-keypad")?.addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-digit],[data-action]")
+            if (!btn) return
+            if (btn.dataset.action === "back") {
+                onPasscodeBackspace()
+                return
+            }
+            if (btn.dataset.digit != null) {
+                onPasscodeDigit(btn.dataset.digit)
+            }
+        })
+
+        document.getElementById("play-passcode-back")?.addEventListener("click", () => {
+            if (passcodeMode === "confirm") {
+                configurePasscodeGate("create")
+                return
+            }
+            closeGuestProfileFlow()
+        })
+
+        document.getElementById("play-profile-back")?.addEventListener("click", () => {
+            sessionStorage.removeItem(UNLOCK_KEY)
+            const vault = readVault()
+            if (!vault) {
+                closeGuestProfileFlow()
+                return
+            }
+            showFlowPanel("gate")
+            configurePasscodeGate("unlock")
+        })
+
+        document.getElementById("play-profile-add-btn")?.addEventListener("click", () => {
+            if (!flowBusy) addNewProfile()
+        })
+
+        profileList?.addEventListener("click", (event) => {
+            const btn = event.target.closest(".play-profile-slot")
+            if (!btn?.dataset.guestId) return
+            void bootSelectedProfile(decodeURIComponent(btn.dataset.guestId))
+        })
+    }
+
+    window.SaiPokePlay = window.SaiPokePlay || {}
+    window.SaiPokePlay.openGuestProfileFlow = openGuestProfileFlow
+    window.SaiPokePlay.closeGuestProfileFlow = closeGuestProfileFlow
+    window.SaiPokePlay.syncGuestProfileMeta = syncGuestProfileMeta
+    window.SaiPokePlay.guestProfilesEnabled = guestProfilesEnabled
+
+    bindProfileUi()
+})()
