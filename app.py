@@ -54,6 +54,7 @@ from wallet_auth import (
     WALLET_CHECK,
     create_wallet_challenge,
     is_guest_user_id,
+    is_guest_placeholder_name,
     issue_wallet_session,
     resolve_guest_user,
     verify_wallet_login,
@@ -1452,7 +1453,13 @@ def auth():
         return jsonify({"success": False, "error": auth_session_error_message()}), 401
     telegram_id = str(user["id"])
     is_wallet = is_wallet_user_id(telegram_id)
-    display_name = "" if is_wallet else display_name_from_user(user)
+    is_guest = is_guest_user_id(telegram_id)
+    if is_wallet:
+        display_name = ""
+    elif is_guest:
+        display_name = ""
+    else:
+        display_name = display_name_from_user(user)
     username = user.get("username") or ""
     now = int(time.time())
 
@@ -1536,6 +1543,8 @@ def auth():
                     (username, now, telegram_id),
                 )
                 display_name = row["display_name"]
+                if is_guest and is_guest_placeholder_name(display_name):
+                    display_name = ""
             skin = row["skin"]
             badges = parse_badges(row["badges"] if "badges" in row.keys() else "[]")
             quest_progress = parse_quest_progress(
@@ -1630,6 +1639,63 @@ def auth():
             "kins_min_hold": int(MIN_TOKEN_UI_AMOUNT),
         }
     )
+
+
+@app.route("/api/guest/profiles", methods=["POST"])
+def guest_profiles_lookup():
+    """Return saved trainer names for guest profile picker (non-wallet play only)."""
+    if wallet_payments_enabled():
+        return wallet_payments_disabled_response()
+
+    data = request.get_json(silent=True) or {}
+    raw_ids = data.get("guestIds")
+    if not isinstance(raw_ids, list):
+        return jsonify({"success": False, "error": "guestIds required."}), 400
+
+    guest_ids: list[str] = []
+    for raw in raw_ids[:8]:
+        guest_id = str(raw or "").strip()
+        if is_guest_user_id(guest_id) and guest_id not in guest_ids:
+            guest_ids.append(guest_id)
+
+    profiles: list[dict] = []
+    if not guest_ids:
+        return jsonify({"success": True, "profiles": profiles})
+
+    with get_db() as conn:
+        for guest_id in guest_ids:
+            row = conn.execute(
+                """
+                SELECT display_name, skin, stats_xp, stats_wins, quest_progress
+                FROM users WHERE telegram_id = ?
+                """,
+                (guest_id,),
+            ).fetchone()
+            if row is None:
+                profiles.append(
+                    {
+                        "guestId": guest_id,
+                        "display_name": "",
+                        "level": 0,
+                        "has_skin": False,
+                    }
+                )
+                continue
+            skin = row["skin"] if "skin" in row.keys() else None
+            stats = trainer_stats_row(row)
+            name = str(row["display_name"] or "").strip()
+            if is_guest_placeholder_name(name):
+                name = ""
+            profiles.append(
+                {
+                    "guestId": guest_id,
+                    "display_name": name,
+                    "level": int(stats.get("level") or 0),
+                    "has_skin": skin is not None,
+                }
+            )
+
+    return jsonify({"success": True, "profiles": profiles})
 
 
 @app.route("/api/pin/set", methods=["POST"])

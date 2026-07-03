@@ -116,6 +116,19 @@ def is_guest_user_id(telegram_id: str) -> bool:
     return bool(_GUEST_ID_RE.match(str(telegram_id or "")))
 
 
+def is_guest_placeholder_name(name: str) -> bool:
+    text = str(name or "").strip()
+    if not text:
+        return True
+    if text.lower().startswith("guest:"):
+        return True
+    if text.lower().startswith("player guest:"):
+        return True
+    if re.match(r"^[a-f0-9]{4}…[a-f0-9]{4}$", text, re.IGNORECASE):
+        return True
+    return False
+
+
 def resolve_guest_user(data: Optional[dict] = None) -> Optional[dict[str, Any]]:
     if WALLET_CHECK:
         return None

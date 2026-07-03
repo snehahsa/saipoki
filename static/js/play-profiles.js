@@ -83,12 +83,50 @@
         return sessionStorage.getItem(UNLOCK_KEY) === vault.passcodeHash
     }
 
+    function isPlaceholderGuestName(name) {
+        const text = String(name || "").trim()
+        if (!text) return true
+        if (/^guest:/i.test(text)) return true
+        if (/^player guest:/i.test(text)) return true
+        if (/^[a-f0-9]{4}…[a-f0-9]{4}$/i.test(text)) return true
+        if (/^[a-f0-9]{4}\u2026[a-f0-9]{4}$/i.test(text)) return true
+        return false
+    }
+
     function profileLabel(profile) {
         const name = String(profile?.name || "").trim()
-        if (name) return name
-        const id = String(profile?.guestId || "")
-        if (id.startsWith("guest:")) return `Trainer ${id.slice(6, 10)}`
-        return "Trainer"
+        if (name && !isPlaceholderGuestName(name)) return name
+        const slot = Number(profile?.slot)
+        if (slot > 0) return `New Trainer ${slot}`
+        return "New Trainer"
+    }
+
+    async function refreshProfileNamesFromServer(profiles) {
+        const guestIds = profiles.map((p) => p.guestId).filter(Boolean)
+        if (!guestIds.length) return
+
+        try {
+            const response = await fetch("/api/guest/profiles", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                cache: "no-store",
+                body: JSON.stringify({ guestIds }),
+            })
+            const data = await response.json()
+            if (!response.ok || !data.success || !Array.isArray(data.profiles)) return
+
+            for (const row of data.profiles) {
+                const guestId = String(row.guestId || "").trim()
+                if (!guestId) continue
+                const displayName = String(row.display_name || "").trim()
+                upsertProfileMeta(guestId, {
+                    name: displayName && !isPlaceholderGuestName(displayName) ? displayName : undefined,
+                    level: Number(row.level) || 0,
+                })
+            }
+        } catch {
+            /* picker still works from cached names */
+        }
     }
 
     function upsertProfileMeta(guestId, patch) {
@@ -97,11 +135,20 @@
         const idx = vault.profiles.findIndex((p) => p.guestId === guestId)
         const now = Date.now()
         if (idx >= 0) {
-            vault.profiles[idx] = { ...vault.profiles[idx], ...patch, guestId, updatedAt: now }
+            const next = { ...vault.profiles[idx], ...patch, guestId, updatedAt: now }
+            if (patch.name && isPlaceholderGuestName(patch.name)) {
+                delete next.name
+                next.name = vault.profiles[idx].name
+            }
+            vault.profiles[idx] = next
         } else if (vault.profiles.length < MAX_PROFILES) {
+            const name = patch.name && !isPlaceholderGuestName(patch.name)
+                ? patch.name
+                : `New Trainer ${vault.profiles.length + 1}`
             vault.profiles.push({
                 guestId,
-                name: patch.name || "New Trainer",
+                name,
+                slot: vault.profiles.length + 1,
                 level: patch.level ?? 0,
                 updatedAt: now,
             })
@@ -220,7 +267,7 @@
         }
     }
 
-    function renderProfilePicker() {
+    async function renderProfilePicker() {
         const vault = readVault()
         if (!vault || !isVaultUnlocked(vault)) {
             openGuestProfileFlow()
@@ -230,18 +277,28 @@
         showFlowPanel("picker")
         if (!profileList) return
 
-        const profiles = [...vault.profiles].sort(
+        if (profileStatus) {
+            profileStatus.textContent = "Loading trainers…"
+            profileStatus.classList.remove("is-error")
+        }
+
+        await refreshProfileNamesFromServer(vault.profiles)
+
+        const refreshedVault = readVault()
+        const sorted = [...(refreshedVault?.profiles || vault.profiles)].sort(
             (a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0),
         )
 
-        if (!profiles.length) {
+        if (profileStatus) profileStatus.textContent = ""
+
+        if (!sorted.length) {
             profileList.innerHTML = (
                 '<p class="play-profile-empty">No trainers yet — add your first profile.</p>'
             )
         } else {
-            profileList.innerHTML = profiles.map((profile) => {
+            profileList.innerHTML = sorted.map((profile) => {
                 const label = profileLabel(profile)
-                const level = Number(profile.level) > 0 ? ` · Lv.${profile.level}` : ""
+                const level = Number(profile.level) > 0 ? `Lv.${profile.level}` : ""
                 return (
                     `<button type="button" class="play-btn play-btn--ghost play-profile-slot" `
                     + `data-guest-id="${encodeURIComponent(profile.guestId)}">`
@@ -254,7 +311,7 @@
 
         const addBtn = document.getElementById("play-profile-add-btn")
         if (addBtn) {
-            const atCap = profiles.length >= MAX_PROFILES
+            const atCap = sorted.length >= MAX_PROFILES
             addBtn.disabled = atCap
             addBtn.textContent = atCap ? "Profile limit reached" : "+ Add new profile"
         }
@@ -310,7 +367,8 @@
         const slot = vault.profiles.length + 1
         vault.profiles.push({
             guestId,
-            name: `Trainer ${slot}`,
+            name: `New Trainer ${slot}`,
+            slot,
             level: 0,
             updatedAt: Date.now(),
         })
@@ -345,7 +403,7 @@
         const name = String(data.display_name || "").trim()
         const level = Number(data.level ?? data.trainer_stats?.level ?? 0)
         upsertProfileMeta(guestId, {
-            name: name || undefined,
+            name: name && !isPlaceholderGuestName(name) ? name : undefined,
             level,
         })
     }
