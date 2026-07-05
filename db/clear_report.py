@@ -321,7 +321,7 @@ def render_clear_report_html(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clear report — SaiPoke</title>
+  <title>Clear report — Pokequest-cards</title>
   <style>
     :root {{ color-scheme: dark; }}
     body {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 0; background: #0b1017; color: #e8eef7; }}

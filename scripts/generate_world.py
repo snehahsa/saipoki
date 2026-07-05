@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate SaiPoke world — compact multi-biome map for gather-clone."""
+"""Generate Pokequest-cards world — compact multi-biome map for gather-clone."""
 
 import json
 import math
@@ -355,7 +355,7 @@ def main() -> None:
     world = {
         "spawnpoint": {"roomIndex": 0, "x": CX, "y": CY + 2},
         "rooms": [
-            {"name": "SaiPoke Realm", "tilemap": main_world.tiles},
+            {"name": "Pokequest-cards", "tilemap": main_world.tiles},
             {"name": "Moonlit Grove", "tilemap": grove.tiles},
         ],
     }

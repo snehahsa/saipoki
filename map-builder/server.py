@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SaiPoke map builder — visual editor on port 9001."""
+"""Pokequest-cards map builder — visual editor on port 9001."""
 
 import json
 import shutil

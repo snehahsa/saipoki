@@ -54,7 +54,7 @@ app.get('/health', (_req, res) => {
         ok: true,
         players,
         maxPlayers: 50,
-        world: 'SaiPoke Realm',
+        world: 'Pokequest-cards',
         worldId: session_1.WORLD_ID,
         rooms: session?.map_data?.rooms?.length ?? 1,
         worldMapHash: mapHash,

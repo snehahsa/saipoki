@@ -23,7 +23,7 @@ let activeApp: PlayApp | null = null
 let pendingEquippedGear: string | null = null
 
 function normalizeRealmData(data: RealmData): RealmData {
-    const DEFAULT_ROOM_NAME = 'SaiPoke Realm'
+    const DEFAULT_ROOM_NAME = 'Pokequest-cards'
     const defaultRoomName = (index: number) => (index === 0 ? DEFAULT_ROOM_NAME : `Map ${index + 1}`)
 
     return {

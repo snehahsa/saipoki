@@ -9,7 +9,7 @@ exports.loadWorldMapFromDisk = loadWorldMapFromDisk;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = __importDefault(require("crypto"));
-const DEFAULT_ROOM_NAME = 'SaiPoke Realm';
+const DEFAULT_ROOM_NAME = 'Pokequest-cards';
 function defaultRoomName(index) {
     return index === 0 ? DEFAULT_ROOM_NAME : `Map ${index + 1}`;
 }

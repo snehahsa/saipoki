@@ -3,7 +3,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { RealmData } from './session'
 
-const DEFAULT_ROOM_NAME = 'SaiPoke Realm'
+const DEFAULT_ROOM_NAME = 'Pokequest-cards'
 
 function defaultRoomName(index: number) {
     return index === 0 ? DEFAULT_ROOM_NAME : `Map ${index + 1}`
