@@ -399,6 +399,7 @@
         }
 
         setActiveGuestId(guestId)
+        await refreshProfileNamesFromServer([{ guestId }])
         upsertProfileMeta(guestId, { level: 0 })
 
         try {
@@ -503,11 +504,22 @@
     }
 
     function getCachedProfileName(guestId) {
+        const meta = getCachedGuestProfileMeta(guestId)
+        return meta?.name || ""
+    }
+
+    function getCachedGuestProfileMeta(guestId) {
         const vault = readVault()
-        if (!vault || !guestId) return ""
+        if (!vault || !guestId) return null
         const profile = vault.profiles.find((p) => p.guestId === guestId)
-        const name = String(profile?.name || "").trim()
-        return name && !isPlaceholderGuestName(name) ? name : ""
+        if (!profile) return null
+        const name = String(profile.name || "").trim()
+        const cleanName = name && !isPlaceholderGuestName(name) ? name : ""
+        return {
+            name: cleanName,
+            has_skin: Boolean(profile.has_skin),
+            profile_ready: Boolean(profile.profile_ready),
+        }
     }
 
     function syncGuestProfileMeta(data) {
@@ -596,6 +608,7 @@
     window.SaiPokePlay.closeGuestProfileFlow = closeGuestProfileFlow
     window.SaiPokePlay.syncGuestProfileMeta = syncGuestProfileMeta
     window.SaiPokePlay.getCachedGuestProfileName = getCachedProfileName
+    window.SaiPokePlay.getCachedGuestProfileMeta = getCachedGuestProfileMeta
     window.SaiPokePlay.guestProfilesEnabled = guestProfilesEnabled
 
     bindProfileUi()

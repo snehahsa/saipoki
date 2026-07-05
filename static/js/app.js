@@ -683,11 +683,68 @@ function guestHasEquippedSkin() {
 
 function guestProfileReady() {
     if (!session) return false
+    if (session.profile_ready) return true
+    const meta = window.SaiPokePlay?.getCachedGuestProfileMeta?.(getActiveGuestId())
+    if (meta?.profile_ready) return true
     return guestHasEquippedSkin() && guestHasRealName(session.display_name)
 }
 
 function guestNeedsProfileSetup() {
     return guestPlayMode() && !guestProfileReady()
+}
+
+function mergeGuestProfileFromVault() {
+    if (!guestPlayMode()) return
+    const meta = window.SaiPokePlay?.getCachedGuestProfileMeta?.(getActiveGuestId())
+    if (!meta) return
+    if (meta.name && !guestHasRealName(session.display_name)) {
+        session.display_name = meta.name
+    }
+    if (meta.profile_ready || (meta.has_skin && meta.name)) {
+        session.profile_ready = true
+        session.has_skin = true
+    }
+}
+
+function finalizeGuestSessionFromAuth(data) {
+    if (!guestPlayMode()) return
+
+    if (Boolean(data?.profile_ready)) {
+        session.profile_ready = true
+        session.has_skin = true
+    }
+
+    if (!guestHasRealName(session.display_name)) {
+        const cached = window.SaiPokePlay?.getCachedGuestProfileName?.(getActiveGuestId())
+        if (cached) session.display_name = cached
+    }
+
+    mergeGuestProfileFromVault()
+
+    if (!session.profile_ready) {
+        session.profile_ready = guestProfileReady()
+    }
+    if (session.profile_ready) {
+        session.has_skin = true
+    }
+}
+
+function routeGuestAfterAuth() {
+    if (guestProfileReady()) {
+        showScreen("menu")
+        startMenuStats()
+        return
+    }
+    if (guestHasEquippedSkin() && !guestHasRealName(session.display_name)) {
+        openSkinSetupScreen()
+        return
+    }
+    if (guestHasRealName(session.display_name) && !guestHasEquippedSkin()) {
+        openSkinSetupScreen()
+        return
+    }
+    syncWelcomeCopy()
+    showScreen("welcome")
 }
 
 function profileSetupComplete() {
@@ -3027,19 +3084,7 @@ function pinUnlocked() {
 
 function routeAfterAuth() {
     if (guestPlayMode()) {
-        if (guestNeedsProfileSetup()) {
-            if (session.has_skin && !guestHasRealName(session.display_name)) {
-                openSkinSetupScreen()
-            } else if (guestHasRealName(session.display_name) && !session.has_skin) {
-                openSkinSetupScreen()
-            } else {
-                syncWelcomeCopy()
-                showScreen("welcome")
-            }
-            return
-        }
-        showScreen("menu")
-        startMenuStats()
+        routeGuestAfterAuth()
         return
     }
     if (session.has_pin && !pinVerified) {
@@ -4712,16 +4757,7 @@ function applySessionFromAuth(data) {
     syncWalletEconomyLabels()
     syncGameHudDepositUi()
     syncProfileKinsDepositUi()
-    if (guestPlayMode() && !guestHasRealName(session.display_name)) {
-        const cached = window.SaiPokePlay?.getCachedGuestProfileName?.(getActiveGuestId())
-        if (cached) session.display_name = cached
-    }
-    if (guestPlayMode()) {
-        session.profile_ready = guestProfileReady()
-        if (session.profile_ready) {
-            session.has_skin = true
-        }
-    }
+    finalizeGuestSessionFromAuth(data)
     window.SaiPokePlay?.syncGuestProfileMeta?.(data)
     window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
@@ -4772,24 +4808,13 @@ async function completeSessionBootstrap() {
     hidePlayLanding()
     pinVerified = guestPlayMode()
 
-    if (guestPlayMode() && guestNeedsProfileSetup()) {
-        if (session.has_skin && !guestHasRealName(session.display_name)) {
-            openSkinSetupScreen()
-        } else if (guestHasRealName(session.display_name) && !session.has_skin) {
-            openSkinSetupScreen()
-        } else {
-            syncWelcomeCopy()
-            showScreen("welcome")
-        }
-    } else if (!guestPlayMode() && !profileSetupComplete()) {
+    if (guestPlayMode()) {
+        routeGuestAfterAuth()
+    } else if (!profileSetupComplete()) {
         syncWelcomeCopy()
         showScreen("welcome")
     } else {
         session.skin = session.skin || sortedSkins[skinIndex]
-        if (guestPlayMode() && guestProfileReady()) {
-            session.has_skin = true
-            session.profile_ready = true
-        }
         routeAfterAuth()
     }
 
@@ -5091,6 +5116,7 @@ const openGuestProfileFlow = window.SaiPokePlay?.openGuestProfileFlow
 const closeGuestProfileFlow = window.SaiPokePlay?.closeGuestProfileFlow
 const syncGuestProfileMeta = window.SaiPokePlay?.syncGuestProfileMeta
 const getCachedGuestProfileName = window.SaiPokePlay?.getCachedGuestProfileName
+const getCachedGuestProfileMeta = window.SaiPokePlay?.getCachedGuestProfileMeta
 
 window.SaiPokePlay = {
     hidePlayLanding,
@@ -5113,6 +5139,7 @@ window.SaiPokePlay = {
     closeGuestProfileFlow,
     syncGuestProfileMeta,
     getCachedGuestProfileName,
+    getCachedGuestProfileMeta,
 }
 
 init().catch((error) => {
