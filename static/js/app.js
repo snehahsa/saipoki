@@ -3727,6 +3727,7 @@ function hideSignModal(opts = {}) {
     }
 
     activeMessageSetId = null
+    document.body.classList.remove("dialogue-active")
 
     const modal = document.getElementById("sign-modal")
     if (modal) modal.classList.add("hidden")
@@ -5009,7 +5010,7 @@ window.SaiPokePlay = {
 }
 
 init().catch((error) => {
-    console.error("SaiPoke init failed:", error)
+    console.error("Pokequest-cards init failed:", error)
     dismissBootSplash()
     showError(error?.message || "Failed to start. Hard refresh and try again.")
 })

@@ -30,6 +30,7 @@
         return [{
             guestId: legacy,
             name: "Saved Trainer",
+            slot: 1,
             level: 0,
             updatedAt: Date.now(),
         }]
@@ -42,6 +43,12 @@
             const data = JSON.parse(raw)
             if (!data || typeof data !== "object" || !data.passcodeHash) return null
             if (!Array.isArray(data.profiles)) data.profiles = []
+            data.profiles.forEach((profile, index) => {
+                if (!profile || typeof profile !== "object") return
+                if (!Number(profile.slot)) {
+                    profile.slot = index + 1
+                }
+            })
             return data
         } catch {
             return null
@@ -119,10 +126,11 @@
                 const guestId = String(row.guestId || "").trim()
                 if (!guestId) continue
                 const displayName = String(row.display_name || "").trim()
-                upsertProfileMeta(guestId, {
-                    name: displayName && !isPlaceholderGuestName(displayName) ? displayName : undefined,
-                    level: Number(row.level) || 0,
-                })
+                const patch = { level: Number(row.level) || 0 }
+                if (displayName && !isPlaceholderGuestName(displayName)) {
+                    patch.name = displayName
+                }
+                upsertProfileMeta(guestId, patch)
             }
         } catch {
             /* picker still works from cached names */
@@ -134,22 +142,30 @@
         if (!vault || !guestId) return
         const idx = vault.profiles.findIndex((p) => p.guestId === guestId)
         const now = Date.now()
+        const metaPatch = { ...(patch || {}) }
+        if (metaPatch.name === undefined) {
+            delete metaPatch.name
+        }
         if (idx >= 0) {
-            const next = { ...vault.profiles[idx], ...patch, guestId, updatedAt: now }
-            if (patch.name && isPlaceholderGuestName(patch.name)) {
-                delete next.name
-                next.name = vault.profiles[idx].name
+            const prev = vault.profiles[idx]
+            const next = { ...prev, ...metaPatch, guestId, updatedAt: now }
+            if (metaPatch.name !== undefined && isPlaceholderGuestName(metaPatch.name)) {
+                next.name = prev.name
+            }
+            if (!next.slot) {
+                next.slot = Number(prev.slot) > 0 ? prev.slot : idx + 1
             }
             vault.profiles[idx] = next
         } else if (vault.profiles.length < MAX_PROFILES) {
-            const name = patch.name && !isPlaceholderGuestName(patch.name)
-                ? patch.name
-                : `New Trainer ${vault.profiles.length + 1}`
+            const slot = vault.profiles.length + 1
+            const name = metaPatch.name && !isPlaceholderGuestName(metaPatch.name)
+                ? metaPatch.name
+                : `New Trainer ${slot}`
             vault.profiles.push({
                 guestId,
                 name,
-                slot: vault.profiles.length + 1,
-                level: patch.level ?? 0,
+                slot,
+                level: metaPatch.level ?? 0,
                 updatedAt: now,
             })
         }
@@ -334,7 +350,7 @@
         }
 
         setActiveGuestId(guestId)
-        upsertProfileMeta(guestId, {})
+        upsertProfileMeta(guestId, { level: 0 })
 
         try {
             const ok = await window.SaiPokePlay?.bootAfterWallet?.()
@@ -402,10 +418,11 @@
 
         const name = String(data.display_name || "").trim()
         const level = Number(data.level ?? data.trainer_stats?.level ?? 0)
-        upsertProfileMeta(guestId, {
-            name: name && !isPlaceholderGuestName(name) ? name : undefined,
-            level,
-        })
+        const patch = { level }
+        if (name && !isPlaceholderGuestName(name)) {
+            patch.name = name
+        }
+        upsertProfileMeta(guestId, patch)
     }
 
     function bindProfileUi() {

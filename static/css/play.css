@@ -612,6 +612,14 @@ body.play-mode.play-in-app .play-bg {
     transition: opacity 420ms ease;
 }
 
+/* Hide menu backdrops while in the live game canvas (avoids dark veil over world) */
+body.play-in-app:has(#game-screen:not(.hidden)) #retro-pixel-bg,
+body.play-in-app:has(#play-game:not(.hidden)) #retro-pixel-bg {
+    opacity: 0 !important;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 body.play-mode .play-bg {
     z-index: 0;
 }
