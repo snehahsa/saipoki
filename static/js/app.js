@@ -240,7 +240,7 @@ function hidePlayLanding() {
 
 function showPlayLanding() {
     document.getElementById("play-landing")?.classList.remove("is-hidden")
-    document.body.classList.remove("play-in-app", "spectator-mode")
+    document.body.classList.remove("play-in-app", "spectator-mode", "game-active", "dialogue-active")
     Object.values(screens).forEach((el) => el?.classList.add("hidden"))
     window.SaiPokePlay?.closeGuestProfileFlow?.()
     window.SaiPokePlay?.syncWalletConnectedUi?.()
@@ -369,10 +369,15 @@ function showScreen(name) {
         el.classList.toggle("hidden", key !== name)
     })
 
+    document.body.classList.toggle("game-active", name === "game")
     document.body.classList.toggle(
         "sky-plain-bg",
         name === "menu" || name === "welcome" || name === "pin" || name === "skin"
     )
+
+    if (name === "game") {
+        document.body.classList.remove("dialogue-active")
+    }
 
     syncRetroAudioForScreen(name)
     window.SaiPokePlay?.syncWalletConnectedUi?.()

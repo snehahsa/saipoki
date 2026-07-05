@@ -110,6 +110,7 @@ body.play-body {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+    display: none !important;
 }
 
 .play-landing-inner {
@@ -596,28 +597,33 @@ body.play-in-app:has(#game-screen:not(.hidden)) .play-wallet-bar {
     cursor: pointer;
 }
 
-/* Game layer */
-body.play-mode #retro-pixel-bg {
+/* Game layer — menus keep retro sky; live canvas hides all landing backdrops */
+body.play-mode #retro-pixel-bg,
+body.play-mode .play-bg {
     opacity: 0;
-    transition: opacity 420ms ease;
-}
-
-body.play-mode.play-in-app #retro-pixel-bg {
-    opacity: 1;
-}
-
-body.play-mode.play-in-app .play-bg {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 420ms ease;
-}
-
-/* Hide menu backdrops while in the live game canvas (avoids dark veil over world) */
-body.play-in-app:has(#game-screen:not(.hidden)) #retro-pixel-bg,
-body.play-in-app:has(#play-game:not(.hidden)) #retro-pixel-bg {
-    opacity: 0 !important;
     visibility: hidden;
     pointer-events: none;
+    transition: opacity 420ms ease;
+}
+
+body.play-mode.play-in-app:not(.game-active) #retro-pixel-bg {
+    opacity: 1;
+    visibility: visible;
+}
+
+body.play-mode.play-in-app:not(.game-active) .play-bg {
+    opacity: 0;
+    visibility: hidden;
+}
+
+body.play-mode.game-active #retro-pixel-bg,
+body.play-mode.game-active .play-bg,
+body.play-mode.play-in-app.game-active #retro-pixel-bg,
+body.play-mode.play-in-app.game-active .play-bg {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    display: none !important;
 }
 
 body.play-mode .play-bg {

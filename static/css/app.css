@@ -249,7 +249,7 @@ html, body {
     background: transparent;
 }
 
-body.dialogue-active #game-screen::before {
+body.dialogue-active #game-screen:has(#sign-modal:not(.hidden))::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -258,12 +258,12 @@ body.dialogue-active #game-screen::before {
     background:
         repeating-linear-gradient(
             0deg,
-            rgba(0, 0, 0, 0.08) 0,
-            rgba(0, 0, 0, 0.08) 2px,
+            rgba(0, 0, 0, 0.04) 0,
+            rgba(0, 0, 0, 0.04) 2px,
             transparent 2px,
             transparent 4px
         ),
-        rgba(8, 12, 28, 0.28);
+        rgba(8, 12, 28, 0.12);
     animation: retro-dialogue-dim 0.35s steps(4) forwards;
 }
 
@@ -3177,7 +3177,7 @@ body.kins-wallet-pending [data-kins-buy] {
     padding: 0;
     justify-content: stretch;
     position: relative;
-    background: #050508;
+    background: #87ceeb;
     touch-action: none;
     overscroll-behavior: none;
     -webkit-user-select: none;
@@ -6025,7 +6025,7 @@ body.poketab-open {
     width: 100%;
     position: relative;
     overflow: hidden;
-    background: #0f0f0f;
+    background: #87ceeb;
     touch-action: none;
     overscroll-behavior: none;
 }
