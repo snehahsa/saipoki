@@ -2414,7 +2414,10 @@ function renderGearAttachViewsGrid() {
         return `
             <div class="gear-view-card ${selected ? "selected" : ""} ${face.eligible ? "eligible" : ""}" data-gear-view="${direction}">
                 <button type="button" class="gear-view-thumb-btn" data-gear-direction="${direction}" title="Edit ${direction} attach">
-                    <span class="gear-view-thumb" style="${gearViewThumbStyle(direction)}"></span>
+                    <span class="gear-view-thumb-wrap">
+                        <span class="gear-view-thumb" style="${gearViewThumbStyle(direction)}"></span>
+                        <span class="gear-view-rod" style="${gearViewRodStyle(direction)}" aria-hidden="true"></span>
+                    </span>
                     <span class="gear-view-label">${direction}</span>
                 </button>
                 <label class="gear-view-eligible">
@@ -2488,6 +2491,9 @@ function gearItemFrame(item) {
 }
 
 function gearToolDrawRect(layout, rect) {
+    if (typeof GearOverlayMath !== "undefined") {
+        return GearOverlayMath.gearToolDrawRect(layout, rect)
+    }
     const z = layout.zoom
     return {
         x: layout.cx + rect.x * z,
@@ -2496,6 +2502,34 @@ function gearToolDrawRect(layout, rect) {
         h: rect.h * z,
         rect,
     }
+}
+
+function gearViewRodStyle(direction) {
+    const editor = state.gearAttachEditor
+    const item = editor.item
+    const face = editor.faces?.[direction]
+    const rect = face?.rect
+    if (!item || !rect || !rect.w || !rect.h) return "display:none"
+
+    const z = GEAR_VIEW_THUMB_ZOOM
+    const sprite = item.sprite || {}
+    const file = sprite.file || "fish.png"
+    const sheetW = editor.itemImage?.naturalWidth || 1254
+    const sheetH = editor.itemImage?.naturalHeight || 1254
+    const destW = rect.w * z
+    const destH = rect.h * z
+    const scale = destW / Math.max(1, sprite.w || 1)
+
+    return [
+        "display:block",
+        `width:${destW}px`,
+        `height:${destH}px`,
+        `transform:translate(${rect.x * z}px, ${rect.y * z}px)`,
+        `background-image:url(/sprites/spritesheets/items/${file})`,
+        `background-size:${sheetW * scale}px ${sheetH * scale}px`,
+        `background-position:-${(sprite.x || 0) * scale}px -${(sprite.y || 0) * scale}px`,
+        "background-repeat:no-repeat",
+    ].join(";")
 }
 
 function drawGearAttachCanvas() {
@@ -2528,6 +2562,10 @@ function drawGearAttachCanvas() {
         charFrame.x, charFrame.y, charFrame.w, charFrame.h,
         layout.cx, layout.cy, layout.bodyW, layout.bodyH
     )
+
+    ctx.strokeStyle = "rgba(96, 165, 250, 0.55)"
+    ctx.lineWidth = 1
+    ctx.strokeRect(layout.cx + 0.5, layout.cy + 0.5, layout.bodyW - 1, layout.bodyH - 1)
 
     const toolBox = gearToolDrawRect(layout, rect)
     if (!toolBox) return

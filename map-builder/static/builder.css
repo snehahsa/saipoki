@@ -1155,6 +1155,19 @@ body {
     color: inherit;
 }
 
+.gear-view-thumb-wrap {
+    position: relative;
+    width: fit-content;
+}
+
+.gear-view-rod {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+
 .gear-view-thumb {
     display: block;
     image-rendering: pixelated;

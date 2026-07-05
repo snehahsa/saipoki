@@ -1,5 +1,3 @@
-import type { Bounds, Container } from 'pixi.js'
-
 /** Character frame size in game pixels — matches map-builder GEAR_CHAR_FRAME_PX / idle frame. */
 export const GEAR_CHAR_FRAME_PX = 48
 
@@ -24,7 +22,7 @@ export type GearOverlayFrame = {
     h: number
 }
 
-type GearBodySprite = Container & {
+type GearBodySprite = {
     x: number
     y: number
     scale: { x: number; y: number }
@@ -43,25 +41,31 @@ export function gearTexturePixelSize(texture: {
     }
 }
 
-/**
- * Top-left of the 48×48 character frame in the body's local space.
- * Prefer PIXI local bounds (matches rendered sprite); fall back to anchor math.
- */
-export function characterFrameTopLeft(body: GearBodySprite): { x: number; y: number } {
-    if (typeof body.getLocalBounds === 'function') {
-        const bounds: Bounds = body.getLocalBounds(true)
-        if (bounds.width > 0 && bounds.height > 0) {
-            return { x: bounds.x, y: bounds.y }
-        }
-    }
-
+/** Character frame size — fixed 48×48 cell (matches map-builder GEAR_CHAR_FRAME_PX). */
+export function characterFrameSize(body: GearBodySprite): { w: number; h: number } {
     const sx = Math.abs(body.scale.x) || 1
     const sy = Math.abs(body.scale.y) || 1
-    const frameW = GEAR_CHAR_FRAME_PX * sx
-    const frameH = GEAR_CHAR_FRAME_PX * sy
+    return { w: GEAR_CHAR_FRAME_PX * sx, h: GEAR_CHAR_FRAME_PX * sy }
+}
+
+/** Frame top-left in body local space (feet anchor at body origin). */
+export function characterFrameOriginLocal(body: GearBodySprite): { x: number; y: number } {
+    const { w: frameW, h: frameH } = characterFrameSize(body)
     return {
-        x: body.x - frameW * body.anchor.x,
-        y: body.y - frameH * body.anchor.y,
+        x: -frameW * body.anchor.x,
+        y: -frameH * body.anchor.y,
+    }
+}
+
+/**
+ * Top-left of the character frame in parent space.
+ * Matches map-builder: idle frame drawn at (0,0), feet anchor (0.5, 1) at sprite position.
+ */
+export function characterFrameTopLeft(body: GearBodySprite): { x: number; y: number } {
+    const local = characterFrameOriginLocal(body)
+    return {
+        x: body.x + local.x,
+        y: body.y + local.y,
     }
 }
 
@@ -114,8 +118,8 @@ export function resolveGearAttachRect(
 }
 
 /**
- * Place tool in player parent space — same as map-builder gearToolDrawRect:
- * character frame top-left + rect (x, y, w, h).
+ * Place tool relative to character frame — same as map-builder gearToolDrawRect:
+ * frame top-left + rect (x, y, w, h). Tool is a sibling of the body in parent space.
  */
 export function placeGearToolOnCharacter(
     tool: {
@@ -134,19 +138,4 @@ export function placeGearToolOnCharacter(
     tool.x = origin.x + rect.x
     tool.y = origin.y + rect.y
     tool.scale.set(rect.w / Math.max(1, textureWidth), rect.h / Math.max(1, textureHeight))
-}
-
-/** @deprecated Use placeGearToolOnCharacter */
-export function applyGearToolRect(
-    sprite: Parameters<typeof placeGearToolOnCharacter>[0],
-    textureWidth: number,
-    textureHeight: number,
-    rect: GearAttachRect
-) {
-    sprite.anchor.set(0, 0)
-    sprite.x = rect.x
-    sprite.y = rect.y
-    const tw = Math.max(1, textureWidth)
-    const th = Math.max(1, textureHeight)
-    sprite.scale.set(rect.w / tw, rect.h / th)
 }

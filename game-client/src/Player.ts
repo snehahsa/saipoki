@@ -464,8 +464,9 @@ export class Player {
 
     private ensureToolSpriteOnStage() {
         if (!this.toolSprite || !this.animatedSprite) return
-        if (this.toolSprite.parent === this.animatedSprite) return
-        this.animatedSprite.addChild(this.toolSprite)
+        if (this.toolSprite.parent === this.parent) return
+        const bodyIndex = this.parent.getChildIndex(this.animatedSprite)
+        this.parent.addChildAt(this.toolSprite, bodyIndex + 1)
     }
 
     private async updateGearOverlay() {
@@ -500,17 +501,17 @@ export class Player {
             this.toolSprite.texture = texture
         }
 
-        // Feet anchor — must match map-builder 48×48 frame origin (top-left at -24,-48).
+        // Feet anchor — map-builder idle frame uses top-left (0,0) = (-24,-48) from feet.
         this.animatedSprite.anchor.set(0.5, 1)
 
         this.ensureToolSpriteOnStage()
 
         const texSize = gearTexturePixelSize(texture)
-        const frame = {
+        const legacyFrame = {
             w: spriteMeta.w ?? texSize.w,
             h: spriteMeta.h ?? texSize.h,
         }
-        const rect = resolveGearAttachRect(this.direction, spriteMeta, frame)
+        const rect = resolveGearAttachRect(this.direction, spriteMeta, legacyFrame)
         placeGearToolOnCharacter(
             this.toolSprite,
             this.animatedSprite,
