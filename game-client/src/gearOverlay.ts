@@ -118,16 +118,31 @@ export function resolveGearAttachRect(
 }
 
 /**
- * Place tool relative to character frame — same as map-builder gearToolDrawRect:
- * frame top-left + rect (x, y, w, h). Tool is a sibling of the body in parent space.
+ * Place tool in the body's local space — same as map-builder gearToolDrawRect:
+ * character frame top-left (0,0) + rect. Parent the tool on animatedSprite.
  */
-export function placeGearToolOnCharacter(
+export function placeGearToolLocalOnCharacter(
     tool: {
         anchor: { set: (x: number, y: number) => void }
         x: number
         y: number
         scale: { set: (x: number, y: number) => void }
     },
+    body: GearBodySprite,
+    textureWidth: number,
+    textureHeight: number,
+    rect: GearAttachRect
+) {
+    const origin = characterFrameOriginLocal(body)
+    tool.anchor.set(0, 0)
+    tool.x = origin.x + rect.x
+    tool.y = origin.y + rect.y
+    tool.scale.set(rect.w / Math.max(1, textureWidth), rect.h / Math.max(1, textureHeight))
+}
+
+/** @deprecated Use placeGearToolLocalOnCharacter with tool parented on animatedSprite. */
+export function placeGearToolOnCharacter(
+    tool: Parameters<typeof placeGearToolLocalOnCharacter>[0],
     body: GearBodySprite,
     textureWidth: number,
     textureHeight: number,

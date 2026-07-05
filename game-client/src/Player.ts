@@ -8,7 +8,7 @@ import { defaultSkin, skins } from '@/utils/pixi/Player/skins'
 import signal from '@/utils/signal'
 import { directionToward, shouldTurnToFace } from './npcNotice'
 import { getGearAttachForFacing, getGearItem, isGearVisibleForFacing, loadGearCatalog, loadGearTexture } from './gearCatalog'
-import { gearTexturePixelSize, placeGearToolOnCharacter, resolveGearAttachRect } from './gearOverlay'
+import { gearTexturePixelSize, placeGearToolLocalOnCharacter, resolveGearAttachRect, type GearAttachRect } from './gearOverlay'
 import {
     LABEL_SCALE_LEVEL,
     LABEL_SCALE_NAME,
@@ -107,6 +107,9 @@ export class Player {
             this.animatedSprite = new PIXI.AnimatedSprite(this.sheet.animations['idle_down'])
             this.animatedSprite.anchor.set(0.5, 1)
             this.animatedSprite.animationSpeed = this.animationSpeed
+            this.animatedSprite.onFrameChange = () => {
+                if (this.equippedGearId) this.repositionGearOverlay()
+            }
             this.animatedSprite.play()
             if (!this.initialized) {
                 this.parent.addChild(this.animatedSprite)
@@ -462,41 +465,66 @@ export class Player {
         await this.updateGearOverlay()
     }
 
+    private gearFacingFromAnimation(): Direction {
+        const state = this.animationState
+        if (state.includes('left')) return 'left'
+        if (state.includes('right')) return 'right'
+        if (state.includes('up')) return 'up'
+        return 'down'
+    }
+
+    private lastGearRect: { texW: number; texH: number; rect: GearAttachRect } | null = null
+
+    private repositionGearOverlay() {
+        if (!this.toolSprite?.visible || !this.animatedSprite || !this.lastGearRect) return
+        const { texW, texH, rect } = this.lastGearRect
+        placeGearToolLocalOnCharacter(this.toolSprite, this.animatedSprite, texW, texH, rect)
+    }
+
     private ensureToolSpriteOnStage() {
         if (!this.toolSprite || !this.animatedSprite) return
-        if (this.toolSprite.parent === this.parent) return
-        const bodyIndex = this.parent.getChildIndex(this.animatedSprite)
-        this.parent.addChildAt(this.toolSprite, bodyIndex + 1)
+        if (this.toolSprite.parent === this.animatedSprite) return
+        this.animatedSprite.addChild(this.toolSprite)
     }
 
     private async updateGearOverlay() {
         if (!this.animatedSprite) return
 
+        const facing = this.gearFacingFromAnimation()
+        if (this.direction !== facing) {
+            this.direction = facing
+        }
+
         const item = getGearItem(this.equippedGearId)
         if (!item) {
             if (this.toolSprite) this.toolSprite.visible = false
+            this.lastGearRect = null
             return
         }
 
-        if (!isGearVisibleForFacing(item, this.direction)) {
+        if (!isGearVisibleForFacing(item, facing)) {
             if (this.toolSprite) this.toolSprite.visible = false
+            this.lastGearRect = null
             return
         }
 
-        const spriteMeta = getGearAttachForFacing(item, this.direction)
+        const spriteMeta = getGearAttachForFacing(item, facing)
         if (!spriteMeta) {
             if (this.toolSprite) this.toolSprite.visible = false
+            this.lastGearRect = null
             return
         }
 
         const texture = await loadGearTexture(item.id)
         if (!texture) {
             if (this.toolSprite) this.toolSprite.visible = false
+            this.lastGearRect = null
             return
         }
 
         if (!this.toolSprite) {
             this.toolSprite = new PIXI.Sprite(texture)
+            this.toolSprite.roundPixels = true
         } else {
             this.toolSprite.texture = texture
         }
@@ -511,8 +539,9 @@ export class Player {
             w: spriteMeta.w ?? texSize.w,
             h: spriteMeta.h ?? texSize.h,
         }
-        const rect = resolveGearAttachRect(this.direction, spriteMeta, legacyFrame)
-        placeGearToolOnCharacter(
+        const rect = resolveGearAttachRect(facing, spriteMeta, legacyFrame)
+        this.lastGearRect = { texW: texSize.w, texH: texSize.h, rect }
+        placeGearToolLocalOnCharacter(
             this.toolSprite,
             this.animatedSprite,
             texSize.w,
