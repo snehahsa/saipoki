@@ -109,6 +109,70 @@ function guestPlayMode() {
     return PLAY_MODE && !walletRequired()
 }
 
+function touchGuestServerBackup() {
+    if (!guestPlayMode() || !session || typeof session !== "object") return
+    window.SaiPokePlay?.saveGuestServerBackup?.(session)
+}
+
+function guestAuthHasProgress(data) {
+    if (!data || typeof data !== "object") return false
+    if (data.profile_ready) return true
+    if (Array.isArray(data.quest_progress?.completed_steps) && data.quest_progress.completed_steps.length) {
+        return true
+    }
+    if (Array.isArray(data.holds) && data.holds.length) return true
+    if (Array.isArray(data.vault) && data.vault.length) return true
+    if (Array.isArray(data.vault_detail) && data.vault_detail.length) return true
+    if (Array.isArray(data.gear_slots) && data.gear_slots.some(Boolean)) return true
+    if (Number(data.balance) > 0) return true
+    const name = String(data.display_name || "").trim()
+    const skin = String(data.skin || "").trim()
+    return Boolean(guestHasRealName(name) && SKINS.includes(skin))
+}
+
+function mergeGuestBackupIntoAuth(data, backup) {
+    if (!data || !backup) return data
+    const out = { ...data }
+    const backupName = String(backup.display_name || "").trim()
+    const backupSkin = String(backup.skin || "").trim()
+    if (backupName && !String(out.display_name || "").trim()) {
+        out.display_name = backupName
+    }
+    if (backupSkin && SKINS.includes(backupSkin) && !out.skin) {
+        out.skin = backupSkin
+    }
+    const serverSteps = out.quest_progress?.completed_steps?.length || 0
+    const backupSteps = backup.quest_progress?.completed_steps?.length || 0
+    if (backupSteps > serverSteps) {
+        out.quest_progress = backup.quest_progress
+    }
+    if (!(out.holds?.length) && backup.holds?.length) out.holds = backup.holds
+    if (!(out.vault?.length) && backup.vault?.length) out.vault = backup.vault
+    if (!(out.vault_detail?.length) && backup.vault_detail?.length) {
+        out.vault_detail = backup.vault_detail
+    }
+    if (!(out.gear_slots?.some?.(Boolean)) && backup.gear_slots?.some?.(Boolean)) {
+        out.gear_slots = backup.gear_slots
+    }
+    if (!(Number(out.balance)) && Number(backup.balance) > 0) {
+        out.balance = backup.balance
+    }
+    if (Array.isArray(backup.owned_skins) && backup.owned_skins.length) {
+        out.owned_skins = backup.owned_skins
+    }
+    if (Number(backup.vending_spins) > 0 && !(Number(out.vending_spins) > 0)) {
+        out.vending_spins = backup.vending_spins
+    }
+    if (Number(backup.level) > 0 && !(Number(out.level) > 0)) {
+        out.level = backup.level
+    }
+    if (out.display_name && out.skin) {
+        out.profile_ready = true
+        out.has_skin = true
+    }
+    return out
+}
+
 function syncWelcomeCopy() {
     const footnote = document.querySelector(".welcome-footnote")
     if (!footnote) return
@@ -201,6 +265,7 @@ function applyTrainerStats(stats, meta = {}) {
     } else if (Number(meta.xp_gained) > 0) {
         showXpGainToast(Number(meta.xp_gained))
     }
+    touchGuestServerBackup()
 }
 
 function isSignedIn() {
@@ -2849,6 +2914,7 @@ async function completeQuestStep(stepId, questId = null, opts = {}) {
         } else if (Number(data.xp_gained) > 0) {
             showXpGainToast(Number(data.xp_gained))
         }
+        touchGuestServerBackup()
 
         if (!wasComplete && stepId === "collect_first_card") {
             const item = resolveCardItem(opts.bagItem || opts.cardId || getVaultCardIds()[0])
@@ -4843,25 +4909,23 @@ async function completeSessionBootstrap() {
     let data = await authenticate()
     if (!data) return false
 
-    applySessionFromAuth(data)
-
     if (guestPlayMode()) {
         const guestId = getActiveGuestId()
-        const meta = window.SaiPokePlay?.getCachedGuestProfileMeta?.(guestId)
-        const serverHasProgress = Boolean(
-            session.profile_ready
-            || (session.quest_progress?.completed_steps?.length)
-            || (session.holds?.length)
-            || (session.vault?.length)
-        )
-        if (guestId && !serverHasProgress && meta?.serverBackup) {
+        const backup = window.SaiPokePlay?.getGuestServerBackup?.(guestId)
+        const serverHasProgress = guestAuthHasProgress(data)
+        if (guestId && !serverHasProgress && backup) {
             const restored = await window.SaiPokePlay?.restoreGuestProfileFromVault?.(guestId)
             if (restored) {
                 data = await authenticate()
-                if (data) applySessionFromAuth(data)
+                if (!data) return false
+            } else {
+                data = mergeGuestBackupIntoAuth(data, backup)
+                void window.SaiPokePlay?.restoreGuestProfileFromVault?.(guestId)
             }
         }
     }
+
+    applySessionFromAuth(data)
 
     if (playSpectatorMode) {
         setGameLoading("ENTERING REALM")
@@ -4983,6 +5047,14 @@ async function init() {
 
     window.SaiPokeTrainer = { applyTrainerStats, renderProfileXp }
 
+    if (guestPlayMode()) {
+        setInterval(() => touchGuestServerBackup(), 45000)
+        window.addEventListener("pagehide", touchGuestServerBackup)
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "hidden") touchGuestServerBackup()
+        })
+    }
+
     bindPinKeypad()
 
     document.getElementById("welcome-setup-btn")?.addEventListener("click", () => {
@@ -5047,6 +5119,7 @@ async function init() {
             session.profile_ready = true
             if (Number.isFinite(data.balance)) session.balance = data.balance
             if (Array.isArray(data.owned_skins)) session.owned_skins = data.owned_skins
+            touchGuestServerBackup()
             populateMenu()
             showScreen("menu")
             status.textContent = ""
@@ -5198,6 +5271,7 @@ const getCachedGuestProfileName = window.SaiPokePlay?.getCachedGuestProfileName
 const getCachedGuestProfileMeta = window.SaiPokePlay?.getCachedGuestProfileMeta
 const saveGuestServerBackup = window.SaiPokePlay?.saveGuestServerBackup
 const restoreGuestProfileFromVault = window.SaiPokePlay?.restoreGuestProfileFromVault
+const getGuestServerBackup = window.SaiPokePlay?.getGuestServerBackup
 
 window.SaiPokePlay = {
     hidePlayLanding,
@@ -5223,6 +5297,7 @@ window.SaiPokePlay = {
     getCachedGuestProfileMeta,
     saveGuestServerBackup,
     restoreGuestProfileFromVault,
+    getGuestServerBackup,
 }
 
 init().catch((error) => {

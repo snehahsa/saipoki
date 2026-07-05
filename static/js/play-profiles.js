@@ -2,6 +2,7 @@
     const WALLET_CHECK = Number(window.APP_CONFIG?.walletCheck ?? 1)
     const VAULT_KEY = "pokequest_profile_vault"
     const GUEST_ID_KEY = "pokequest_guest_id"
+    const GUEST_BACKUP_PREFIX = "pokequest_guest_server_backup:"
     const UNLOCK_KEY = "pokequest_vault_unlocked"
     const MAX_PROFILES = 8
 
@@ -157,6 +158,39 @@
         return backup
     }
 
+    function readStandaloneGuestBackup(guestId) {
+        if (!guestId) return null
+        try {
+            const raw = localStorage.getItem(`${GUEST_BACKUP_PREFIX}${guestId}`)
+            if (!raw) return null
+            const data = JSON.parse(raw)
+            return data && typeof data === "object" ? data : null
+        } catch {
+            return null
+        }
+    }
+
+    function writeStandaloneGuestBackup(guestId, backup) {
+        if (!guestId || !backup) return
+        try {
+            localStorage.setItem(`${GUEST_BACKUP_PREFIX}${guestId}`, JSON.stringify(backup))
+        } catch {
+            /* quota — vault copy may still exist */
+        }
+    }
+
+    function getGuestServerBackup(guestId) {
+        if (!guestId) return null
+        const standalone = readStandaloneGuestBackup(guestId)
+        const vaultCopy = getCachedGuestProfileMeta(guestId)?.serverBackup
+        if (standalone && vaultCopy) {
+            const standaloneSteps = standalone.quest_progress?.completed_steps?.length || 0
+            const vaultSteps = vaultCopy.quest_progress?.completed_steps?.length || 0
+            return standaloneSteps >= vaultSteps ? standalone : vaultCopy
+        }
+        return standalone || vaultCopy || null
+    }
+
     function backupHasProgress(backup) {
         if (!backup || typeof backup !== "object") return false
         if (backup.display_name && backup.skin) return true
@@ -165,6 +199,7 @@
             && backup.quest_progress.completed_steps.length) return true
         if (Array.isArray(backup.vault_detail) && backup.vault_detail.length) return true
         if (Array.isArray(backup.vault) && backup.vault.length) return true
+        if (Array.isArray(backup.gear_slots) && backup.gear_slots.some(Boolean)) return true
         if (Number(backup.balance) > 0) return true
         return false
     }
@@ -175,13 +210,13 @@
         if (!guestId) return
         const backup = sessionBackupFromAuth(data)
         if (!backup) return
+        writeStandaloneGuestBackup(guestId, backup)
         upsertProfileMeta(guestId, { serverBackup: backup })
     }
 
     async function restoreGuestProfileFromVault(guestId) {
         if (!guestProfilesEnabled() || !guestId) return false
-        const meta = getCachedGuestProfileMeta(guestId)
-        const backup = meta?.serverBackup
+        const backup = getGuestServerBackup(guestId)
         if (!backupHasProgress(backup)) return false
 
         try {
@@ -267,6 +302,7 @@
                 slot,
                 level: metaPatch.level ?? 0,
                 updatedAt: now,
+                ...metaPatch,
             })
         }
         writeVault(vault)
@@ -709,6 +745,7 @@
     window.SaiPokePlay.getCachedGuestProfileMeta = getCachedGuestProfileMeta
     window.SaiPokePlay.saveGuestServerBackup = saveGuestServerBackup
     window.SaiPokePlay.restoreGuestProfileFromVault = restoreGuestProfileFromVault
+    window.SaiPokePlay.getGuestServerBackup = getGuestServerBackup
     window.SaiPokePlay.guestProfilesEnabled = guestProfilesEnabled
 
     bindProfileUi()

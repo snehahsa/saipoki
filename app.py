@@ -696,6 +696,19 @@ def quest_is_unlocked(quest: dict, completed_steps: list) -> bool:
 
 init_db()
 
+from db.connection import get_db_path, is_postgres
+
+if is_postgres():
+    print("Database: PostgreSQL (persistent)", flush=True)
+else:
+    db_path = get_db_path()
+    persistent = str(db_path).startswith("/data/")
+    print(
+        f"Database: SQLite at {db_path}"
+        + (" (persistent volume)" if persistent else " (ephemeral — mount Railway volume at /data)"),
+        flush=True,
+    )
+
 
 def telegram_bot_username() -> str:
     return (os.getenv("TELEGRAM_BOT_USERNAME") or "FortifyAltCTRLFarmbot").lstrip("@")
@@ -1787,6 +1800,8 @@ def _guest_backup_has_progress(backup: dict) -> bool:
     if any(gear):
         return True
     if int(backup.get("balance") or 0) > 0:
+        return True
+    if int(backup.get("level") or 0) > 1:
         return True
     return False
 
