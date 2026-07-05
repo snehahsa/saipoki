@@ -1462,6 +1462,7 @@ def auth():
     else:
         display_name = display_name_from_user(user)
     username = user.get("username") or ""
+    display_name_raw = display_name
     now = int(time.time())
 
     with get_db() as conn:
@@ -1526,6 +1527,7 @@ def auth():
             is_test = request_is_test_mode(data)
             if is_test:
                 display_name = display_name_from_user(user)
+                display_name_raw = display_name
                 conn.execute(
                     """
                     UPDATE users
@@ -1544,6 +1546,7 @@ def auth():
                     (username, now, telegram_id),
                 )
                 display_name = row["display_name"]
+                display_name_raw = display_name
                 if is_guest and is_guest_placeholder_name(display_name):
                     display_name = ""
             skin = row["skin"]
@@ -1611,7 +1614,7 @@ def auth():
 
     profile_ready = False
     if is_guest:
-        profile_ready = guest_profile_ready(display_name, skin)
+        profile_ready = guest_profile_ready(display_name_raw, skin)
 
     return jsonify(
         {

@@ -674,14 +674,26 @@ function guestHasRealName(name) {
     return Boolean(text) && !isGuestPlaceholderName(text) && !looksLikeWalletName(text)
 }
 
+function guestHasEquippedSkin() {
+    if (!session) return false
+    if (session.has_skin) return true
+    const skin = String(session.skin || "").trim()
+    return Boolean(skin && SKINS.includes(skin))
+}
+
 function guestProfileReady() {
     if (!session) return false
-    if (session.profile_ready) return true
-    return Boolean(session.has_skin) && guestHasRealName(session.display_name)
+    return guestHasEquippedSkin() && guestHasRealName(session.display_name)
 }
 
 function guestNeedsProfileSetup() {
     return guestPlayMode() && !guestProfileReady()
+}
+
+function profileSetupComplete() {
+    if (!session) return false
+    if (guestPlayMode()) return guestProfileReady()
+    return Boolean(session.has_skin) || guestHasEquippedSkin()
 }
 
 function initSkinNameInput() {
@@ -732,6 +744,11 @@ function setSkinSetupStep(step) {
 }
 
 function openSkinSetupScreen() {
+    if (profileSetupComplete()) {
+        showScreen("menu")
+        startMenuStats()
+        return
+    }
     if (!pinUnlocked()) {
         openPinScreen(session?.has_pin ? "login" : "setup")
         return
@@ -3033,7 +3050,7 @@ function routeAfterAuth() {
         showScreen("welcome")
         return
     }
-    if (!session.has_skin) {
+    if (!profileSetupComplete()) {
         openSkinSetupScreen()
         return
     }
@@ -3081,7 +3098,7 @@ async function completePinEntry() {
             await verifyPin(pinBuffer)
             pinVerified = true
             clearPinStatus()
-            if (!session.has_skin) {
+            if (!profileSetupComplete()) {
                 openSkinSetupScreen()
             } else {
                 showScreen("menu")
@@ -3094,7 +3111,7 @@ async function completePinEntry() {
         session.has_pin = true
         pinVerified = true
         clearPinStatus()
-        if (!session.has_skin) {
+        if (!profileSetupComplete()) {
             openSkinSetupScreen()
         } else {
             showScreen("menu")
@@ -4699,8 +4716,11 @@ function applySessionFromAuth(data) {
         const cached = window.SaiPokePlay?.getCachedGuestProfileName?.(getActiveGuestId())
         if (cached) session.display_name = cached
     }
-    if (guestPlayMode() && session.profile_ready == null) {
+    if (guestPlayMode()) {
         session.profile_ready = guestProfileReady()
+        if (session.profile_ready) {
+            session.has_skin = true
+        }
     }
     window.SaiPokePlay?.syncGuestProfileMeta?.(data)
     window.SaiPokePlay?.syncWalletConnectedUi?.()
@@ -4761,11 +4781,15 @@ async function completeSessionBootstrap() {
             syncWelcomeCopy()
             showScreen("welcome")
         }
-    } else if (!guestPlayMode() && !session.has_skin) {
+    } else if (!guestPlayMode() && !profileSetupComplete()) {
         syncWelcomeCopy()
         showScreen("welcome")
     } else {
         session.skin = session.skin || sortedSkins[skinIndex]
+        if (guestPlayMode() && guestProfileReady()) {
+            session.has_skin = true
+            session.profile_ready = true
+        }
         routeAfterAuth()
     }
 
@@ -4937,6 +4961,10 @@ async function init() {
         handleEnterRealm()
     })
     document.getElementById("profile-btn").addEventListener("click", () => {
+        if (guestNeedsProfileSetup()) {
+            openSkinSetupScreen()
+            return
+        }
         renderProfileXp()
         renderProfileScreen()
         showScreen("profile")
@@ -4991,6 +5019,11 @@ async function init() {
 
             const data = await saveSkinOrPay(skin, session.display_name)
             session.skin = skin
+            session.has_skin = true
+            if (guestPlayMode()) {
+                session.profile_ready = guestProfileReady()
+                window.SaiPokePlay?.syncGuestProfileMeta?.(session)
+            }
             if (data.display_name) session.display_name = data.display_name
             if (Number.isFinite(data.balance)) session.balance = data.balance
             if (Array.isArray(data.owned_skins)) session.owned_skins = data.owned_skins
