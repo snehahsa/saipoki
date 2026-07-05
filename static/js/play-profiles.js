@@ -178,6 +178,16 @@
         writeVault(vault)
     }
 
+    function removeProfileFromVault(guestId) {
+        const vault = readVault()
+        if (!vault || !guestId) return false
+        const idx = vault.profiles.findIndex((p) => p.guestId === guestId)
+        if (idx < 0) return false
+        vault.profiles.splice(idx, 1)
+        writeVault(vault)
+        return true
+    }
+
     function showFlowPanel(panel) {
         flowEl?.classList.remove("hidden")
         landingActions?.classList.add("hidden")
@@ -321,15 +331,24 @@
             profileList.innerHTML = sorted.map((profile) => {
                 const label = profileLabel(profile)
                 const level = Number(profile.level) > 0 ? `Lv.${profile.level}` : ""
+                const guestIdEnc = encodeURIComponent(profile.guestId)
                 return (
-                    `<button type="button" class="play-btn play-btn--ghost play-profile-slot" `
-                    + `data-guest-id="${encodeURIComponent(profile.guestId)}">`
+                    `<div class="play-profile-row" role="listitem">`
+                    + `<button type="button" class="play-btn play-btn--ghost play-profile-slot" `
+                    + `data-guest-id="${guestIdEnc}">`
                     + `<span class="play-profile-slot-name">${escapeHtml(label)}</span>`
                     + `<span class="play-profile-slot-meta">${escapeHtml(level)}</span>`
                     + `</button>`
+                    + `<button type="button" class="play-profile-delete" data-guest-id="${guestIdEnc}" `
+                    + `aria-label="Delete ${escapeHtml(label)}" title="Delete profile">×</button>`
+                    + `</div>`
                 )
             }).join("")
         }
+
+        profileList.querySelectorAll(".play-profile-delete").forEach((btn) => {
+            btn.disabled = flowBusy
+        })
 
         const addBtn = document.getElementById("play-profile-add-btn")
         if (addBtn) {
@@ -396,6 +415,49 @@
         })
         writeVault(vault)
         void bootSelectedProfile(guestId)
+    }
+
+    async function deleteProfile(guestId) {
+        if (!guestId || flowBusy) return
+        const vault = readVault()
+        if (!vault || !isVaultUnlocked(vault)) return
+
+        const profile = vault.profiles.find((p) => p.guestId === guestId)
+        const label = profile ? profileLabel(profile) : "this trainer"
+        if (!window.confirm(`Delete ${label}? Saved progress will be removed from the cloud.`)) {
+            return
+        }
+
+        flowBusy = true
+        if (profileStatus) {
+            profileStatus.textContent = "Deleting trainer…"
+            profileStatus.classList.remove("is-error")
+        }
+
+        try {
+            const response = await fetch("/api/guest/profiles/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ guestId }),
+            })
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "Could not delete trainer.")
+            }
+
+            removeProfileFromVault(guestId)
+            if (localStorage.getItem(GUEST_ID_KEY) === guestId) {
+                localStorage.removeItem(GUEST_ID_KEY)
+            }
+            await renderProfilePicker()
+        } catch (error) {
+            if (profileStatus) {
+                profileStatus.textContent = error?.message || "Could not delete trainer."
+                profileStatus.classList.add("is-error")
+            }
+        } finally {
+            flowBusy = false
+        }
     }
 
     function openGuestProfileFlow() {
@@ -482,6 +544,12 @@
         })
 
         profileList?.addEventListener("click", (event) => {
+            const deleteBtn = event.target.closest(".play-profile-delete")
+            if (deleteBtn?.dataset.guestId) {
+                event.preventDefault()
+                void deleteProfile(decodeURIComponent(deleteBtn.dataset.guestId))
+                return
+            }
             const btn = event.target.closest(".play-profile-slot")
             if (!btn?.dataset.guestId) return
             void bootSelectedProfile(decodeURIComponent(btn.dataset.guestId))

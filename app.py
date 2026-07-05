@@ -1707,6 +1707,44 @@ def guest_profiles_lookup():
     return jsonify({"success": True, "profiles": profiles})
 
 
+@app.route("/api/guest/profiles/delete", methods=["POST"])
+def guest_profile_delete():
+    """Remove a guest trainer from the cloud (non-wallet play only)."""
+    if wallet_payments_enabled():
+        return wallet_payments_disabled_response()
+
+    data = request.get_json(silent=True) or {}
+    guest_id = str(data.get("guestId") or "").strip()
+    if not is_guest_user_id(guest_id):
+        return jsonify({"success": False, "error": "Invalid guest profile."}), 400
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM users WHERE telegram_id = ?",
+            (guest_id,),
+        ).fetchone()
+        if row is not None:
+            conn.execute("DELETE FROM users WHERE telegram_id = ?", (guest_id,))
+            conn.execute(
+                "DELETE FROM friend_requests WHERE from_id = ? OR to_id = ?",
+                (guest_id, guest_id),
+            )
+            conn.execute(
+                "DELETE FROM friendships WHERE user_low = ? OR user_high = ?",
+                (guest_id, guest_id),
+            )
+            conn.execute(
+                "DELETE FROM poketab_messages WHERE from_id = ? OR to_id = ?",
+                (guest_id, guest_id),
+            )
+            conn.execute(
+                "DELETE FROM poketab_user_state WHERE user_id = ?",
+                (guest_id,),
+            )
+
+    return jsonify({"success": True, "guestId": guest_id})
+
+
 @app.route("/api/pin/set", methods=["POST"])
 def set_pin():
     telegram_id, err = _auth_user_from_request()
