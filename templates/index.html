@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="format-detection" content="telephone=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>{% if play_mode %}PokeQuest — Play Now{% else %}SaiPoke Realm{% endif %}</title>
+    <title>{% if play_mode %}Pokequest-cards — Play Now{% else %}Pokequest-cards{% endif %}</title>
     <link rel="icon" href="/static/imgs/favicon.png?v={{ asset_v.favicon }}" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/static/imgs/apple-touch-icon.png?v={{ asset_v.favicon }}">
     <link rel="preload" href="/fonts/silkscreen.ttf" as="font" type="font/ttf" crossorigin>
@@ -132,12 +132,12 @@
 </div>
 {% endif %}
 
-<section id="play-landing" aria-label="Enter PokeQuest">
+<section id="play-landing" aria-label="Enter Pokequest-cards">
     <div class="play-landing-inner">
         <img
             class="play-logo"
             src="/static/imgs/titles.png?v={{ asset_v.titles }}"
-            alt="PokeQuest"
+            alt="Pokequest-cards"
             width="280"
             height="101"
             decoding="async"
@@ -191,6 +191,18 @@
                 <button type="button" class="play-btn play-btn--primary" id="play-profile-add-btn">+ Add new profile</button>
                 <p class="play-profile-status" id="play-profile-status" aria-live="polite"></p>
                 <button type="button" class="play-btn play-btn--ghost play-profile-back" id="play-profile-back">Back</button>
+            </div>
+        </div>
+
+        <div id="play-profile-confirm" class="play-profile-confirm hidden" role="dialog" aria-modal="true" aria-labelledby="play-profile-confirm-title">
+            <div class="play-profile-confirm-panel">
+                <p class="play-profile-confirm-title" id="play-profile-confirm-title">Delete trainer?</p>
+                <p class="play-profile-confirm-body" id="play-profile-confirm-body"></p>
+                <p class="play-profile-confirm-warn">Saved progress will be removed from the cloud.</p>
+                <div class="play-profile-confirm-actions">
+                    <button type="button" class="play-btn play-btn--ghost" id="play-profile-confirm-cancel">Cancel</button>
+                    <button type="button" class="play-btn play-btn--danger" id="play-profile-confirm-delete">Delete</button>
+                </div>
             </div>
         </div>
     </div>

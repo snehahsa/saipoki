@@ -9,10 +9,13 @@
     let passcodeMode = "unlock" // unlock | create | confirm
     let pendingCreateHash = ""
     let flowBusy = false
+    let confirmResolver = null
 
     const flowEl = document.getElementById("play-profile-flow")
     const gateEl = document.getElementById("play-passcode-gate")
     const pickerEl = document.getElementById("play-profile-picker")
+    const confirmEl = document.getElementById("play-profile-confirm")
+    const confirmBodyEl = document.getElementById("play-profile-confirm-body")
     const landingActions = document.querySelector(".play-actions")
     const passcodeTitle = document.getElementById("play-passcode-title")
     const passcodeSubtitle = document.getElementById("play-passcode-subtitle")
@@ -366,6 +369,27 @@
             .replace(/"/g, "&quot;")
     }
 
+    function closeDeleteConfirm(result) {
+        confirmEl?.classList.add("hidden")
+        if (confirmResolver) {
+            confirmResolver(Boolean(result))
+            confirmResolver = null
+        }
+    }
+
+    function showDeleteConfirm(label) {
+        return new Promise((resolve) => {
+            if (!confirmEl || !confirmBodyEl) {
+                resolve(false)
+                return
+            }
+            confirmResolver = resolve
+            confirmBodyEl.innerHTML = `Remove <strong>${escapeHtml(label)}</strong> from this device?`
+            confirmEl.classList.remove("hidden")
+            document.getElementById("play-profile-confirm-delete")?.focus()
+        })
+    }
+
     async function bootSelectedProfile(guestId) {
         if (!guestId || flowBusy) return
         flowBusy = true
@@ -424,9 +448,8 @@
 
         const profile = vault.profiles.find((p) => p.guestId === guestId)
         const label = profile ? profileLabel(profile) : "this trainer"
-        if (!window.confirm(`Delete ${label}? Saved progress will be removed from the cloud.`)) {
-            return
-        }
+        const confirmed = await showDeleteConfirm(label)
+        if (!confirmed) return
 
         flowBusy = true
         if (profileStatus) {
@@ -541,6 +564,18 @@
 
         document.getElementById("play-profile-add-btn")?.addEventListener("click", () => {
             if (!flowBusy) addNewProfile()
+        })
+
+        document.getElementById("play-profile-confirm-cancel")?.addEventListener("click", () => {
+            closeDeleteConfirm(false)
+        })
+
+        document.getElementById("play-profile-confirm-delete")?.addEventListener("click", () => {
+            closeDeleteConfirm(true)
+        })
+
+        confirmEl?.addEventListener("click", (event) => {
+            if (event.target === confirmEl) closeDeleteConfirm(false)
         })
 
         profileList?.addEventListener("click", (event) => {
