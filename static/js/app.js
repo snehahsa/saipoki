@@ -657,11 +657,38 @@ function looksLikeWalletName(name) {
     return false
 }
 
+function isGuestPlaceholderName(name) {
+    const text = String(name || "").trim()
+    if (!text) return true
+    if (/^guest:/i.test(text)) return true
+    if (/^player guest:/i.test(text)) return true
+    if (/^[a-f0-9]{4}…[a-f0-9]{4}$/i.test(text)) return true
+    if (/^[a-f0-9]{4}\u2026[a-f0-9]{4}$/i.test(text)) return true
+    if (/^new trainer(\s+\d+)?$/i.test(text)) return true
+    if (/^saved trainer$/i.test(text)) return true
+    return false
+}
+
+function guestHasRealName(name) {
+    const text = String(name || "").trim()
+    return Boolean(text) && !isGuestPlaceholderName(text) && !looksLikeWalletName(text)
+}
+
+function guestProfileReady() {
+    if (!session) return false
+    if (session.profile_ready) return true
+    return Boolean(session.has_skin) && guestHasRealName(session.display_name)
+}
+
+function guestNeedsProfileSetup() {
+    return guestPlayMode() && !guestProfileReady()
+}
+
 function initSkinNameInput() {
     const input = document.getElementById("skin-player-name-input")
     if (!input || !session) return
     let name = session.display_name || ""
-    if (!session.has_skin || looksLikeWalletName(name)) {
+    if (!guestHasRealName(name)) {
         name = ""
     }
     input.value = name
@@ -710,7 +737,11 @@ function openSkinSetupScreen() {
         return
     }
     initSkinNameInput()
-    setSkinSetupStep("name")
+    if (guestPlayMode() && guestHasRealName(session?.display_name)) {
+        setSkinSetupStep("picker")
+    } else {
+        setSkinSetupStep("name")
+    }
     showScreen("skin")
 }
 
@@ -2979,9 +3010,15 @@ function pinUnlocked() {
 
 function routeAfterAuth() {
     if (guestPlayMode()) {
-        if (!session.has_skin) {
-            syncWelcomeCopy()
-            showScreen("welcome")
+        if (guestNeedsProfileSetup()) {
+            if (session.has_skin && !guestHasRealName(session.display_name)) {
+                openSkinSetupScreen()
+            } else if (guestHasRealName(session.display_name) && !session.has_skin) {
+                openSkinSetupScreen()
+            } else {
+                syncWelcomeCopy()
+                showScreen("welcome")
+            }
             return
         }
         showScreen("menu")
@@ -4647,6 +4684,13 @@ function applySessionFromAuth(data) {
     syncWalletEconomyLabels()
     syncGameHudDepositUi()
     syncProfileKinsDepositUi()
+    if (guestPlayMode() && !guestHasRealName(session.display_name)) {
+        const cached = window.SaiPokePlay?.getCachedGuestProfileName?.(getActiveGuestId())
+        if (cached) session.display_name = cached
+    }
+    if (guestPlayMode() && session.profile_ready == null) {
+        session.profile_ready = guestProfileReady()
+    }
     window.SaiPokePlay?.syncGuestProfileMeta?.(data)
     window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
@@ -4697,7 +4741,16 @@ async function completeSessionBootstrap() {
     hidePlayLanding()
     pinVerified = guestPlayMode()
 
-    if (!session.has_skin) {
+    if (guestPlayMode() && guestNeedsProfileSetup()) {
+        if (session.has_skin && !guestHasRealName(session.display_name)) {
+            openSkinSetupScreen()
+        } else if (guestHasRealName(session.display_name) && !session.has_skin) {
+            openSkinSetupScreen()
+        } else {
+            syncWelcomeCopy()
+            showScreen("welcome")
+        }
+    } else if (!guestPlayMode() && !session.has_skin) {
         syncWelcomeCopy()
         showScreen("welcome")
     } else {
@@ -4857,6 +4910,7 @@ async function init() {
             session.display_name = data.display_name || displayName
             window.SaiPokePlay?.syncGuestProfileMeta?.(session)
             session.has_skin = true
+            session.profile_ready = true
             if (Number.isFinite(data.balance)) session.balance = data.balance
             if (Array.isArray(data.owned_skins)) session.owned_skins = data.owned_skins
             populateMenu()
@@ -4991,6 +5045,7 @@ const playDisconnectWallet = window.SaiPokePlay?.disconnectWallet
 const openGuestProfileFlow = window.SaiPokePlay?.openGuestProfileFlow
 const closeGuestProfileFlow = window.SaiPokePlay?.closeGuestProfileFlow
 const syncGuestProfileMeta = window.SaiPokePlay?.syncGuestProfileMeta
+const getCachedGuestProfileName = window.SaiPokePlay?.getCachedGuestProfileName
 
 window.SaiPokePlay = {
     hidePlayLanding,
@@ -5012,6 +5067,7 @@ window.SaiPokePlay = {
     openGuestProfileFlow,
     closeGuestProfileFlow,
     syncGuestProfileMeta,
+    getCachedGuestProfileName,
 }
 
 init().catch((error) => {

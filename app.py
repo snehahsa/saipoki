@@ -53,6 +53,7 @@ from wallet_auth import (
     SOLANA_RPC_URL,
     WALLET_CHECK,
     create_wallet_challenge,
+    guest_profile_ready,
     is_guest_user_id,
     is_guest_placeholder_name,
     issue_wallet_session,
@@ -1608,6 +1609,10 @@ def auth():
         else None
     )
 
+    profile_ready = False
+    if is_guest:
+        profile_ready = guest_profile_ready(display_name, skin)
+
     return jsonify(
         {
             "success": True,
@@ -1616,6 +1621,7 @@ def auth():
             "username": username,
             "skin": skin,
             "has_skin": skin is not None,
+            "profile_ready": profile_ready,
             "badges": badges,
             "holds": holds,
             "gear_slots": gear_slots,
@@ -1678,6 +1684,7 @@ def guest_profiles_lookup():
                         "display_name": "",
                         "level": 0,
                         "has_skin": False,
+                        "profile_ready": False,
                     }
                 )
                 continue
@@ -1686,12 +1693,14 @@ def guest_profiles_lookup():
             name = str(row["display_name"] or "").strip()
             if is_guest_placeholder_name(name):
                 name = ""
+            ready = guest_profile_ready(row["display_name"], skin)
             profiles.append(
                 {
                     "guestId": guest_id,
                     "display_name": name,
                     "level": int(stats.get("level") or 0),
                     "has_skin": skin is not None,
+                    "profile_ready": ready,
                 }
             )
 
@@ -2928,7 +2937,7 @@ def proxy_health():
                 "ok": False,
                 "players": 0,
                 "maxPlayers": 50,
-                "world": "SaiPoke Realm",
+                "world": "Pokequest-cards",
                 "rooms": 0,
                 "gameServer": "unavailable",
             }

@@ -126,7 +126,21 @@ def is_guest_placeholder_name(name: str) -> bool:
         return True
     if re.match(r"^[a-f0-9]{4}…[a-f0-9]{4}$", text, re.IGNORECASE):
         return True
+    if re.match(r"^[a-f0-9]{4}\u2026[a-f0-9]{4}$", text, re.IGNORECASE):
+        return True
+    if re.match(r"^new trainer(\s+\d+)?$", text, re.IGNORECASE):
+        return True
+    if text.lower() == "saved trainer":
+        return True
     return False
+
+
+def guest_profile_ready(display_name: str | None, skin: str | None) -> bool:
+    """Guest trainer finished name + avatar setup."""
+    if not skin:
+        return False
+    name = str(display_name or "").strip()
+    return bool(name) and not is_guest_placeholder_name(name)
 
 
 def resolve_guest_user(data: Optional[dict] = None) -> Optional[dict[str, Any]]:

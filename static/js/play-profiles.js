@@ -97,6 +97,8 @@
         if (/^player guest:/i.test(text)) return true
         if (/^[a-f0-9]{4}…[a-f0-9]{4}$/i.test(text)) return true
         if (/^[a-f0-9]{4}\u2026[a-f0-9]{4}$/i.test(text)) return true
+        if (/^new trainer(\s+\d+)?$/i.test(text)) return true
+        if (/^saved trainer$/i.test(text)) return true
         return false
     }
 
@@ -126,7 +128,11 @@
                 const guestId = String(row.guestId || "").trim()
                 if (!guestId) continue
                 const displayName = String(row.display_name || "").trim()
-                const patch = { level: Number(row.level) || 0 }
+                const patch = {
+                    level: Number(row.level) || 0,
+                    has_skin: Boolean(row.has_skin),
+                    profile_ready: Boolean(row.profile_ready),
+                }
                 if (displayName && !isPlaceholderGuestName(displayName)) {
                     patch.name = displayName
                 }
@@ -411,6 +417,14 @@
         configurePasscodeGate("unlock")
     }
 
+    function getCachedProfileName(guestId) {
+        const vault = readVault()
+        if (!vault || !guestId) return ""
+        const profile = vault.profiles.find((p) => p.guestId === guestId)
+        const name = String(profile?.name || "").trim()
+        return name && !isPlaceholderGuestName(name) ? name : ""
+    }
+
     function syncGuestProfileMeta(data) {
         if (!guestProfilesEnabled()) return
         const guestId = localStorage.getItem(GUEST_ID_KEY)
@@ -418,7 +432,11 @@
 
         const name = String(data.display_name || "").trim()
         const level = Number(data.level ?? data.trainer_stats?.level ?? 0)
-        const patch = { level }
+        const patch = {
+            level,
+            has_skin: Boolean(data.has_skin),
+            profile_ready: Boolean(data.profile_ready),
+        }
         if (name && !isPlaceholderGuestName(name)) {
             patch.name = name
         }
@@ -474,6 +492,7 @@
     window.SaiPokePlay.openGuestProfileFlow = openGuestProfileFlow
     window.SaiPokePlay.closeGuestProfileFlow = closeGuestProfileFlow
     window.SaiPokePlay.syncGuestProfileMeta = syncGuestProfileMeta
+    window.SaiPokePlay.getCachedGuestProfileName = getCachedProfileName
     window.SaiPokePlay.guestProfilesEnabled = guestProfilesEnabled
 
     bindProfileUi()
