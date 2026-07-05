@@ -7,8 +7,8 @@ import { server } from '@/utils/backend/server'
 import { defaultSkin, skins } from '@/utils/pixi/Player/skins'
 import signal from '@/utils/signal'
 import { directionToward, shouldTurnToFace } from './npcNotice'
-import { getGearAttachForFacing, getGearItem, isGearVisibleForFacing, loadGearTexture } from './gearCatalog'
-import { placeGearToolOnCharacter, resolveGearAttachRect } from './gearOverlay'
+import { getGearAttachForFacing, getGearItem, isGearVisibleForFacing, loadGearCatalog, loadGearTexture } from './gearCatalog'
+import { gearTexturePixelSize, placeGearToolOnCharacter, resolveGearAttachRect } from './gearOverlay'
 import {
     LABEL_SCALE_LEVEL,
     LABEL_SCALE_NAME,
@@ -456,14 +456,16 @@ export class Player {
 
     public async setEquippedGear(gearId: string | null) {
         this.equippedGearId = gearId
+        if (gearId) {
+            await loadGearCatalog(true)
+        }
         await this.updateGearOverlay()
     }
 
     private ensureToolSpriteOnStage() {
         if (!this.toolSprite || !this.animatedSprite) return
-        if (this.toolSprite.parent === this.parent) return
-        const bodyIndex = this.parent.getChildIndex(this.animatedSprite)
-        this.parent.addChildAt(this.toolSprite, bodyIndex + 1)
+        if (this.toolSprite.parent === this.animatedSprite) return
+        this.animatedSprite.addChild(this.toolSprite)
     }
 
     private async updateGearOverlay() {
@@ -498,18 +500,22 @@ export class Player {
             this.toolSprite.texture = texture
         }
 
+        // Feet anchor — must match map-builder 48×48 frame origin (top-left at -24,-48).
+        this.animatedSprite.anchor.set(0.5, 1)
+
         this.ensureToolSpriteOnStage()
 
+        const texSize = gearTexturePixelSize(texture)
         const frame = {
-            w: spriteMeta.w ?? texture.width,
-            h: spriteMeta.h ?? texture.height,
+            w: spriteMeta.w ?? texSize.w,
+            h: spriteMeta.h ?? texSize.h,
         }
         const rect = resolveGearAttachRect(this.direction, spriteMeta, frame)
         placeGearToolOnCharacter(
             this.toolSprite,
             this.animatedSprite,
-            texture.width,
-            texture.height,
+            texSize.w,
+            texSize.h,
             rect
         )
         this.toolSprite.visible = true

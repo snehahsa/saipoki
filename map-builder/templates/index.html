@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SaiPoke Map Builder</title>
+    <title>Pokequest-cards Quest Builder</title>
     <link rel="stylesheet" href="/static/builder.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
             <div class="brand">
                 <span class="brand-icon">🗺</span>
                 <div>
-                    <div class="brand-title">SaiPoke Map Builder</div>
+                    <div class="brand-title">Pokequest-cards Quest Builder</div>
                     <div class="brand-sub">Drag sprites onto the grid · saves to game world</div>
                 </div>
             </div>
@@ -108,7 +108,7 @@
 
                 <label class="field">
                     <span>Map name</span>
-                    <input type="text" id="room-name" maxlength="32" value="SaiPoke Realm">
+                    <input type="text" id="room-name" maxlength="32" value="Pokequest-cards">
                 </label>
 
                 <div class="panel-subhead">Maps (rooms)</div>
@@ -468,6 +468,10 @@
                     <aside class="animal-frame-sidebar">
                         <div class="panel-subhead">Attach values</div>
                         <p class="prop-meta" id="gear-attach-active-view">Editing: left</p>
+                        <label class="field">
+                            <span>Preview skin</span>
+                            <select id="gear-attach-char-skin"></select>
+                        </label>
                         <label class="audit-toggle gear-eligible-toggle">
                             <input type="checkbox" id="gear-face-eligible">
                             Use eligible on this view

@@ -1,5 +1,5 @@
 const TILE = 32
-const DEFAULT_ROOM_NAME = "SaiPoke Realm"
+const DEFAULT_ROOM_NAME = "Pokequest-cards"
 const ROOM_NAME_MAX_LENGTH = 32
 
 function roomIdForIndex(index) {
@@ -2375,7 +2375,18 @@ function readGearFaceInputsToState() {
     editor.faces[editor.direction] = face
 }
 
+function renderGearAttachCharSkinSelect() {
+    const select = document.getElementById("gear-attach-char-skin")
+    if (!select) return
+    const skins = state.characterSkins.length ? state.characterSkins : ["009"]
+    const current = state.gearAttachEditor.charSkin || skins[0]
+    select.innerHTML = skins.map((skin) => `
+        <option value="${escapeAttr(skin)}" ${skin === current ? "selected" : ""}>${escapeHtml(skin)}</option>
+    `).join("")
+}
+
 function renderGearAttachSidebar() {
+    renderGearAttachCharSkinSelect()
     syncGearFaceInputsFromState()
 }
 
@@ -2663,6 +2674,19 @@ function bindGearAttachEditor() {
         openGearAttachEditor(btn.dataset.editGearItem)
     })
 
+    document.getElementById("gear-attach-char-skin")?.addEventListener("change", async (e) => {
+        const skin = e.target.value
+        if (!skin || !state.gearAttachEditor.open) return
+        state.gearAttachEditor.charSkin = skin
+        try {
+            await loadGearAttachImages(state.gearAttachEditor.item)
+            renderGearAttachViewsGrid()
+            drawGearAttachCanvas()
+        } catch (err) {
+            showToast(err.message || "Could not load character skin", true)
+        }
+    })
+
     document.getElementById("btn-gear-attach-close")?.addEventListener("click", closeGearAttachEditor)
     document.getElementById("btn-gear-attach-save")?.addEventListener("click", () => {
         saveGearAttachEditor()
@@ -2719,7 +2743,7 @@ function bindGearAttachEditor() {
 
         readGearFaceInputsToState()
         const layout = editor.canvasLayout || computeGearAttachCanvasLayout()
-        const point = canvasPointFromEvent(e, layout)
+        const point = gearAttachCanvasPointFromEvent(e)
         const attach = currentGearFace()
         const rect = attach.rect
         const toolBox = gearToolDrawRect(layout, rect)
@@ -2756,7 +2780,7 @@ function bindGearAttachEditor() {
         if (!editor.open) return
 
         const layout = editor.canvasLayout || computeGearAttachCanvasLayout()
-        const point = canvasPointFromEvent(e, layout)
+        const point = gearAttachCanvasPointFromEvent(e)
         const attach = currentGearFace()
         const rect = attach.rect
         const toolBox = gearToolDrawRect(layout, rect)
@@ -5106,6 +5130,16 @@ function hitFrameHandle(point, rect, layout) {
         }
     }
     return null
+}
+
+function gearAttachCanvasPointFromEvent(e) {
+    const canvas = document.getElementById("gear-attach-canvas")
+    const rect = canvas?.getBoundingClientRect()
+    if (!rect) return { x: 0, y: 0 }
+    return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+    }
 }
 
 function canvasPointFromEvent(e, layout) {

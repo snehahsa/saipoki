@@ -1,3 +1,5 @@
+import type { Bounds, Container } from 'pixi.js'
+
 /** Character frame size in game pixels — matches map-builder GEAR_CHAR_FRAME_PX / idle frame. */
 export const GEAR_CHAR_FRAME_PX = 48
 
@@ -22,18 +24,37 @@ export type GearOverlayFrame = {
     h: number
 }
 
-type GearBodySprite = {
+type GearBodySprite = Container & {
     x: number
     y: number
     scale: { x: number; y: number }
     anchor: { x: number; y: number }
 }
 
+/** Crop size in pixels — use frame, not full source sheet dimensions. */
+export function gearTexturePixelSize(texture: {
+    width: number
+    height: number
+    frame?: { width: number; height: number }
+}): { w: number; h: number } {
+    return {
+        w: Math.max(1, texture.frame?.width ?? texture.width),
+        h: Math.max(1, texture.frame?.height ?? texture.height),
+    }
+}
+
 /**
- * Top-left of the 48×48 character frame in parent-local space.
- * Map-builder draws the idle frame at (0,0); game sprites may use spritesheet anchor (0.5, 1).
+ * Top-left of the 48×48 character frame in the body's local space.
+ * Prefer PIXI local bounds (matches rendered sprite); fall back to anchor math.
  */
 export function characterFrameTopLeft(body: GearBodySprite): { x: number; y: number } {
+    if (typeof body.getLocalBounds === 'function') {
+        const bounds: Bounds = body.getLocalBounds(true)
+        if (bounds.width > 0 && bounds.height > 0) {
+            return { x: bounds.x, y: bounds.y }
+        }
+    }
+
     const sx = Math.abs(body.scale.x) || 1
     const sy = Math.abs(body.scale.y) || 1
     const frameW = GEAR_CHAR_FRAME_PX * sx
@@ -112,9 +133,7 @@ export function placeGearToolOnCharacter(
     tool.anchor.set(0, 0)
     tool.x = origin.x + rect.x
     tool.y = origin.y + rect.y
-    const tw = Math.max(1, textureWidth)
-    const th = Math.max(1, textureHeight)
-    tool.scale.set(rect.w / tw, rect.h / th)
+    tool.scale.set(rect.w / Math.max(1, textureWidth), rect.h / Math.max(1, textureHeight))
 }
 
 /** @deprecated Use placeGearToolOnCharacter */
