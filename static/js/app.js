@@ -4807,7 +4807,8 @@ function applySessionFromAuth(data) {
     syncGameHudDepositUi()
     syncProfileKinsDepositUi()
     finalizeGuestSessionFromAuth(data)
-    window.SaiPokePlay?.syncGuestProfileMeta?.(data)
+    window.SaiPokePlay?.syncGuestProfileMeta?.(session)
+    window.SaiPokePlay?.saveGuestServerBackup?.(session)
     window.SaiPokePlay?.syncWalletConnectedUi?.()
 }
 
@@ -4839,10 +4840,28 @@ function onWalletDisconnect() {
 }
 
 async function completeSessionBootstrap() {
-    const data = await authenticate()
+    let data = await authenticate()
     if (!data) return false
 
     applySessionFromAuth(data)
+
+    if (guestPlayMode()) {
+        const guestId = getActiveGuestId()
+        const meta = window.SaiPokePlay?.getCachedGuestProfileMeta?.(guestId)
+        const serverHasProgress = Boolean(
+            session.profile_ready
+            || (session.quest_progress?.completed_steps?.length)
+            || (session.holds?.length)
+            || (session.vault?.length)
+        )
+        if (guestId && !serverHasProgress && meta?.serverBackup) {
+            const restored = await window.SaiPokePlay?.restoreGuestProfileFromVault?.(guestId)
+            if (restored) {
+                data = await authenticate()
+                if (data) applySessionFromAuth(data)
+            }
+        }
+    }
 
     if (playSpectatorMode) {
         setGameLoading("ENTERING REALM")
@@ -5177,6 +5196,8 @@ const closeGuestProfileFlow = window.SaiPokePlay?.closeGuestProfileFlow
 const syncGuestProfileMeta = window.SaiPokePlay?.syncGuestProfileMeta
 const getCachedGuestProfileName = window.SaiPokePlay?.getCachedGuestProfileName
 const getCachedGuestProfileMeta = window.SaiPokePlay?.getCachedGuestProfileMeta
+const saveGuestServerBackup = window.SaiPokePlay?.saveGuestServerBackup
+const restoreGuestProfileFromVault = window.SaiPokePlay?.restoreGuestProfileFromVault
 
 window.SaiPokePlay = {
     hidePlayLanding,
@@ -5200,6 +5221,8 @@ window.SaiPokePlay = {
     syncGuestProfileMeta,
     getCachedGuestProfileName,
     getCachedGuestProfileMeta,
+    saveGuestServerBackup,
+    restoreGuestProfileFromVault,
 }
 
 init().catch((error) => {

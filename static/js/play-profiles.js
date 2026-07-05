@@ -113,6 +113,91 @@
         return "New Trainer"
     }
 
+    function serverProfilePatchFromRow(row) {
+        const patch = {}
+        const level = Number(row.level) || 0
+        if (level > 0) patch.level = level
+
+        if (row.has_skin) patch.has_skin = true
+        if (row.profile_ready) patch.profile_ready = true
+
+        const skin = String(row.skin || "").trim()
+        if (skin) patch.skin = skin
+
+        const displayName = String(row.display_name || "").trim()
+        if (displayName && !isPlaceholderGuestName(displayName)) {
+            patch.name = displayName
+        }
+        return patch
+    }
+
+    function sessionBackupFromAuth(data) {
+        if (!data || typeof data !== "object") return null
+        const name = String(data.display_name || "").trim()
+        const skin = String(data.skin || "").trim()
+        const backup = {
+            savedAt: Date.now(),
+            display_name: name && !isPlaceholderGuestName(name) ? name : "",
+            skin: skin || "",
+            balance: Number(data.balance) || 0,
+            holds: Array.isArray(data.holds) ? data.holds : [],
+            gear_slots: Array.isArray(data.gear_slots) ? data.gear_slots : [],
+            quest_progress: data.quest_progress || { completed_steps: [], removed_quests: [] },
+            vault: Array.isArray(data.vault) ? data.vault : [],
+            vault_detail: Array.isArray(data.vault_detail) ? data.vault_detail : [],
+            owned_skins: Array.isArray(data.owned_skins) ? data.owned_skins : [],
+            vending_spins: Number(data.vending_spins) || 0,
+            level: Number(data.level ?? data.trainer_stats?.level) || 0,
+        }
+        if (!backup.display_name && !backup.skin && !backup.holds.length
+            && !backup.quest_progress?.completed_steps?.length
+            && !backup.vault.length && !backup.vault_detail.length) {
+            return null
+        }
+        return backup
+    }
+
+    function backupHasProgress(backup) {
+        if (!backup || typeof backup !== "object") return false
+        if (backup.display_name && backup.skin) return true
+        if (Array.isArray(backup.holds) && backup.holds.length) return true
+        if (Array.isArray(backup.quest_progress?.completed_steps)
+            && backup.quest_progress.completed_steps.length) return true
+        if (Array.isArray(backup.vault_detail) && backup.vault_detail.length) return true
+        if (Array.isArray(backup.vault) && backup.vault.length) return true
+        if (Number(backup.balance) > 0) return true
+        return false
+    }
+
+    function saveGuestServerBackup(data) {
+        if (!guestProfilesEnabled()) return
+        const guestId = localStorage.getItem(GUEST_ID_KEY)
+        if (!guestId) return
+        const backup = sessionBackupFromAuth(data)
+        if (!backup) return
+        upsertProfileMeta(guestId, { serverBackup: backup })
+    }
+
+    async function restoreGuestProfileFromVault(guestId) {
+        if (!guestProfilesEnabled() || !guestId) return false
+        const meta = getCachedGuestProfileMeta(guestId)
+        const backup = meta?.serverBackup
+        if (!backupHasProgress(backup)) return false
+
+        try {
+            const response = await fetch("/api/guest/restore", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                cache: "no-store",
+                body: JSON.stringify({ guestId, backup }),
+            })
+            const data = await response.json()
+            return Boolean(response.ok && data.success && data.restored)
+        } catch {
+            return false
+        }
+    }
+
     async function refreshProfileNamesFromServer(profiles) {
         const guestIds = profiles.map((p) => p.guestId).filter(Boolean)
         if (!guestIds.length) return
@@ -130,18 +215,7 @@
             for (const row of data.profiles) {
                 const guestId = String(row.guestId || "").trim()
                 if (!guestId) continue
-                const displayName = String(row.display_name || "").trim()
-                const patch = {
-                    level: Number(row.level) || 0,
-                    has_skin: Boolean(row.has_skin),
-                    profile_ready: Boolean(row.profile_ready),
-                }
-                const skin = String(row.skin || "").trim()
-                if (skin) patch.skin = skin
-                if (displayName && !isPlaceholderGuestName(displayName)) {
-                    patch.name = displayName
-                }
-                upsertProfileMeta(guestId, patch)
+                upsertProfileMeta(guestId, serverProfilePatchFromRow(row))
             }
         } catch {
             /* picker still works from cached names */
@@ -162,6 +236,21 @@
             const next = { ...prev, ...metaPatch, guestId, updatedAt: now }
             if (metaPatch.name !== undefined && isPlaceholderGuestName(metaPatch.name)) {
                 next.name = prev.name
+            }
+            if (prev.has_skin && metaPatch.has_skin === false) {
+                next.has_skin = true
+            }
+            if (prev.profile_ready && metaPatch.profile_ready === false) {
+                next.profile_ready = true
+            }
+            if (prev.serverBackup && !metaPatch.serverBackup) {
+                next.serverBackup = prev.serverBackup
+            } else if (metaPatch.serverBackup && prev.serverBackup) {
+                const prevSteps = prev.serverBackup?.quest_progress?.completed_steps?.length || 0
+                const nextSteps = metaPatch.serverBackup?.quest_progress?.completed_steps?.length || 0
+                if (prevSteps > nextSteps) {
+                    next.serverBackup = prev.serverBackup
+                }
             }
             if (!next.slot) {
                 next.slot = Number(prev.slot) > 0 ? prev.slot : idx + 1
@@ -406,7 +495,6 @@
 
         setActiveGuestId(guestId)
         await refreshProfileNamesFromServer([{ guestId }])
-        upsertProfileMeta(guestId, { level: 0 })
 
         try {
             const ok = await window.SaiPokePlay?.bootAfterWallet?.()
@@ -526,6 +614,7 @@
             skin: String(profile.skin || "").trim(),
             has_skin: Boolean(profile.has_skin),
             profile_ready: Boolean(profile.profile_ready),
+            serverBackup: profile.serverBackup || null,
         }
     }
 
@@ -536,16 +625,16 @@
 
         const name = String(data.display_name || "").trim()
         const level = Number(data.level ?? data.trainer_stats?.level ?? 0)
-        const patch = {
-            level,
-            has_skin: Boolean(data.has_skin),
-            profile_ready: Boolean(data.profile_ready),
-        }
+        const patch = { level }
+        if (data.has_skin) patch.has_skin = true
+        if (data.profile_ready) patch.profile_ready = true
         const skin = String(data.skin || "").trim()
         if (skin) patch.skin = skin
         if (name && !isPlaceholderGuestName(name)) {
             patch.name = name
         }
+        const backup = sessionBackupFromAuth(data)
+        if (backup) patch.serverBackup = backup
         upsertProfileMeta(guestId, patch)
     }
 
@@ -618,6 +707,8 @@
     window.SaiPokePlay.syncGuestProfileMeta = syncGuestProfileMeta
     window.SaiPokePlay.getCachedGuestProfileName = getCachedProfileName
     window.SaiPokePlay.getCachedGuestProfileMeta = getCachedGuestProfileMeta
+    window.SaiPokePlay.saveGuestServerBackup = saveGuestServerBackup
+    window.SaiPokePlay.restoreGuestProfileFromVault = restoreGuestProfileFromVault
     window.SaiPokePlay.guestProfilesEnabled = guestProfilesEnabled
 
     bindProfileUi()

@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+users.db
+users.db-wal
+users.db-shm
+.env
+node_modules/
+game-client/node_modules/
+game-server/node_modules/

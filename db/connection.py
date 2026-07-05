@@ -31,10 +31,14 @@ def _normalize_pg_url(url: str) -> str:
 
 
 def get_db_path() -> Path:
-    raw = os.getenv(
-        "DB_PATH",
-        os.getenv("SQLITE_DB_PATH", str(webp_root() / "users.db")),
-    )
+    env_path = os.getenv("DB_PATH") or os.getenv("SQLITE_DB_PATH")
+    if env_path:
+        raw = env_path
+    elif Path("/data").is_dir() and os.access("/data", os.W_OK):
+        # Railway / Docker volume — survives redeploys when mounted at /data
+        raw = "/data/users.db"
+    else:
+        raw = str(webp_root() / "users.db")
     path = Path(raw)
     if not path.is_absolute():
         path = monorepo_root() / path

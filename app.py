@@ -8,7 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import parse_qsl
 
 from dotenv import load_dotenv
@@ -1748,6 +1748,132 @@ def guest_profile_delete():
             )
 
     return jsonify({"success": True, "guestId": guest_id})
+
+
+def _guest_row_needs_restore(row) -> bool:
+    """Allow vault restore when the server row has no saved game progress."""
+    if row is None:
+        return True
+    qp = parse_quest_progress(
+        row["quest_progress"] if "quest_progress" in row.keys() else None
+    )
+    if qp.get("completed_steps"):
+        return False
+    if parse_holds(row["holds"] if "holds" in row.keys() else None):
+        return False
+    if vault_for_user(row["vault"] if "vault" in row.keys() else None):
+        return False
+    gear = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+    if any(gear):
+        return False
+    return True
+
+
+def _guest_backup_has_progress(backup: dict) -> bool:
+    if not isinstance(backup, dict):
+        return False
+    name = normalize_player_name(backup.get("display_name"))
+    skin = backup.get("skin")
+    if name and skin in SKINS:
+        return True
+    qp = backup.get("quest_progress")
+    if isinstance(qp, dict) and qp.get("completed_steps"):
+        return True
+    if holds_for_user(backup.get("holds") or []):
+        return True
+    if vault_for_user(backup.get("vault_detail") or backup.get("vault") or []):
+        return True
+    gear = gear_slots_for_user(backup.get("gear_slots"))
+    if any(gear):
+        return True
+    if int(backup.get("balance") or 0) > 0:
+        return True
+    return False
+
+
+def _apply_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> None:
+    row = conn.execute(
+        "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
+    ).fetchone()
+    if row is None:
+        return
+
+    display_name = normalize_player_name(backup.get("display_name"))
+    skin = backup.get("skin") if backup.get("skin") in SKINS else None
+
+    fields: dict[str, Any] = {}
+    if display_name:
+        fields["display_name"] = display_name
+    if skin:
+        fields["skin"] = skin
+    if "balance" in backup:
+        fields["balance"] = max(0, int(backup.get("balance") or 0))
+    holds = holds_for_user(backup.get("holds") or [])
+    if holds:
+        fields["holds"] = json.dumps(holds)
+    gear_slots = gear_slots_for_user(backup.get("gear_slots"))
+    if any(gear_slots):
+        fields["gear_slots"] = json.dumps(gear_slots)
+    qp_in = backup.get("quest_progress")
+    if isinstance(qp_in, dict):
+        qp = parse_quest_progress(qp_in)
+        if qp.get("completed_steps") or qp.get("removed_quests"):
+            fields["quest_progress"] = json.dumps(qp)
+    vault_raw = backup.get("vault_detail") or backup.get("vault")
+    if vault_raw:
+        vault = vault_for_user(vault_raw)
+        if vault:
+            fields["vault"] = json.dumps(vault)
+    owned_in = backup.get("owned_skins")
+    if isinstance(owned_in, list) and owned_in:
+        fields["owned_skins"] = owned_skins_json(
+            parse_owned_skins(owned_in, skin or row["skin"])
+        )
+    if "vending_spins" in backup:
+        fields["vending_spins"] = max(0, int(backup.get("vending_spins") or 0))
+
+    if not fields:
+        return
+
+    fields["updated_at"] = now
+    assignments = ", ".join(f"{key} = ?" for key in fields)
+    conn.execute(
+        f"UPDATE users SET {assignments} WHERE telegram_id = ?",
+        (*fields.values(), telegram_id),
+    )
+
+
+@app.route("/api/guest/restore", methods=["POST"])
+def guest_profile_restore():
+    """Restore guest trainer progress from browser vault backup after deploy DB wipe."""
+    if wallet_payments_enabled():
+        return wallet_payments_disabled_response()
+
+    data = request.get_json(silent=True) or {}
+    user = resolve_auth_user(data)
+    if not user:
+        return jsonify({"success": False, "error": auth_session_error_message()}), 401
+
+    telegram_id = str(user["id"])
+    if not is_guest_user_id(telegram_id):
+        return jsonify({"success": False, "error": "Guest profiles only."}), 403
+
+    backup = data.get("backup")
+    if not isinstance(backup, dict) or not _guest_backup_has_progress(backup):
+        return jsonify({"success": False, "error": "No restorable backup."}), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
+        ).fetchone()
+        if not _guest_row_needs_restore(row):
+            return jsonify({"success": True, "restored": False, "reason": "server_has_progress"})
+
+        _apply_guest_backup(conn, telegram_id, backup, now)
+        backfill_quest_triggers(conn, telegram_id)
+
+    return jsonify({"success": True, "restored": True})
 
 
 @app.route("/api/pin/set", methods=["POST"])
