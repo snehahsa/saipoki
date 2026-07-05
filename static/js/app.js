@@ -678,7 +678,47 @@ function guestHasEquippedSkin() {
     if (!session) return false
     if (session.has_skin) return true
     const skin = String(session.skin || "").trim()
-    return Boolean(skin && SKINS.includes(skin))
+    if (skin && SKINS.includes(skin)) return true
+    const meta = window.SaiPokePlay?.getCachedGuestProfileMeta?.(getActiveGuestId())
+    if (meta?.profile_ready || meta?.has_skin) return true
+    const cachedSkin = String(meta?.skin || "").trim()
+    return Boolean(cachedSkin && SKINS.includes(cachedSkin))
+}
+
+function clearReturningGuestBoot() {
+    if (window.SaiPokePlay) {
+        window.SaiPokePlay._returningGuestBoot = false
+    }
+}
+
+function resolveSavedGuestProfile() {
+    if (!guestPlayMode() || !session) return false
+
+    const meta = window.SaiPokePlay?.getCachedGuestProfileMeta?.(getActiveGuestId())
+    if (meta?.name && !guestHasRealName(session.display_name)) {
+        session.display_name = meta.name
+    }
+    const cachedSkin = String(meta?.skin || "").trim()
+    if (cachedSkin && SKINS.includes(cachedSkin)) {
+        session.skin = cachedSkin
+    }
+
+    if (meta?.profile_ready) {
+        session.profile_ready = true
+        session.has_skin = true
+        return true
+    }
+    if (meta?.has_skin && meta?.name) {
+        session.profile_ready = true
+        session.has_skin = true
+        return true
+    }
+    if (guestHasEquippedSkin() && guestHasRealName(session.display_name)) {
+        session.profile_ready = true
+        session.has_skin = true
+        return true
+    }
+    return Boolean(session.profile_ready)
 }
 
 function guestProfileReady() {
@@ -700,6 +740,10 @@ function mergeGuestProfileFromVault() {
     if (meta.name && !guestHasRealName(session.display_name)) {
         session.display_name = meta.name
     }
+    const cachedSkin = String(meta.skin || "").trim()
+    if (cachedSkin && SKINS.includes(cachedSkin)) {
+        session.skin = cachedSkin
+    }
     if (meta.profile_ready || (meta.has_skin && meta.name)) {
         session.profile_ready = true
         session.has_skin = true
@@ -720,6 +764,7 @@ function finalizeGuestSessionFromAuth(data) {
     }
 
     mergeGuestProfileFromVault()
+    resolveSavedGuestProfile()
 
     if (!session.profile_ready) {
         session.profile_ready = guestProfileReady()
@@ -730,6 +775,9 @@ function finalizeGuestSessionFromAuth(data) {
 }
 
 function routeGuestAfterAuth() {
+    resolveSavedGuestProfile()
+    clearReturningGuestBoot()
+
     if (guestProfileReady()) {
         showScreen("menu")
         startMenuStats()
@@ -801,6 +849,7 @@ function setSkinSetupStep(step) {
 }
 
 function openSkinSetupScreen() {
+    resolveSavedGuestProfile()
     if (profileSetupComplete()) {
         showScreen("menu")
         startMenuStats()
@@ -4968,7 +5017,13 @@ async function init() {
             const data = await saveSkinOrPay(skin, displayName)
             session.skin = skin
             session.display_name = data.display_name || displayName
-            window.SaiPokePlay?.syncGuestProfileMeta?.(session)
+            window.SaiPokePlay?.syncGuestProfileMeta?.({
+                ...session,
+                display_name: session.display_name,
+                skin,
+                has_skin: true,
+                profile_ready: true,
+            })
             session.has_skin = true
             session.profile_ready = true
             if (Number.isFinite(data.balance)) session.balance = data.balance
@@ -5046,8 +5101,13 @@ async function init() {
             session.skin = skin
             session.has_skin = true
             if (guestPlayMode()) {
-                session.profile_ready = guestProfileReady()
-                window.SaiPokePlay?.syncGuestProfileMeta?.(session)
+                session.profile_ready = true
+                window.SaiPokePlay?.syncGuestProfileMeta?.({
+                    ...session,
+                    skin,
+                    has_skin: true,
+                    profile_ready: true,
+                })
             }
             if (data.display_name) session.display_name = data.display_name
             if (Number.isFinite(data.balance)) session.balance = data.balance

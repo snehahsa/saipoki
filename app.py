@@ -1685,6 +1685,7 @@ def guest_profiles_lookup():
                     {
                         "guestId": guest_id,
                         "display_name": "",
+                        "skin": "",
                         "level": 0,
                         "has_skin": False,
                         "profile_ready": False,
@@ -1701,6 +1702,7 @@ def guest_profiles_lookup():
                 {
                     "guestId": guest_id,
                     "display_name": name,
+                    "skin": skin or "",
                     "level": int(stats.get("level") or 0),
                     "has_skin": skin is not None,
                     "profile_ready": ready,

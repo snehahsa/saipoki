@@ -136,6 +136,8 @@
                     has_skin: Boolean(row.has_skin),
                     profile_ready: Boolean(row.profile_ready),
                 }
+                const skin = String(row.skin || "").trim()
+                if (skin) patch.skin = skin
                 if (displayName && !isPlaceholderGuestName(displayName)) {
                     patch.name = displayName
                 }
@@ -390,12 +392,16 @@
         })
     }
 
-    async function bootSelectedProfile(guestId) {
+    async function bootSelectedProfile(guestId, { isNew = false } = {}) {
         if (!guestId || flowBusy) return
         flowBusy = true
         if (profileStatus) {
             profileStatus.textContent = "Loading trainer…"
             profileStatus.classList.remove("is-error")
+        }
+
+        if (window.SaiPokePlay) {
+            window.SaiPokePlay._returningGuestBoot = !isNew
         }
 
         setActiveGuestId(guestId)
@@ -439,7 +445,7 @@
             updatedAt: Date.now(),
         })
         writeVault(vault)
-        void bootSelectedProfile(guestId)
+        void bootSelectedProfile(guestId, { isNew: true })
     }
 
     async function deleteProfile(guestId) {
@@ -517,6 +523,7 @@
         const cleanName = name && !isPlaceholderGuestName(name) ? name : ""
         return {
             name: cleanName,
+            skin: String(profile.skin || "").trim(),
             has_skin: Boolean(profile.has_skin),
             profile_ready: Boolean(profile.profile_ready),
         }
@@ -534,6 +541,8 @@
             has_skin: Boolean(data.has_skin),
             profile_ready: Boolean(data.profile_ready),
         }
+        const skin = String(data.skin || "").trim()
+        if (skin) patch.skin = skin
         if (name && !isPlaceholderGuestName(name)) {
             patch.name = name
         }
