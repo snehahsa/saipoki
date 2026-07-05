@@ -4559,7 +4559,18 @@ function bindButtonPressAnimation() {
     }, { passive: true })
 }
 
+function prefersDesktopControls() {
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches
+}
+
+function syncDesktopControlsUi() {
+    document.body.classList.toggle("desktop-controls", prefersDesktopControls())
+}
+
 function bindPadControls() {
+    syncDesktopControlsUi()
+    if (prefersDesktopControls()) return
+
     const zone = document.getElementById("game-joystick")
     const base = document.getElementById("game-joystick-base")
     const stick = document.getElementById("game-joystick-stick")
@@ -5028,6 +5039,7 @@ async function init() {
     bindNoSelectOnButtons()
     bindButtonPressAnimation()
     bindPadControls()
+    window.matchMedia("(hover: hover) and (pointer: fine)").addEventListener("change", syncDesktopControlsUi)
     bindQuickbar()
     bindGameTouchGuard()
     bindGameDrawer()

@@ -6054,6 +6054,24 @@ body.poketab-open {
     gap: 32px;
 }
 
+body.desktop-controls .game-joystick {
+    display: none !important;
+}
+
+body.desktop-controls .game-pad {
+    gap: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .game-joystick {
+        display: none !important;
+    }
+
+    .game-pad {
+        gap: 0;
+    }
+}
+
 /* ── Quick gear bar (3 slots beside joystick) ── */
 .game-quickbar {
     position: relative;
