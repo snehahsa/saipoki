@@ -173,12 +173,42 @@ def _read_json(path: Path) -> Optional[dict]:
         return None
 
 
+def _manifest_entry_to_saved_config(entry: dict) -> dict:
+    """Rebuild per-item editor config from committed manifest.json."""
+    sprite = entry.get("sprite") if isinstance(entry.get("sprite"), dict) else {}
+    return {
+        "id": entry.get("id"),
+        "file": sprite.get("file"),
+        "frame": {
+            "x": sprite.get("x", 0),
+            "y": sprite.get("y", 0),
+            "w": sprite.get("w", 1),
+            "h": sprite.get("h", 1),
+        },
+        "useFacings": list(entry.get("useFacings") or []),
+        "faces": dict(entry.get("faces") or {}),
+    }
+
+
+def _saved_config_from_manifest(item_id: str) -> dict:
+    manifest = _read_json(STATIC_ITEMS_MANIFEST_PATH)
+    if not manifest or not isinstance(manifest.get("items"), list):
+        return {}
+    for entry in manifest["items"]:
+        if isinstance(entry, dict) and entry.get("id") == item_id:
+            return _manifest_entry_to_saved_config(entry)
+    return {}
+
+
 def load_saved_item_config(item_id: str) -> dict:
     saved = _read_json(item_config_path(item_id))
     if saved:
         return saved
     legacy_path = LEGACY_ITEMS_DIR / f"{item_id}.json"
-    return _read_json(legacy_path) or {}
+    saved = _read_json(legacy_path)
+    if saved:
+        return saved
+    return _saved_config_from_manifest(item_id)
 
 
 def default_face_attach(item_id: str) -> dict:
@@ -384,7 +414,18 @@ def gear_item_client_meta(item_id: str) -> dict:
 
 
 def gear_catalog_for_client() -> dict:
-    sync_items_manifest()
+    """Serve committed manifest.json — never rewrite on page load (Railway would lose map-builder rects)."""
+    manifest = _read_json(STATIC_ITEMS_MANIFEST_PATH)
+    if manifest and isinstance(manifest.get("items"), list):
+        out: dict[str, dict] = {}
+        for entry in manifest["items"]:
+            if not isinstance(entry, dict):
+                continue
+            item_id = entry.get("id")
+            if item_id in GEAR_ITEM_IDS:
+                out[item_id] = entry
+        if out:
+            return out
     return {item_id: gear_item_client_meta(item_id) for item_id in GEAR_ITEMS}
 
 

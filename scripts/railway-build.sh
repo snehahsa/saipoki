@@ -7,7 +7,11 @@ pip install -r requirements.txt
 # Copy vendored sprites/fonts when submodule checkout exists (optional).
 if [ -d gather-clone/frontend/public/sprites ]; then
   mkdir -p static/sprites static/fonts
-  rsync -a gather-clone/frontend/public/sprites/ static/sprites/
+  # Keep committed gear attach JSON (map-builder rects) — gather-clone may lack or stale them.
+  rsync -a gather-clone/frontend/public/sprites/ static/sprites/ \
+    --exclude 'spritesheets/items/manifest.json' \
+    --exclude 'spritesheets/items/fishing_rod.json' \
+    --exclude 'spritesheets/items/hub_key.json'
   rsync -a gather-clone/frontend/public/fonts/ static/fonts/ 2>/dev/null || true
 fi
 

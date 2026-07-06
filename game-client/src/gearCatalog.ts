@@ -133,8 +133,23 @@ export function normalizeGearItem(raw: unknown): GearItemDef | null {
     }
 }
 
+/** Server manifest rebuilt without per-item JSON uses legacy formula rects (wrong y). */
+function looksLikeLegacyGearAttach(
+    incoming: GearItemDef,
+    existing?: GearItemDef
+): boolean {
+    if (incoming.id !== 'fishing_rod' || !existing?.faces?.left?.rect) return false
+    const leftY = incoming.faces?.left?.rect?.y
+    const goodY = existing.faces.left.rect.y
+    if (typeof leftY !== 'number' || typeof goodY !== 'number') return false
+    return leftY < 0 && goodY > 0
+}
+
 function mergeGearItem(existing: GearItemDef | undefined, incoming: GearItemDef): GearItemDef {
     if (!existing) return incoming
+    if (looksLikeLegacyGearAttach(incoming, existing)) {
+        return existing
+    }
     return {
         ...existing,
         ...incoming,
