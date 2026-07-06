@@ -397,6 +397,17 @@ def sync_items_manifest() -> None:
     legacy_manifest.write_text(payload, encoding="utf-8")
 
 
+def ensure_gear_item_files() -> None:
+    """Restore missing or legacy-corrupt item JSON on disk, then refresh manifest."""
+    STATIC_ITEMS_DIR.mkdir(parents=True, exist_ok=True)
+    for item_id, defaults in GEAR_ITEM_SAVED_DEFAULTS.items():
+        path = item_config_path(item_id)
+        existing = _read_json(path)
+        if not existing or _saved_config_has_legacy_attach(item_id, existing):
+            path.write_text(json.dumps(defaults, indent=2) + "\n", encoding="utf-8")
+    sync_items_manifest()
+
+
 def empty_gear_slots() -> list[Optional[str]]:
     return [None] * GEAR_SLOT_COUNT
 

@@ -182,7 +182,7 @@ export async function loadGearCatalog(force = false): Promise<void> {
 
     catalogPromise = (async () => {
         try {
-            const res = await fetch(`/sprites/spritesheets/items/manifest.json?t=${Date.now()}`, {
+            const res = await fetch(`/api/gear/manifest.json?t=${Date.now()}`, {
                 cache: 'no-store',
             })
             if (!res.ok) return

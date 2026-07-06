@@ -2956,6 +2956,33 @@ def leaderboard_api():
     return jsonify(payload)
 
 
+@app.route("/api/gear/manifest.json")
+def api_gear_manifest():
+    from gear_catalog import gear_items_manifest_payload
+
+    response = jsonify(gear_items_manifest_payload())
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/deploy/gear-fix")
+def api_deploy_gear_fix():
+    """Quick check that production is running gear-attach fix code."""
+    from gear_catalog import GEAR_ITEM_SAVED_DEFAULTS, gear_items_manifest_payload, item_config_path
+
+    payload = gear_items_manifest_payload()
+    rod = next((x for x in payload.get("items", []) if x.get("id") == "fishing_rod"), {})
+    left = (rod.get("faces") or {}).get("left") or {}
+    return jsonify(
+        {
+            "leftAttachY": (left.get("rect") or {}).get("y"),
+            "useFacings": rod.get("useFacings"),
+            "hasSavedDefaults": "fishing_rod" in GEAR_ITEM_SAVED_DEFAULTS,
+            "fishingRodJsonOnDisk": item_config_path("fishing_rod").is_file(),
+        }
+    )
+
+
 @app.route("/sprites/animations/manifest.json")
 def animation_manifest():
     from animation_catalog import load_manifest
@@ -2974,6 +3001,13 @@ def gear_items_manifest():
 
 @app.route("/sprites/<path:filename>")
 def sprites(filename):
+    if filename == "spritesheets/items/manifest.json":
+        from gear_catalog import gear_items_manifest_payload
+
+        response = jsonify(gear_items_manifest_payload())
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     bases = (
         Path(app.root_path) / "static/sprites",
         Path(app.root_path) / "gather-clone/frontend/public/sprites",
