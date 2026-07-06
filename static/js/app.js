@@ -1971,7 +1971,25 @@ function formatVaultMultiplierSimple(mult) {
 
 function formatGradeLabel(grade, { short = false } = {}) {
     const g = Math.max(1, Math.min(Number(grade) || 1, VAULT_GRADING.max_grade || 5))
-    return short ? `Gr.#${g}` : `Grading #${g}`
+    return short ? `G${g}` : `Grading #${g}`
+}
+
+function vaultProgressLabel(stack) {
+    const prog = vaultStackProgress(stack)
+    if (prog.at_max_grade) return "MAX"
+    if (prog.grade === 1) {
+        return `${prog.total_minted}/${prog.next_cost}`
+    }
+    return `+${prog.copies}/${prog.next_cost}`
+}
+
+function vaultProgressTitle(stack) {
+    const prog = vaultStackProgress(stack)
+    if (prog.at_max_grade) return "Maximum grade reached"
+    if (prog.grade === 1) {
+        return `${prog.total_minted} of ${prog.next_cost} pulls until Silver (Grading #2)`
+    }
+    return `${prog.copies} of ${prog.next_cost} banked copies until ${formatGradeLabel(prog.grade + 1)}`
 }
 
 function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
@@ -1998,20 +2016,22 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         const gradeBadge = document.createElement("span")
         gradeBadge.className = "vault-slot-grade"
         gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
+        gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
 
         const multBadge = document.createElement("span")
         multBadge.className = "vault-slot-mult"
         multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
+        multBadge.title = "Battle multiplier"
 
         if (!stack.at_max_grade) {
             const copyBadge = document.createElement("span")
             copyBadge.className = "vault-slot-copies"
-            if (stack.grade === 1) {
-                copyBadge.textContent = `${stack.total_minted}/${stack.next_cost || 3}`
-            } else if (stack.copies > 0) {
-                copyBadge.textContent = `+${stack.copies}`
+            const progressText = vaultProgressLabel(stack)
+            if (progressText) {
+                copyBadge.textContent = stack.grade === 1 ? `↑${progressText}` : progressText
+                copyBadge.title = vaultProgressTitle(stack)
+                frame.appendChild(copyBadge)
             }
-            if (copyBadge.textContent) frame.appendChild(copyBadge)
         }
 
         slot.appendChild(frame)
@@ -2124,13 +2144,17 @@ function renderVaultCardPopup(stack) {
     }
 
     const countEl = document.getElementById("vault-card-popup-grade-count")
+    const gradeLabelEl = document.querySelector(".vault-card-popup-grade-label")
+    if (gradeLabelEl) {
+        gradeLabelEl.textContent = prog.grade === 1 ? "PULLS TO SILVER" : "COPIES TO NEXT GRADE"
+    }
     if (countEl) {
         if (prog.at_max_grade) {
             countEl.textContent = "MAX"
         } else if (prog.grade === 1) {
-            countEl.textContent = `${prog.total_minted} / ${prog.next_cost}`
+            countEl.textContent = `${prog.total_minted} of ${prog.next_cost} pulls`
         } else {
-            countEl.textContent = `${prog.copies} / ${prog.next_cost}`
+            countEl.textContent = `${prog.copies} of ${prog.next_cost} banked`
         }
     }
 
