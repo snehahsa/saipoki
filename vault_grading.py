@@ -7,6 +7,9 @@ from typing import Any
 
 MAX_GRADE = 5
 
+# CHIPS charged on every manual grade fuse (G2+ banked-copy upgrade).
+FUSE_FEE_CHIPS = 100
+
 # Copies required to advance FROM grade N → N+1 (escalating commitment).
 GRADE_UPGRADE_COST: dict[int, int] = {1: 3, 2: 4, 3: 5, 4: 6}
 
@@ -33,6 +36,7 @@ def grading_config_for_client() -> dict[str, Any]:
         "upgrade_costs": dict(GRADE_UPGRADE_COST),
         "multipliers": dict(GRADE_MULTIPLIER),
         "labels": dict(GRADE_LABELS),
+        "fuse_fee_chips": FUSE_FEE_CHIPS,
     }
 
 
@@ -327,4 +331,13 @@ def merge_vaults(*vaults: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def vault_detail_for_client(vault: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [enrich_stack(entry) for entry in vault]
+    stacks = [enrich_stack(entry) for entry in vault]
+    stacks.sort(
+        key=lambda e: (
+            -(e.get("grade") or 1),
+            -(e.get("multiplier") or 1.0),
+            e.get("acquired_at") or 0,
+            e.get("card_id") or "",
+        )
+    )
+    return stacks

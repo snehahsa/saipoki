@@ -42,7 +42,7 @@ from poke_registry import (
     vault_card_ids,
     vault_detail_for_client,
 )
-from vault_grading import grading_config_for_client, merge_vaults
+from vault_grading import FUSE_FEE_CHIPS, grading_config_for_client, merge_vaults, stack_progress
 from quests_catalog import QUEST_CATALOG, QUEST_IDS, QUEST_STEP_IDS, STEP_TO_QUEST
 from quest_engine import (
     backfill_quest_triggers,
@@ -3134,12 +3134,57 @@ def vault_upgrade_card():
     now = int(time.time())
     with get_db() as conn:
         row = conn.execute(
-            "SELECT vault FROM users WHERE telegram_id = ?", (telegram_id,)
+            "SELECT balance, vault FROM users WHERE telegram_id = ?", (telegram_id,)
         ).fetchone()
         if row is None:
             return jsonify({"success": False, "error": "User not found"}), 404
 
+        balance = int(row["balance"] or 0)
         vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+        card_stack = next(
+            (entry for entry in vault if str(entry.get("card_id") or "").strip() == card_id),
+            None,
+        )
+        if not card_stack:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "card_not_in_vault",
+                    "vault_detail": vault_detail_for_client(vault),
+                }
+            ), 400
+
+        prog = stack_progress(card_stack)
+        fuse_eligible = prog["can_upgrade"] or (
+            prog["grade"] == 1 and prog.get("auto_promote_ready")
+        )
+        if prog["at_max_grade"]:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "max_grade",
+                    "vault_detail": vault_detail_for_client(vault),
+                }
+            ), 400
+        if not fuse_eligible:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "insufficient_copies",
+                    "vault_detail": vault_detail_for_client(vault),
+                }
+            ), 400
+        if balance < FUSE_FEE_CHIPS:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "insufficient_balance",
+                    "fuse_fee_chips": FUSE_FEE_CHIPS,
+                    "balance": balance,
+                    "vault_detail": vault_detail_for_client(vault),
+                }
+            ), 400
+
         vault, result = upgrade_card_in_vault(vault, card_id)
         if not result.get("success"):
             status = 400 if result.get("error") in {
@@ -3149,9 +3194,10 @@ def vault_upgrade_card():
             } else 400
             return jsonify({**result, "vault_detail": vault_detail_for_client(vault)}), status
 
+        new_balance = balance - FUSE_FEE_CHIPS
         conn.execute(
-            "UPDATE users SET vault = ?, updated_at = ? WHERE telegram_id = ?",
-            (json.dumps(vault), now, telegram_id),
+            "UPDATE users SET vault = ?, balance = ?, updated_at = ? WHERE telegram_id = ?",
+            (json.dumps(vault), new_balance, now, telegram_id),
         )
 
     card = catalog[card_id]
@@ -3160,6 +3206,8 @@ def vault_upgrade_card():
             **result,
             "card_id": card_id,
             "card_name": card.get("name"),
+            "balance": new_balance,
+            "fuse_fee_chips": FUSE_FEE_CHIPS,
             "vault": vault_card_ids(vault),
             "vault_detail": vault_detail_for_client(vault),
         }

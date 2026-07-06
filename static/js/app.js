@@ -21,6 +21,7 @@ const VAULT_GRADING = window.APP_CONFIG.vaultGrading || {
     upgrade_costs: { 1: 3, 2: 4, 3: 5, 4: 6 },
     multipliers: { 1: 1, 2: 1.22, 3: 1.48, 4: 1.78, 5: 2.15 },
     labels: { 1: "Standard", 2: "Silver", 3: "Gold", 4: "Platinum", 5: "Mythic" },
+    fuse_fee_chips: 100,
 }
 
 let vaultCardPopupOpenId = null
@@ -1852,6 +1853,19 @@ function vaultUpgradeCost(grade) {
     return Number(cost) || 3
 }
 
+function vaultFuseFeeChips() {
+    return Number(VAULT_GRADING.fuse_fee_chips) || 100
+}
+
+function vaultCanAffordFuse() {
+    return (Number(session?.balance) || 0) >= vaultFuseFeeChips()
+}
+
+function vaultCanFuseStack(stack) {
+    const prog = vaultStackProgress(stack)
+    return Boolean(prog.can_upgrade && vaultCanAffordFuse())
+}
+
 function vaultStackProgress(stack) {
     const grade = Math.max(1, Math.min(Number(stack?.grade) || 1, VAULT_GRADING.max_grade || 5))
     const copies = Math.max(0, Number(stack?.copies) || 0)
@@ -1941,6 +1955,12 @@ function normalizeVaultDetail(raw) {
     }
 
     return Array.from(byId.values()).sort((a, b) => {
+        const gradeA = Number(a.grade) || 1
+        const gradeB = Number(b.grade) || 1
+        if (gradeB !== gradeA) return gradeB - gradeA
+        const multA = Number(a.multiplier) || 1
+        const multB = Number(b.multiplier) || 1
+        if (multB !== multA) return multB - multA
         const ta = a.acquired_at || 0
         const tb = b.acquired_at || 0
         if (ta !== tb) return ta - tb
@@ -1992,67 +2012,17 @@ function vaultProgressLabel(stack) {
     return `${prog.copies}/${prog.next_cost}`
 }
 
-const VAULT_GRADE_FX_TIERS = {
-    2: { count: 4, dur: 16, sparks: 0 },
-    3: { count: 8, dur: 11, sparks: 0 },
-    4: { count: 12, dur: 8, sparks: 0 },
-    5: { count: 16, dur: 5.5, sparks: 8 },
-}
-
-function createVaultGradeFxElement(grade, variant = "slot") {
-    const g = Math.max(2, Math.min(Number(grade) || 2, 5))
-    const tier = VAULT_GRADE_FX_TIERS[g]
-    const fx = document.createElement("div")
-    fx.className = `vault-grade-fx vault-grade-fx--g${g} vault-grade-fx--${variant}`
-    fx.setAttribute("aria-hidden", "true")
-    fx.style.setProperty("--fx-dur", `${tier.dur}s`)
-
-    const ring = document.createElement("span")
-    ring.className = "vault-grade-fx-ring"
-    fx.appendChild(ring)
-
-    if (g >= 4) {
-        const aura = document.createElement("span")
-        aura.className = "vault-grade-fx-aura"
-        fx.appendChild(aura)
-    }
-
-    if (g >= 5) {
-        const orbitA = document.createElement("span")
-        orbitA.className = "vault-grade-fx-orbit"
-        fx.appendChild(orbitA)
-        const orbitB = document.createElement("span")
-        orbitB.className = "vault-grade-fx-orbit vault-grade-fx-orbit--rev"
-        fx.appendChild(orbitB)
-    }
-
-    for (let i = 0; i < tier.count; i += 1) {
-        const particle = document.createElement("span")
-        particle.className = "vault-grade-fx-particle"
-        particle.style.setProperty("--fx-i", String(i))
-        particle.style.setProperty("--fx-n", String(tier.count))
-        fx.appendChild(particle)
-    }
-
-    for (let s = 0; s < tier.sparks; s += 1) {
-        const spark = document.createElement("span")
-        spark.className = "vault-grade-fx-spark"
-        spark.style.setProperty("--fx-i", String(s))
-        spark.style.setProperty("--fx-n", String(tier.sparks))
-        fx.appendChild(spark)
-    }
-
-    return fx
-}
-
-function mountVaultGradeFx(visualEl, grade, variant = "slot") {
+function mountVaultGradeFx(visualEl, grade) {
     if (!visualEl) return
-    visualEl.querySelector(".vault-grade-fx")?.remove()
-    const g = Math.max(1, Math.min(Number(grade) || 1, 5))
+    visualEl.querySelectorAll(".vault-aura-canvas").forEach((el) => el.remove())
+    const g = Math.max(1, Math.min(Number(grade) || 1, VAULT_GRADING.max_grade || 5))
     visualEl.dataset.grade = String(g)
-    visualEl.classList.toggle("vault-slot-visual--fx", g >= 2)
-    if (g < 2) return
-    visualEl.prepend(createVaultGradeFxElement(g, variant))
+    visualEl.classList.toggle("vault-slot-visual--graded", g >= 2)
+    visualEl.classList.remove(
+        "vault-slot-visual--fx",
+        "vault-slot-visual--aura-glow",
+        "vault-slot-visual--aura-3d",
+    )
 }
 
 function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
@@ -2064,6 +2034,9 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
     if (item) {
         slot.classList.add(filledClass)
         slot.dataset.cardId = stack.card_id
+        if (Number(stack.grade) >= 3) {
+            slot.classList.add("vault-slot--graded-high")
+        }
         const progressHint = vaultProgressTitle(stack)
         slot.setAttribute(
             "aria-label",
@@ -2072,7 +2045,6 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
 
         const visual = document.createElement("div")
         visual.className = "vault-slot-visual"
-        const fxVariant = String(slotClass).includes("game-drawer") ? "drawer" : "bag"
 
         const frame = document.createElement("div")
         frame.className = "vault-slot-frame"
@@ -2094,11 +2066,12 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         }
 
         visual.appendChild(frame)
-        mountVaultGradeFx(visual, stack.grade, fxVariant)
+        mountVaultGradeFx(visual, stack.grade)
         slot.appendChild(visual)
 
         const gradeBadge = document.createElement("span")
-        gradeBadge.className = "vault-slot-grade"
+        gradeBadge.className = "vault-slot-grade vault-grade-tag"
+        gradeBadge.dataset.grade = String(stack.grade)
         gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
         gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
         slot.appendChild(gradeBadge)
@@ -2140,6 +2113,7 @@ function applyVaultFromServer(vault, vaultDetail) {
 
 function vaultGradeHint(stack) {
     const prog = vaultStackProgress(stack)
+    const fuseFee = vaultFuseFeeChips()
     if (prog.at_max_grade) {
         return "Mythic tier — maximum battle multiplier unlocked."
     }
@@ -2147,10 +2121,14 @@ function vaultGradeHint(stack) {
         return `Pull ${prog.next_cost} of this species to auto-forge Silver (G2). ${prog.total_minted}/${prog.next_cost} minted.`
     }
     if (prog.can_upgrade) {
-        return `Ready to fuse ${prog.next_cost} banked copies into ${vaultGradeLabel(prog.grade + 1)}.`
+        if (!vaultCanAffordFuse()) {
+            const short = Math.max(0, fuseFee - (Number(session?.balance) || 0))
+            return `Ready to fuse, but you need ${formatChipsAmount(short)} more CHIPS (${formatChipsAmount(fuseFee)} fuse fee).`
+        }
+        return `Ready to fuse ${prog.next_cost} banked copies into ${vaultGradeLabel(prog.grade + 1)} · ${formatChipsAmount(fuseFee)} fee.`
     }
     const need = Math.max(0, (prog.next_cost || 0) - prog.copies)
-    return `Bank ${need} more duplicate${need === 1 ? "" : "s"} to upgrade to ${vaultGradeLabel(prog.grade + 1)} (×${vaultGradeMultiplier(prog.grade + 1).toFixed(2)}).`
+    return `Bank ${need} more duplicate${need === 1 ? "" : "s"} to upgrade to ${vaultGradeLabel(prog.grade + 1)} (×${vaultGradeMultiplier(prog.grade + 1).toFixed(2)}). Fuse costs ${formatChipsAmount(fuseFee)}.`
 }
 
 function renderVaultCardPopup(stack) {
@@ -2166,7 +2144,7 @@ function renderVaultCardPopup(stack) {
     const popupVisual = document.getElementById("vault-card-popup-visual")
     const popupFrame = document.getElementById("vault-card-popup-frame")
     if (popupFrame) popupFrame.dataset.grade = String(prog.grade)
-    mountVaultGradeFx(popupVisual, prog.grade, "popup")
+    if (popupVisual) mountVaultGradeFx(popupVisual, prog.grade)
 
     const art = document.getElementById("vault-card-popup-art")
     if (art) {
@@ -2175,13 +2153,19 @@ function renderVaultCardPopup(stack) {
     }
 
     const gradePill = document.getElementById("vault-card-popup-grade-pill")
-    if (gradePill) gradePill.textContent = formatGradeLabel(prog.grade)
+    if (gradePill) {
+        gradePill.textContent = formatGradeLabel(prog.grade)
+        gradePill.dataset.grade = String(prog.grade)
+    }
 
     const multEl = document.getElementById("vault-card-popup-mult")
     if (multEl) multEl.textContent = formatVaultMultiplierSimple(prog.multiplier)
 
     const tagEl = document.getElementById("vault-card-popup-tag")
-    if (tagEl) tagEl.textContent = String(prog.grade_label || "STANDARD").toUpperCase()
+    if (tagEl) {
+        tagEl.textContent = String(prog.grade_label || "STANDARD").toUpperCase()
+        tagEl.dataset.grade = String(prog.grade)
+    }
 
     const nameEl = document.getElementById("vault-card-popup-name")
     if (nameEl) nameEl.textContent = item?.name || stack.card_id
@@ -2221,6 +2205,8 @@ function renderVaultCardPopup(stack) {
 
     const countEl = document.getElementById("vault-card-popup-grade-count")
     const gradeLabelEl = document.querySelector(".vault-card-popup-grade-label")
+    const gradePanel = popup.querySelector(".vault-card-popup-grade-panel")
+    if (gradePanel) gradePanel.dataset.grade = String(prog.grade)
     if (gradeLabelEl) {
         gradeLabelEl.textContent = prog.grade === 1 ? "PULLS TO SILVER" : "COPIES TO NEXT GRADE"
     }
@@ -2249,12 +2235,16 @@ function renderVaultCardPopup(stack) {
 
     const upgradeBtn = document.getElementById("vault-card-popup-upgrade")
     if (upgradeBtn) {
+        const canFuse = vaultCanFuseStack(stack)
         upgradeBtn.classList.toggle("hidden", !prog.can_upgrade)
-        upgradeBtn.disabled = !prog.can_upgrade
+        upgradeBtn.disabled = !canFuse
         const nextLabel = vaultGradeLabel(prog.grade + 1)
-        upgradeBtn.textContent = prog.can_upgrade
-            ? `▲ FUSE → ${nextLabel.toUpperCase()} (${formatGradeLabel(prog.grade + 1)})`
-            : "▲ UPGRADE GRADE"
+        const fuseFee = vaultFuseFeeChips()
+        upgradeBtn.textContent = canFuse
+            ? `▲ FUSE → ${nextLabel.toUpperCase()} (${formatGradeLabel(prog.grade + 1)}) · ${formatChipsAmount(fuseFee)}`
+            : prog.can_upgrade
+                ? `NEED ${formatChipsAmount(fuseFee)} TO FUSE`
+                : "▲ UPGRADE GRADE"
     }
 }
 
@@ -2268,6 +2258,8 @@ function openVaultCardPopup(cardId) {
 
 function closeVaultCardPopup() {
     vaultCardPopupOpenId = null
+    const popupVisual = document.getElementById("vault-card-popup-visual")
+    if (popupVisual) mountVaultGradeFx(popupVisual, 1)
     document.getElementById("vault-card-popup")?.classList.add("hidden")
 }
 
@@ -2277,24 +2269,35 @@ async function vaultCardUpgrade() {
     if (upgradeBtn) upgradeBtn.disabled = true
 
     try {
+        const stack = getVaultStack(vaultCardPopupOpenId)
+        if (stack && !vaultCanFuseStack(stack)) {
+            throw new Error(`Fuse costs ${formatChipsAmount(vaultFuseFeeChips())} CHIPS.`)
+        }
         const { response, data } = await postGameApi("/api/vault/upgrade", { card_id: vaultCardPopupOpenId })
         if (!response.ok || !data.success) {
+            if (data.error === "insufficient_balance") {
+                throw new Error(`Need ${formatChipsAmount(data.fuse_fee_chips || vaultFuseFeeChips())} CHIPS to fuse.`)
+            }
             throw new Error(data.error || "Upgrade failed")
+        }
+        if (Number.isFinite(data.balance)) {
+            session.balance = data.balance
+            updateBalanceDisplays()
         }
         applyVaultFromServer(data.vault, data.vault_detail)
         if (data.grade_changed) {
             vendingBeep(880, 0.06)
             vendingBeep(1180, 0.1, 0.08)
         }
-        const stack = getVaultStack(vaultCardPopupOpenId)
-        if (stack) renderVaultCardPopup(stack)
+        const updated = getVaultStack(vaultCardPopupOpenId)
+        if (updated) renderVaultCardPopup(updated)
     } catch (err) {
         const hintEl = document.getElementById("vault-card-popup-grade-hint")
         if (hintEl) hintEl.textContent = String(err.message || "Could not upgrade.")
     } finally {
         const stack = getVaultStack(vaultCardPopupOpenId)
         const upgradeBtnFinal = document.getElementById("vault-card-popup-upgrade")
-        if (upgradeBtnFinal && stack) upgradeBtnFinal.disabled = !stack.can_upgrade
+        if (upgradeBtnFinal && stack) upgradeBtnFinal.disabled = !vaultCanFuseStack(stack)
     }
 }
 
@@ -2302,7 +2305,6 @@ function bindVaultCardPopup() {
     const close = () => closeVaultCardPopup()
     document.getElementById("vault-card-popup-scrim")?.addEventListener("click", close)
     document.getElementById("vault-card-popup-close")?.addEventListener("click", close)
-    document.getElementById("vault-card-popup-dismiss")?.addEventListener("click", close)
     document.getElementById("vault-card-popup-upgrade")?.addEventListener("click", () => {
         void vaultCardUpgrade()
     })
@@ -4520,7 +4522,7 @@ let vendingBootTimer = null
 let vendingPendingWinner = null
 let vendingEquipResolve = null
 
-const VENDING_CARD_WIDTH_FALLBACK = 221
+const VENDING_CARD_WIDTH_FALLBACK = 148
 const VENDING_SHUFFLE_SLOTS = 48
 const VENDING_WINNER_SLOT = 38
 
@@ -4678,7 +4680,10 @@ async function vendingConfirmEquip() {
     vendingHideEquipButton()
     vendingBusy = false
     vendingUpdateDrawButton()
-    closeVendingScreen()
+    vendingResetGradeFlash()
+    vendingShowView("vending-view-menu")
+    vendingSetLeds("ready")
+    vendingSetButtonsEnabled(true)
 
     if (vendingEquipResolve) {
         vendingEquipResolve()
