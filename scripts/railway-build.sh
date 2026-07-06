@@ -38,7 +38,16 @@ elif [ -f data/defaultmap.json ]; then
   cp data/defaultmap.json game-server/data/defaultmap.json
 fi
 
-cd game-client
-npm ci
-npm run build
-echo "game.js built: $(wc -c < ../static/game/game.js) bytes"
+if command -v npm >/dev/null 2>&1; then
+  cd game-client
+  npm ci
+  npm run build
+  echo "game.js built: $(wc -c < ../static/game/game.js) bytes"
+else
+  if [ -f static/game/game.js ]; then
+    echo "npm not available — using committed static/game/game.js ($(wc -c < static/game/game.js) bytes)"
+  else
+    echo "ERROR: npm missing and static/game/game.js not found" >&2
+    exit 1
+  fi
+fi

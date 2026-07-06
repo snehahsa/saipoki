@@ -1,0 +1,5 @@
+# Flask app + Vite game client (game-client/ has package.json, not repo root).
+providers = ["python", "node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
