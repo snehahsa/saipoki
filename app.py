@@ -1846,7 +1846,89 @@ def _guest_backup_has_progress(backup: dict) -> bool:
     return False
 
 
-def _apply_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> None:
+def _guest_row_needs_restore(row) -> bool:
+    """Allow vault restore when the server row has no saved game progress."""
+    if row is None:
+        return True
+    qp = parse_quest_progress(
+        row["quest_progress"] if "quest_progress" in row.keys() else None
+    )
+    if qp.get("completed_steps"):
+        return False
+    if parse_holds(row["holds"] if "holds" in row.keys() else None):
+        return False
+    if vault_for_user(row["vault"] if "vault" in row.keys() else None):
+        return False
+    gear = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+    if any(gear):
+        return False
+    return True
+
+
+def _guest_progress_score_row(row) -> int:
+    if row is None:
+        return 0
+    score = 0
+    qp = parse_quest_progress(
+        row["quest_progress"] if "quest_progress" in row.keys() else None
+    )
+    score += len(qp.get("completed_steps") or []) * 10
+    score += len(parse_holds(row["holds"] if "holds" in row.keys() else None)) * 8
+    gear = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+    score += sum(1 for item in gear if item) * 8
+    score += len(vault_for_user(row["vault"] if "vault" in row.keys() else None)) * 5
+    score += min(int(row["balance"] if "balance" in row.keys() else 0) // 50, 40)
+    skin = row["skin"] if "skin" in row.keys() else None
+    if skin:
+        score += 3
+    name = str(row["display_name"] or "").strip() if "display_name" in row.keys() else ""
+    if name and not is_guest_placeholder_name(name):
+        score += 2
+    return score
+
+
+def _guest_progress_score_backup(backup: dict) -> int:
+    if not isinstance(backup, dict):
+        return 0
+    score = 0
+    qp = backup.get("quest_progress")
+    if isinstance(qp, dict):
+        score += len(qp.get("completed_steps") or []) * 10
+    score += len(holds_for_user(backup.get("holds") or [])) * 8
+    gear = gear_slots_for_user(backup.get("gear_slots"))
+    score += sum(1 for item in gear if item) * 8
+    score += len(
+        vault_for_user(backup.get("vault_detail") or backup.get("vault") or [])
+    ) * 5
+    score += min(int(backup.get("balance") or 0) // 50, 40)
+    skin = backup.get("skin")
+    if skin in SKINS:
+        score += 3
+    name = normalize_player_name(backup.get("display_name"))
+    if name:
+        score += 2
+    return score
+
+
+def _merge_quest_progress(server_raw, backup_raw) -> dict:
+    server = parse_quest_progress(server_raw)
+    backup = parse_quest_progress(backup_raw)
+    completed = list(
+        dict.fromkeys(
+            (server.get("completed_steps") or []) + (backup.get("completed_steps") or [])
+        )
+    )
+    removed = list(
+        dict.fromkeys(
+            (server.get("removed_quests") or []) + (backup.get("removed_quests") or [])
+        )
+    )
+    fishing = {**(server.get("fishing") or {}), **(backup.get("fishing") or {})}
+    return {"completed_steps": completed, "removed_quests": removed, "fishing": fishing}
+
+
+def _merge_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> bool:
+    """Merge browser vault backup into the server row. Returns True if row changed."""
     ensure_user_row(
         conn,
         telegram_id,
@@ -1857,44 +1939,84 @@ def _apply_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> None:
         "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
     ).fetchone()
     if row is None:
-        return
-
-    display_name = normalize_player_name(backup.get("display_name"))
-    skin = backup.get("skin") if backup.get("skin") in SKINS else None
+        return False
 
     fields: dict[str, Any] = {}
-    if display_name:
-        fields["display_name"] = display_name
-    if skin:
-        fields["skin"] = skin
-    if "balance" in backup:
-        fields["balance"] = max(0, int(backup.get("balance") or 0))
-    holds = holds_for_user(backup.get("holds") or [])
-    if holds:
-        fields["holds"] = json.dumps(holds)
-    gear_slots = gear_slots_for_user(backup.get("gear_slots"))
-    if any(gear_slots):
-        fields["gear_slots"] = json.dumps(gear_slots)
-    qp_in = backup.get("quest_progress")
-    if isinstance(qp_in, dict):
-        qp = parse_quest_progress(qp_in)
-        if qp.get("completed_steps") or qp.get("removed_quests"):
-            fields["quest_progress"] = json.dumps(qp)
-    vault_raw = backup.get("vault_detail") or backup.get("vault")
-    if vault_raw:
-        vault = vault_for_user(vault_raw)
-        if vault:
-            fields["vault"] = json.dumps(vault)
-    owned_in = backup.get("owned_skins")
-    if isinstance(owned_in, list) and owned_in:
-        fields["owned_skins"] = owned_skins_json(
-            parse_owned_skins(owned_in, skin or row["skin"])
-        )
-    if "vending_spins" in backup:
-        fields["vending_spins"] = max(0, int(backup.get("vending_spins") or 0))
+
+    backup_name = normalize_player_name(backup.get("display_name"))
+    row_name = str(row["display_name"] or "").strip() if "display_name" in row.keys() else ""
+    if backup_name and (
+        not row_name or is_guest_placeholder_name(row_name)
+    ):
+        fields["display_name"] = backup_name
+
+    backup_skin = backup.get("skin") if backup.get("skin") in SKINS else None
+    row_skin = row["skin"] if "skin" in row.keys() else None
+    if backup_skin and not row_skin:
+        fields["skin"] = backup_skin
+
+    merged_balance = max(
+        int(row["balance"] if "balance" in row.keys() else 0),
+        int(backup.get("balance") or 0),
+    )
+    if merged_balance != int(row["balance"] if "balance" in row.keys() else 0):
+        fields["balance"] = merged_balance
+
+    server_holds = parse_holds(row["holds"] if "holds" in row.keys() else None)
+    backup_holds = holds_for_user(backup.get("holds") or [])
+    merged_holds = list(dict.fromkeys(server_holds + backup_holds))
+    if merged_holds != server_holds:
+        fields["holds"] = json.dumps(merged_holds)
+
+    slots = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
+    for gear_id in gear_slots_for_user(backup.get("gear_slots")):
+        if gear_id:
+            grant_gear_to_slots(slots, gear_id)
+    if slots != parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None):
+        fields["gear_slots"] = json.dumps(slots)
+
+    merged_qp = _merge_quest_progress(
+        row["quest_progress"] if "quest_progress" in row.keys() else None,
+        backup.get("quest_progress"),
+    )
+    server_qp = parse_quest_progress(
+        row["quest_progress"] if "quest_progress" in row.keys() else None
+    )
+    if merged_qp != server_qp:
+        fields["quest_progress"] = json.dumps(merged_qp)
+
+    merged_vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+    known_cards = set(vault_card_ids(merged_vault))
+    for card in vault_for_user(backup.get("vault_detail") or backup.get("vault") or []):
+        card_id = str(card.get("card_id") or "").strip()
+        if card_id and card_id not in known_cards:
+            merged_vault.append(card)
+            known_cards.add(card_id)
+    server_vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+    if merged_vault != server_vault:
+        fields["vault"] = json.dumps(merged_vault)
+
+    server_owned = parse_owned_skins(
+        row["owned_skins"] if "owned_skins" in row.keys() else None,
+        row_skin,
+    )
+    backup_owned = parse_owned_skins(
+        backup.get("owned_skins") if isinstance(backup.get("owned_skins"), list) else None,
+        backup_skin or row_skin,
+    )
+    merged_owned = list(dict.fromkeys(server_owned + backup_owned))
+    if merged_owned != server_owned:
+        fields["owned_skins"] = owned_skins_json(merged_owned)
+
+    merged_spins = max(
+        int(row["vending_spins"] if "vending_spins" in row.keys() else 0),
+        int(backup.get("vending_spins") or 0),
+    )
+    if merged_spins != int(row["vending_spins"] if "vending_spins" in row.keys() else 0):
+        fields["vending_spins"] = merged_spins
 
     if not fields:
-        return
+        return False
 
     fields["updated_at"] = now
     assignments = ", ".join(f"{key} = ?" for key in fields)
@@ -1902,6 +2024,11 @@ def _apply_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> None:
         f"UPDATE users SET {assignments} WHERE telegram_id = ?",
         (*fields.values(), telegram_id),
     )
+    return True
+
+
+def _apply_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> None:
+    _merge_guest_backup(conn, telegram_id, backup, now)
 
 
 @app.route("/api/guest/restore", methods=["POST"])
@@ -1928,13 +2055,49 @@ def guest_profile_restore():
         row = conn.execute(
             "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
         ).fetchone()
-        if not _guest_row_needs_restore(row):
-            return jsonify({"success": True, "restored": False, "reason": "server_has_progress"})
+        server_score = _guest_progress_score_row(row)
+        backup_score = _guest_progress_score_backup(backup)
+        if (
+            not _guest_row_needs_restore(row)
+            and backup_score <= server_score
+        ):
+            return jsonify(
+                {"success": True, "restored": False, "reason": "server_has_progress"}
+            )
 
-        _apply_guest_backup(conn, telegram_id, backup, now)
-        backfill_quest_triggers(conn, telegram_id)
+        changed = _merge_guest_backup(conn, telegram_id, backup, now)
+        if changed:
+            backfill_quest_triggers(conn, telegram_id)
 
-    return jsonify({"success": True, "restored": True})
+    return jsonify({"success": True, "restored": bool(changed)})
+
+
+@app.route("/api/guest/sync", methods=["POST"])
+def guest_profile_sync():
+    """Merge guest vault backup into the server row (survives deploy DB wipes)."""
+    if wallet_payments_enabled():
+        return wallet_payments_disabled_response()
+
+    data = request.get_json(silent=True) or {}
+    user = resolve_auth_user(data)
+    if not user:
+        return jsonify({"success": False, "error": auth_session_error_message()}), 401
+
+    telegram_id = str(user["id"])
+    if not is_guest_user_id(telegram_id):
+        return jsonify({"success": False, "error": "Guest profiles only."}), 403
+
+    backup = data.get("backup")
+    if not isinstance(backup, dict) or not _guest_backup_has_progress(backup):
+        return jsonify({"success": False, "error": "No backup to sync."}), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        changed = _merge_guest_backup(conn, telegram_id, backup, now)
+        if changed:
+            backfill_quest_triggers(conn, telegram_id)
+
+    return jsonify({"success": True, "synced": bool(changed)})
 
 
 @app.route("/api/pin/set", methods=["POST"])

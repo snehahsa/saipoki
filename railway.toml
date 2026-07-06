@@ -2,6 +2,10 @@
 builder = "NIXPACKS"
 buildCommand = "bash scripts/railway-build.sh"
 
+# Production persistence: mount a Railway volume at /data (SQLite via DB_PATH),
+# or attach Railway Postgres and set DATABASE_URL. Without either, guest vault
+# sync restores progress after each deploy.
+
 [deploy]
 startCommand = "bash scripts/railway-start.sh"
 restartPolicyType = "ON_FAILURE"

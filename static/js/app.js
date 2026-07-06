@@ -2624,6 +2624,7 @@ async function grantGear(item, source = "") {
         session.gear_slots = normalizeGearSlots(data.gear_slots)
         syncQuickbar()
         syncPlayerGearToGame()
+        touchGuestServerBackup()
 
         const resolvedMeta = data.meta || meta
         if (data.newly_granted) {
@@ -3891,6 +3892,13 @@ async function enterGame() {
             gear_slots: normalizeGearSlots(fresh.gear_slots),
             vault: normalizeVault(fresh.vault),
         }
+        touchGuestServerBackup()
+        if (guestPlayMode()) {
+            const guestId = getActiveGuestId()
+            if (guestId) {
+                void window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
+            }
+        }
     } catch (error) {
         setGameLoading("", false)
         stopGameHud()
@@ -4970,6 +4978,12 @@ async function completeSessionBootstrap() {
 
     if (guestPlayMode()) {
         const guestId = getActiveGuestId()
+        if (guestId && window.SaiPokePlay?.getGuestServerBackup?.(guestId)) {
+            await window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
+            data = await authenticate()
+            if (!data) return false
+        }
+
         const backup = window.SaiPokePlay?.getGuestServerBackup?.(guestId)
         const serverHasProgress = guestAuthHasProgress(data)
         if (guestId && !serverHasProgress && backup) {
@@ -5330,6 +5344,7 @@ const getCachedGuestProfileName = window.SaiPokePlay?.getCachedGuestProfileName
 const getCachedGuestProfileMeta = window.SaiPokePlay?.getCachedGuestProfileMeta
 const saveGuestServerBackup = window.SaiPokePlay?.saveGuestServerBackup
 const restoreGuestProfileFromVault = window.SaiPokePlay?.restoreGuestProfileFromVault
+const syncGuestProfileToServer = window.SaiPokePlay?.syncGuestProfileToServer
 const getGuestServerBackup = window.SaiPokePlay?.getGuestServerBackup
 
 window.SaiPokePlay = {
@@ -5356,6 +5371,7 @@ window.SaiPokePlay = {
     getCachedGuestProfileMeta,
     saveGuestServerBackup,
     restoreGuestProfileFromVault,
+    syncGuestProfileToServer,
     getGuestServerBackup,
 }
 

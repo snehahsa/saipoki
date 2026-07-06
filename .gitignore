@@ -4,6 +4,9 @@ __pycache__/
 users.db
 users.db-wal
 users.db-shm
+users.db-journal
+*.db-wal
+*.db-shm
 .env
 node_modules/
 game-client/node_modules/

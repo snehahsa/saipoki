@@ -214,6 +214,25 @@
         upsertProfileMeta(guestId, { serverBackup: backup })
     }
 
+    async function syncGuestProfileToServer(guestId) {
+        if (!guestProfilesEnabled() || !guestId) return false
+        const backup = getGuestServerBackup(guestId)
+        if (!backupHasProgress(backup)) return false
+
+        try {
+            const response = await fetch("/api/guest/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                cache: "no-store",
+                body: JSON.stringify({ guestId, backup }),
+            })
+            const data = await response.json().catch(() => ({}))
+            return Boolean(response.ok && data.success)
+        } catch {
+            return false
+        }
+    }
+
     async function restoreGuestProfileFromVault(guestId) {
         if (!guestProfilesEnabled() || !guestId) return false
         const backup = getGuestServerBackup(guestId)
@@ -745,6 +764,7 @@
     window.SaiPokePlay.getCachedGuestProfileMeta = getCachedGuestProfileMeta
     window.SaiPokePlay.saveGuestServerBackup = saveGuestServerBackup
     window.SaiPokePlay.restoreGuestProfileFromVault = restoreGuestProfileFromVault
+    window.SaiPokePlay.syncGuestProfileToServer = syncGuestProfileToServer
     window.SaiPokePlay.getGuestServerBackup = getGuestServerBackup
     window.SaiPokePlay.guestProfilesEnabled = guestProfilesEnabled
 
