@@ -1989,15 +1989,7 @@ function vaultProgressLabel(stack) {
     if (prog.grade === 1) {
         return `${prog.total_minted}/${prog.next_cost}`
     }
-    if (prog.copies > 0) {
-        return `+${prog.copies}/${prog.next_cost}`
-    }
-    return ""
-}
-
-function vaultSlotShowsMultiplier(stack) {
-    const mult = Number(stack?.multiplier) || 1
-    return mult > 1.01
+    return `${prog.copies}/${prog.next_cost}`
 }
 
 function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
@@ -2036,21 +2028,17 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
 
         slot.appendChild(frame)
 
-        if (stack.grade >= 2) {
-            const gradeBadge = document.createElement("span")
-            gradeBadge.className = "vault-slot-grade"
-            gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
-            gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
-            slot.appendChild(gradeBadge)
-        }
+        const gradeBadge = document.createElement("span")
+        gradeBadge.className = "vault-slot-grade"
+        gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
+        gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
+        slot.appendChild(gradeBadge)
 
-        if (vaultSlotShowsMultiplier(stack)) {
-            const multBadge = document.createElement("span")
-            multBadge.className = "vault-slot-mult"
-            multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
-            multBadge.title = "Battle multiplier"
-            slot.appendChild(multBadge)
-        }
+        const multBadge = document.createElement("span")
+        multBadge.className = "vault-slot-mult"
+        multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
+        multBadge.title = "Battle multiplier"
+        slot.appendChild(multBadge)
     } else {
         slot.disabled = true
         slot.textContent = emptyText

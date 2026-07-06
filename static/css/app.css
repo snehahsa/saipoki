@@ -5968,11 +5968,12 @@ body.poketab-open {
 .game-drawer-slot-vault .vault-slot-grade,
 .game-drawer-slot-vault .vault-slot-mult,
 .game-drawer-slot-vault .vault-slot-copies {
-    font-size: 11px;
-    padding: 5px 6px;
+    font-size: 13px;
+    padding: 6px 7px;
     line-height: 1.2;
-    max-width: calc(100% - 4px);
+    max-width: calc(100% - 6px);
     white-space: nowrap;
+    border-width: 2px;
 }
 
 .vault-slot-grade {
