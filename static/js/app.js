@@ -4458,7 +4458,7 @@ let vendingBootTimer = null
 let vendingPendingWinner = null
 let vendingEquipResolve = null
 
-const VENDING_CARD_WIDTH_FALLBACK = 184
+const VENDING_CARD_WIDTH_FALLBACK = 221
 const VENDING_SHUFFLE_SLOTS = 48
 const VENDING_WINNER_SLOT = 38
 
