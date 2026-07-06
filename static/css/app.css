@@ -5624,7 +5624,7 @@ body.poketab-open {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(100%, 640px);
+    width: min(100%, 736px);
     display: flex;
     transform: translateX(100%);
     animation: drawer-slide-in 0.28s steps(6, end) forwards;
@@ -5865,7 +5865,7 @@ body.poketab-open {
 .game-drawer-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    gap: 14px;
     align-content: start;
 }
 
@@ -5968,8 +5968,8 @@ body.poketab-open {
 .game-drawer-slot-vault .vault-slot-grade,
 .game-drawer-slot-vault .vault-slot-mult,
 .game-drawer-slot-vault .vault-slot-copies {
-    font-size: 10px;
-    padding: 4px 6px;
+    font-size: 11px;
+    padding: 5px 6px;
     line-height: 1.2;
     max-width: calc(100% - 4px);
     white-space: nowrap;
@@ -6888,9 +6888,11 @@ body.vending-open {
     position: fixed;
     inset: 0;
     z-index: 50000;
-    display: grid;
-    place-items: center;
-    padding: calc(10px * var(--vm));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(10px, env(safe-area-inset-top, 0px)) 12px max(10px, env(safe-area-inset-bottom, 0px));
+    overflow: hidden;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
 }
@@ -6910,15 +6912,21 @@ body.vending-open {
 .vending-room {
     position: relative;
     z-index: 1;
-    width: min(calc(520px * var(--vm)), 98vw);
-    max-height: calc(100vh - 24px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    width: min(calc(520px * var(--vm)), 96vw);
+    max-height: calc(100dvh - 20px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .vending-machine {
     position: relative;
-    padding: calc(12px * var(--vm));
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 20px);
+    min-height: 0;
+    overflow: hidden;
+    padding: calc(10px * var(--vm));
     background:
         repeating-conic-gradient(#4a4458 0% 25%, #3a3448 0% 50%) 50% / calc(4px * var(--vm)) calc(4px * var(--vm)),
         linear-gradient(180deg, #5a5468 0%, #3a3448 100%);
@@ -6931,9 +6939,10 @@ body.vending-open {
 .vending-top-panel {
     display: flex;
     align-items: center;
-    gap: calc(10px * var(--vm));
-    margin-bottom: calc(10px * var(--vm));
-    padding: calc(8px * var(--vm)) calc(10px * var(--vm));
+    gap: calc(8px * var(--vm));
+    margin-bottom: calc(8px * var(--vm));
+    padding: calc(6px * var(--vm)) calc(8px * var(--vm));
+    flex-shrink: 0;
     background: #2a2438;
     border: calc(2px * var(--vm)) solid #1a1420;
     box-shadow: inset 0 calc(-2px * var(--vm)) 0 rgba(0, 0, 0, 0.35);
@@ -6977,8 +6986,11 @@ body.vending-open {
 .vending-body {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: calc(8px * var(--vm));
-    align-items: stretch;
+    gap: calc(6px * var(--vm));
+    align-items: start;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .vending-side {
@@ -7047,16 +7059,16 @@ body.vending-open {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: calc(6px * var(--vm));
+    gap: calc(4px * var(--vm));
     width: 100%;
-    min-height: calc(64px * var(--vm));
-    padding: calc(10px * var(--vm)) calc(6px * var(--vm));
+    min-height: calc(52px * var(--vm));
+    padding: calc(8px * var(--vm)) calc(5px * var(--vm));
     text-align: center;
     line-height: 1.25;
 }
 
 .vending-side-plate-stack .vending-side-btn {
-    min-height: calc(52px * var(--vm));
+    min-height: calc(44px * var(--vm));
 }
 
 .vending-side-btn-text {
@@ -7107,18 +7119,24 @@ body.vending-open {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
 }
 
 .vending-bottom-deck {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: calc(8px * var(--vm));
-    align-items: center;
-    margin-top: calc(8px * var(--vm));
-    padding: calc(10px * var(--vm));
+    grid-template-rows: auto auto;
+    gap: calc(5px * var(--vm));
+    align-items: stretch;
+    margin-top: calc(6px * var(--vm));
+    padding: calc(6px * var(--vm));
+    flex-shrink: 0;
     background: #2a2438;
     border: calc(2px * var(--vm)) solid #1a1420;
-    box-shadow: inset 0 calc(2px * var(--vm)) calc(8px * var(--vm)) rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 calc(2px * var(--vm)) calc(6px * var(--vm)) rgba(0, 0, 0, 0.35);
 }
 
 .vending-wire-red { background: #e84a4a; }
@@ -7201,22 +7219,31 @@ body.vending-open {
 
 .vending-monitor-wrap {
     margin-bottom: 0;
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .vending-monitor-bezel {
-    padding: calc(10px * var(--vm));
+    padding: calc(8px * var(--vm));
     background: linear-gradient(180deg, #6a6478 0%, #4a4458 100%);
     border: calc(3px * var(--vm)) solid #1a1420;
     box-shadow: inset 0 calc(2px * var(--vm)) 0 rgba(255, 255, 255, 0.12);
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .vending-monitor-glass {
     position: relative;
-    height: calc(200px * var(--vm));
-    min-height: calc(200px * var(--vm));
-    max-height: calc(200px * var(--vm));
+    flex: 1 1 auto;
+    min-height: calc(110px * var(--vm));
+    height: auto;
+    max-height: min(calc(168px * var(--vm)), 32dvh);
     overflow: hidden;
     background: #0a1a8a;
     border: calc(3px * var(--vm)) solid #0a0818;
@@ -7369,8 +7396,9 @@ body.vending-open {
 
 .vending-shuffle-window {
     position: relative;
-    height: calc(112px * var(--vm));
-    margin: 0 auto calc(8px * var(--vm));
+    height: min(calc(96px * var(--vm)), 100%);
+    max-height: calc(96px * var(--vm));
+    margin: 0 auto calc(6px * var(--vm));
     overflow: hidden;
     background: #061060;
     border: calc(2px * var(--vm)) solid #2a5ae8;
@@ -7588,12 +7616,13 @@ body.vending-open {
 }
 
 .vending-monitor-label {
-    margin: calc(6px * var(--vm)) 0 0;
+    margin: calc(4px * var(--vm)) 0 0;
     font-family: silkscreen, monospace;
     font-size: calc(7px * var(--vm));
     letter-spacing: 0.12em;
     text-align: center;
     color: #8a8498;
+    flex-shrink: 0;
 }
 
 .vending-btn {
@@ -7683,14 +7712,14 @@ body.vending-open {
     grid-template-columns: repeat(3, 1fr);
     grid-column: 1;
     grid-row: 2;
-    gap: calc(4px * var(--vm));
-    padding: calc(6px * var(--vm));
+    gap: calc(3px * var(--vm));
+    padding: calc(4px * var(--vm));
     background: #2a2438;
     border: calc(2px * var(--vm)) solid #1a1420;
 }
 
 .vending-keypad span {
-    height: calc(14px * var(--vm));
+    height: calc(11px * var(--vm));
     background: #4a4458;
     border: calc(1px * var(--vm)) solid #1a1420;
     box-shadow: inset 0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.1);
@@ -7700,9 +7729,10 @@ body.vending-open {
     grid-column: 2;
     grid-row: 1 / span 2;
     width: auto;
-    min-width: calc(88px * var(--vm));
-    height: 100%;
-    padding: calc(8px * var(--vm));
+    min-width: calc(72px * var(--vm));
+    align-self: stretch;
+    height: auto;
+    padding: calc(6px * var(--vm));
     font-family: silkscreen, monospace;
     font-size: calc(8px * var(--vm));
     letter-spacing: 0.08em;
@@ -7731,7 +7761,7 @@ body.vending-open {
     left: auto;
     bottom: auto;
     width: 100%;
-    height: calc(10px * var(--vm));
+    height: calc(8px * var(--vm));
     transform: none;
     box-shadow: inset 0 calc(2px * var(--vm)) calc(4px * var(--vm)) rgba(0, 0, 0, 0.6);
 }
@@ -7741,9 +7771,29 @@ body.vending-open {
     right: auto;
     bottom: auto;
     width: 100%;
-    height: calc(6px * var(--vm));
-    margin-top: calc(6px * var(--vm));
+    height: calc(5px * var(--vm));
+    margin-top: calc(4px * var(--vm));
     border-radius: calc(3px * var(--vm));
+}
+
+@media (max-height: 720px) {
+    .vending-screen {
+        --vm: 1.72;
+    }
+
+    .vending-monitor-glass {
+        max-height: min(calc(150px * var(--vm)), 28dvh);
+    }
+}
+
+@media (max-height: 600px) {
+    .vending-screen {
+        --vm: 1.55;
+    }
+
+    .vending-monitor-glass {
+        max-height: min(calc(130px * var(--vm)), 24dvh);
+    }
 }
 
 /* ── Trainer stats screen ── */

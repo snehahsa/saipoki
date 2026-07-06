@@ -4458,9 +4458,14 @@ let vendingBootTimer = null
 let vendingPendingWinner = null
 let vendingEquipResolve = null
 
-const VENDING_CARD_WIDTH = 184
+const VENDING_CARD_WIDTH_FALLBACK = 184
 const VENDING_SHUFFLE_SLOTS = 48
 const VENDING_WINNER_SLOT = 38
+
+function vendingShuffleCardWidth(track) {
+    const card = track?.querySelector(".vending-shuffle-card")
+    return card?.getBoundingClientRect().width || VENDING_CARD_WIDTH_FALLBACK
+}
 
 function isWalletVerified() {
     return true
@@ -4893,9 +4898,6 @@ async function vendingPerformDraw() {
     const track = document.getElementById("vending-shuffle-track")
     const statusEl = document.getElementById("vending-shuffle-status")
     const windowEl = document.querySelector(".vending-shuffle-window")
-    const windowWidth = windowEl?.clientWidth || 280
-    const centerOffset = (windowWidth - VENDING_CARD_WIDTH) / 2
-    const targetX = -(VENDING_WINNER_SLOT * VENDING_CARD_WIDTH - centerOffset)
 
     const bars = ["▮▯▯▯▯▯", "▮▮▯▯▯▯", "▮▮▮▯▯▯", "▮▮▮▮▯▯", "▮▮▮▮▮▯", "▮▮▮▮▮▮"]
     let barIdx = 0
@@ -4906,6 +4908,10 @@ async function vendingPerformDraw() {
     }, 120)
 
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    const cardWidth = vendingShuffleCardWidth(track)
+    const windowWidth = windowEl?.clientWidth || 280
+    const centerOffset = (windowWidth - cardWidth) / 2
+    const targetX = -(VENDING_WINNER_SLOT * cardWidth - centerOffset)
     if (track) {
         track.style.transition = "transform 3.4s cubic-bezier(0.08, 0.85, 0.15, 1)"
         track.style.transform = `translateX(${targetX}px)`
