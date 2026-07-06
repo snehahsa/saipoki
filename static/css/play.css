@@ -53,7 +53,18 @@ body.play-body {
     object-position: center 42%;
     transform: scale(1);
     animation: play-bg-zoom 48s ease-in-out infinite alternate;
-    will-change: transform;
+    will-change: transform, opacity;
+}
+
+@keyframes play-bg-intro {
+    from {
+        opacity: 0;
+        transform: scale(1.06);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 @keyframes play-bg-zoom {
@@ -703,13 +714,29 @@ body.play-in-app:has(#game-screen:not(.hidden)) .play-wallet-bar {
     cursor: pointer;
 }
 
-/* Game layer — menus keep retro sky; live canvas hides all landing backdrops */
+/* Landing hero on /play; menus use retro sky; live game hides both */
 body.play-mode #retro-pixel-bg,
 body.play-mode .play-bg {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 420ms ease;
+    transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+body.play-mode:not(.play-in-app) #retro-pixel-bg {
+    opacity: 0;
+    visibility: hidden;
+}
+
+body.play-mode:not(.play-in-app) .play-bg {
+    opacity: 1;
+    visibility: visible;
+}
+
+body.play-mode:not(.play-in-app) .play-bg__image {
+    animation:
+        play-bg-intro 2.8s ease-out forwards,
+        play-bg-zoom 48s ease-in-out 2.8s infinite alternate;
 }
 
 body.play-mode.play-in-app:not(.game-active) #retro-pixel-bg {
