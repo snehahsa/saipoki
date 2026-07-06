@@ -823,7 +823,7 @@
                         <p class="game-drawer-hint">PokéTab features coming soon</p>
                     </section>
                     <section class="game-drawer-pane" data-pane="vault" data-hold-ui="drawer:vault" aria-label="Vault">
-                        <div class="game-drawer-hero">
+                        <div class="game-drawer-hero game-drawer-hero--compact">
                             <img
                                 class="game-drawer-hero-icon"
                                 src="/static/menuitems/dex.png?v={{ asset_v.dex_icon }}"
@@ -833,7 +833,9 @@
                             >
                             <p class="game-drawer-hero-text">Store &amp; track your PokéCards</p>
                         </div>
-                        <div class="game-drawer-grid" id="game-vault-grid"></div>
+                        <div class="game-drawer-grid-scroll" id="game-vault-grid-scroll">
+                            <div class="game-drawer-grid" id="game-vault-grid"></div>
+                        </div>
                         <p class="game-drawer-hint">Tap a card to grade · fuse duplicates into higher tiers</p>
                     </section>
                 </div>

@@ -2025,24 +2025,6 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         img.alt = item.name || "card"
         frame.appendChild(img)
 
-        // Grade 2+ only — G1 uses plain frame; avoids "G1" + "1/3" double numbers.
-        if (stack.grade >= 2) {
-            const gradeBadge = document.createElement("span")
-            gradeBadge.className = "vault-slot-grade"
-            gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
-            gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
-            slot.appendChild(gradeBadge)
-        }
-
-        // Meaningful multipliers only — hide ×1 on standard cards (reads like a second "1").
-        if (vaultSlotShowsMultiplier(stack)) {
-            const multBadge = document.createElement("span")
-            multBadge.className = "vault-slot-mult"
-            multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
-            multBadge.title = "Battle multiplier"
-            slot.appendChild(multBadge)
-        }
-
         const progressText = vaultProgressLabel(stack)
         if (progressText) {
             const copyBadge = document.createElement("span")
@@ -2053,6 +2035,22 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         }
 
         slot.appendChild(frame)
+
+        if (stack.grade >= 2) {
+            const gradeBadge = document.createElement("span")
+            gradeBadge.className = "vault-slot-grade"
+            gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
+            gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
+            slot.appendChild(gradeBadge)
+        }
+
+        if (vaultSlotShowsMultiplier(stack)) {
+            const multBadge = document.createElement("span")
+            multBadge.className = "vault-slot-mult"
+            multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
+            multBadge.title = "Battle multiplier"
+            slot.appendChild(multBadge)
+        }
     } else {
         slot.disabled = true
         slot.textContent = emptyText
@@ -4460,7 +4458,7 @@ let vendingBootTimer = null
 let vendingPendingWinner = null
 let vendingEquipResolve = null
 
-const VENDING_CARD_WIDTH = 92
+const VENDING_CARD_WIDTH = 184
 const VENDING_SHUFFLE_SLOTS = 48
 const VENDING_WINNER_SLOT = 38
 

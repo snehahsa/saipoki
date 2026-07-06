@@ -5624,7 +5624,7 @@ body.poketab-open {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(100%, 320px);
+    width: min(100%, 480px);
     display: flex;
     transform: translateX(100%);
     animation: drawer-slide-in 0.28s steps(6, end) forwards;
@@ -5642,11 +5642,11 @@ body.poketab-open {
 
 .game-drawer-tabs {
     flex-shrink: 0;
-    width: 58px;
+    width: 64px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 12px 0 12px 6px;
+    gap: 8px;
+    padding: 14px 0 14px 8px;
     background: linear-gradient(180deg, #2a2218 0%, #1a140e 100%);
     border-right: 3px solid #0d0a08;
     box-shadow: inset -3px 0 0 rgba(255, 255, 255, 0.06);
@@ -5655,8 +5655,8 @@ body.poketab-open {
 .game-drawer-tab {
     appearance: none;
     border: none;
-    width: 52px;
-    padding: 8px 4px 6px;
+    width: 56px;
+    padding: 10px 4px 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -5695,7 +5695,7 @@ body.poketab-open {
 
 .game-drawer-tab-label {
     font-family: silkscreen, monospace;
-    font-size: 6px;
+    font-size: 7px;
     letter-spacing: 0.08em;
     line-height: 1.2;
     text-align: center;
@@ -5750,7 +5750,7 @@ body.poketab-open {
 
 .game-drawer-title {
     font-family: silkscreen, monospace;
-    font-size: 11px;
+    font-size: 13px;
     letter-spacing: 0.1em;
     color: #2a1808;
     text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.8);
@@ -5786,8 +5786,9 @@ body.poketab-open {
     display: none;
     flex-direction: column;
     height: 100%;
-    padding: 12px;
-    overflow-y: auto;
+    min-height: 0;
+    padding: 12px 14px 14px;
+    overflow: hidden;
 }
 
 .game-drawer-pane.active {
@@ -5803,6 +5804,12 @@ body.poketab-open {
     background: rgba(255, 255, 255, 0.45);
     border: 2px solid #8b7355;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+    flex-shrink: 0;
+}
+
+.game-drawer-hero--compact {
+    padding: 8px 10px;
+    margin-bottom: 10px;
 }
 
 .game-drawer-hero-icon {
@@ -5815,28 +5822,52 @@ body.poketab-open {
 
 .game-drawer-hero-text {
     font-family: silkscreen, monospace;
-    font-size: 7px;
+    font-size: 8px;
     line-height: 1.65;
     color: #4a3018;
     margin: 0;
 }
 
+.game-drawer-grid-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -2px;
+    padding: 2px 2px 6px;
+    scrollbar-width: thin;
+    scrollbar-color: #8b7355 rgba(255, 255, 255, 0.35);
+}
+
+.game-drawer-grid-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.game-drawer-grid-scroll::-webkit-scrollbar-thumb {
+    background: #8b7355;
+    border: 1px solid #2d2418;
+}
+
 .game-drawer-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    align-content: start;
 }
 
 .game-drawer-slot {
     aspect-ratio: 5 / 7;
+    min-height: 0;
+    width: 100%;
     border: 2px dashed #b8a888;
     background: rgba(255, 255, 255, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: silkscreen, monospace;
-    font-size: 6px;
+    font-size: 7px;
     color: #9a8b72;
     box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.4);
 }
@@ -5918,6 +5949,15 @@ body.poketab-open {
     image-rendering: pixelated;
     text-shadow: 1px 1px 0 #1a1208;
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
+.game-drawer-slot-vault .vault-slot-grade,
+.game-drawer-slot-vault .vault-slot-mult,
+.game-drawer-slot-vault .vault-slot-copies {
+    font-size: 9px;
+    padding: 4px 5px;
+    line-height: 1.2;
 }
 
 .vault-slot-grade {
@@ -5949,12 +5989,13 @@ body.poketab-open {
 
 .game-drawer-hint {
     font-family: silkscreen, monospace;
-    font-size: 6px;
+    font-size: 7px;
     text-align: center;
     color: #8b7355;
     letter-spacing: 0.04em;
-    margin: auto 0 0;
-    padding-top: 8px;
+    margin: 0;
+    padding-top: 10px;
+    flex-shrink: 0;
 }
 
 .game-drawer-hero-empty .game-drawer-hero-text {
@@ -6822,18 +6863,19 @@ body.desktop-controls .game-pad {
     text-shadow: 2px 2px 0 #2a2218;
 }
 
-/* ── Vending machine overlay (use_vending) ── */
+/* ── Vending machine overlay (use_vending) — 2× readable scale ── */
 body.vending-open {
     overflow: hidden;
 }
 
 .vending-screen {
+    --vm: 2;
     position: fixed;
     inset: 0;
     z-index: 50000;
     display: grid;
     place-items: center;
-    padding: 10px;
+    padding: calc(10px * var(--vm));
     image-rendering: pixelated;
     image-rendering: crisp-edges;
 }
@@ -6853,7 +6895,10 @@ body.vending-open {
 .vending-room {
     position: relative;
     z-index: 1;
-    width: min(420px, 96vw);
+    width: min(calc(420px * var(--vm)), 98vw);
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .vending-wires {
@@ -6861,32 +6906,32 @@ body.vending-open {
     top: 8%;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: calc(18px * var(--vm));
     pointer-events: none;
 }
 
 .vending-wires-left {
-    left: -28px;
+    left: calc(-28px * var(--vm));
 }
 
 .vending-wires-right {
-    right: -28px;
+    right: calc(-28px * var(--vm));
 }
 
 .vending-wire {
     display: block;
-    width: 36px;
-    height: 5px;
+    width: calc(36px * var(--vm));
+    height: calc(5px * var(--vm));
     border-radius: 0;
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
     animation: vending-wire-pulse 1.4s steps(2) infinite;
 }
 
 .vending-wires-left .vending-wire:nth-child(1) { transform: rotate(-18deg); animation-delay: 0s; }
-.vending-wires-left .vending-wire:nth-child(2) { transform: rotate(8deg); width: 44px; animation-delay: 0.3s; }
+.vending-wires-left .vending-wire:nth-child(2) { transform: rotate(8deg); width: calc(44px * var(--vm)); animation-delay: 0.3s; }
 .vending-wires-left .vending-wire:nth-child(3) { transform: rotate(-6deg); animation-delay: 0.6s; }
 .vending-wires-right .vending-wire:nth-child(1) { transform: rotate(14deg); animation-delay: 0.15s; }
-.vending-wires-right .vending-wire:nth-child(2) { transform: rotate(-10deg); width: 40px; animation-delay: 0.45s; }
+.vending-wires-right .vending-wire:nth-child(2) { transform: rotate(-10deg); width: calc(40px * var(--vm)); animation-delay: 0.45s; }
 .vending-wires-right .vending-wire:nth-child(3) { transform: rotate(4deg); animation-delay: 0.75s; }
 
 .vending-wire-red { background: #e84a4a; }
@@ -6903,39 +6948,39 @@ body.vending-open {
 
 .vending-machine {
     position: relative;
-    padding: 14px 14px 16px;
+    padding: calc(14px * var(--vm)) calc(14px * var(--vm)) calc(16px * var(--vm));
     background:
-        repeating-conic-gradient(#4a4458 0% 25%, #3a3448 0% 50%) 50% / 4px 4px,
+        repeating-conic-gradient(#4a4458 0% 25%, #3a3448 0% 50%) 50% / calc(4px * var(--vm)) calc(4px * var(--vm)),
         linear-gradient(180deg, #5a5468 0%, #3a3448 100%);
-    border: 4px solid #1a1420;
+    border: calc(4px * var(--vm)) solid #1a1420;
     box-shadow:
-        inset 0 0 0 2px #8a8498,
-        8px 8px 0 rgba(0, 0, 0, 0.65);
+        inset 0 0 0 calc(2px * var(--vm)) #8a8498,
+        calc(8px * var(--vm)) calc(8px * var(--vm)) 0 rgba(0, 0, 0, 0.65);
 }
 
 .vending-top-panel {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    padding: 6px 8px;
+    gap: calc(8px * var(--vm));
+    margin-bottom: calc(10px * var(--vm));
+    padding: calc(6px * var(--vm)) calc(8px * var(--vm));
     background: #2a2438;
-    border: 2px solid #1a1420;
+    border: calc(2px * var(--vm)) solid #1a1420;
 }
 
 .vending-brand {
     margin-left: auto;
     font-family: silkscreen, monospace;
-    font-size: 8px;
+    font-size: calc(8px * var(--vm));
     letter-spacing: 0.06em;
     color: #7ae8ff;
-    text-shadow: 0 0 6px rgba(122, 232, 255, 0.5);
+    text-shadow: 0 0 calc(6px * var(--vm)) rgba(122, 232, 255, 0.5);
 }
 
 .vending-led {
-    width: 10px;
-    height: 10px;
-    border: 2px solid #1a1420;
+    width: calc(10px * var(--vm));
+    height: calc(10px * var(--vm));
+    border: calc(2px * var(--vm)) solid #1a1420;
     background: #2a2438;
     box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.15);
 }
@@ -6973,27 +7018,27 @@ body.vending-open {
 }
 
 .vending-monitor-wrap {
-    margin-bottom: 12px;
+    margin-bottom: calc(12px * var(--vm));
 }
 
 .vending-monitor-bezel {
-    padding: 10px;
+    padding: calc(10px * var(--vm));
     background: linear-gradient(180deg, #6a6478 0%, #4a4458 100%);
-    border: 3px solid #1a1420;
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12);
+    border: calc(3px * var(--vm)) solid #1a1420;
+    box-shadow: inset 0 calc(2px * var(--vm)) 0 rgba(255, 255, 255, 0.12);
 }
 
 .vending-monitor-glass {
     position: relative;
-    height: 200px;
-    min-height: 200px;
-    max-height: 200px;
+    height: calc(200px * var(--vm));
+    min-height: calc(200px * var(--vm));
+    max-height: calc(200px * var(--vm));
     overflow: hidden;
     background: #0a1a8a;
-    border: 3px solid #0a0818;
+    border: calc(3px * var(--vm)) solid #0a0818;
     box-shadow:
-        inset 0 0 24px rgba(40, 120, 255, 0.35),
-        inset 0 0 0 2px #1a3aaa;
+        inset 0 0 calc(24px * var(--vm)) rgba(40, 120, 255, 0.35),
+        inset 0 0 0 calc(2px * var(--vm)) #1a3aaa;
 }
 
 .vending-scanlines {
@@ -7035,18 +7080,18 @@ body.vending-open {
     z-index: 1;
     height: 100%;
     min-height: 0;
-    padding: 10px;
+    padding: calc(10px * var(--vm));
     box-sizing: border-box;
     font-family: silkscreen, monospace;
     color: #7ae8ff;
-    text-shadow: 0 0 4px rgba(122, 232, 255, 0.6);
+    text-shadow: 0 0 calc(4px * var(--vm)) rgba(122, 232, 255, 0.6);
     overflow: hidden;
 }
 
 .vending-monitor-inner:has(#vending-view-result:not(.hidden)) {
     display: flex;
     flex-direction: column;
-    padding: 6px 8px;
+    padding: calc(6px * var(--vm)) calc(8px * var(--vm));
 }
 
 .vending-view.hidden {
@@ -7056,29 +7101,29 @@ body.vending-open {
 .vending-boot-text {
     margin: 0;
     font-family: inherit;
-    font-size: 9px;
+    font-size: calc(9px * var(--vm));
     line-height: 1.55;
     white-space: pre-wrap;
     color: #9cf0ff;
 }
 
 .vending-menu-title {
-    margin: 0 0 10px;
-    font-size: 10px;
+    margin: 0 0 calc(10px * var(--vm));
+    font-size: calc(10px * var(--vm));
     color: #fff;
     text-align: center;
 }
 
 .vending-menu-line {
-    margin: 0 0 6px;
-    font-size: 8px;
+    margin: 0 0 calc(6px * var(--vm));
+    font-size: calc(8px * var(--vm));
     letter-spacing: 0.04em;
 }
 
 .vending-menu-cursor,
 .vending-soon-cursor {
-    margin: 8px 0 0;
-    font-size: 10px;
+    margin: calc(8px * var(--vm)) 0 0;
+    font-size: calc(10px * var(--vm));
     animation: vending-cursor-blink 0.7s steps(2) infinite;
 }
 
@@ -7088,8 +7133,8 @@ body.vending-open {
 }
 
 .vending-error-code {
-    margin: 0 0 8px;
-    font-size: 18px;
+    margin: 0 0 calc(8px * var(--vm));
+    font-size: calc(18px * var(--vm));
     color: #ff6a6a;
     text-align: center;
     animation: vending-error-flash 0.5s steps(2) infinite;
@@ -7097,7 +7142,7 @@ body.vending-open {
 
 .vending-error-msg {
     margin: 0;
-    font-size: 8px;
+    font-size: calc(8px * var(--vm));
     line-height: 1.6;
     white-space: pre-wrap;
     color: #ff9a9a;
@@ -7110,15 +7155,15 @@ body.vending-open {
 }
 
 .vending-soon-title {
-    margin: 0 0 8px;
-    font-size: 12px;
+    margin: 0 0 calc(8px * var(--vm));
+    font-size: calc(12px * var(--vm));
     text-align: center;
     color: #ffe86a;
 }
 
 .vending-soon-msg {
     margin: 0;
-    font-size: 8px;
+    font-size: calc(8px * var(--vm));
     line-height: 1.6;
     white-space: pre-wrap;
     text-align: center;
@@ -7126,8 +7171,8 @@ body.vending-open {
 }
 
 .vending-shuffle-label {
-    margin: 0 0 8px;
-    font-size: 9px;
+    margin: 0 0 calc(8px * var(--vm));
+    font-size: calc(9px * var(--vm));
     text-align: center;
     color: #fff;
     animation: vending-shuffle-text 0.4s steps(2) infinite;
@@ -7140,12 +7185,12 @@ body.vending-open {
 
 .vending-shuffle-window {
     position: relative;
-    height: 112px;
-    margin: 0 auto 8px;
+    height: calc(112px * var(--vm));
+    margin: 0 auto calc(8px * var(--vm));
     overflow: hidden;
     background: #061060;
-    border: 2px solid #2a5ae8;
-    box-shadow: inset 0 0 16px rgba(0, 80, 255, 0.4);
+    border: calc(2px * var(--vm)) solid #2a5ae8;
+    box-shadow: inset 0 0 calc(16px * var(--vm)) rgba(0, 80, 255, 0.4);
 }
 
 .vending-shuffle-pointer {
@@ -7153,11 +7198,11 @@ body.vending-open {
     top: 0;
     left: 50%;
     z-index: 2;
-    width: 4px;
+    width: calc(4px * var(--vm));
     height: 100%;
     transform: translateX(-50%);
     background: #ffe86a;
-    box-shadow: 0 0 8px #ffe86a;
+    box-shadow: 0 0 calc(8px * var(--vm)) #ffe86a;
 }
 
 .vending-shuffle-pointer::before,
@@ -7166,18 +7211,18 @@ body.vending-open {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
+    border-left: calc(8px * var(--vm)) solid transparent;
+    border-right: calc(8px * var(--vm)) solid transparent;
 }
 
 .vending-shuffle-pointer::before {
-    top: -2px;
-    border-bottom: 10px solid #ffe86a;
+    top: calc(-2px * var(--vm));
+    border-bottom: calc(10px * var(--vm)) solid #ffe86a;
 }
 
 .vending-shuffle-pointer::after {
-    bottom: -2px;
-    border-top: 10px solid #ffe86a;
+    bottom: calc(-2px * var(--vm));
+    border-top: calc(10px * var(--vm)) solid #ffe86a;
 }
 
 .vending-shuffle-track-wrap {
@@ -7193,10 +7238,10 @@ body.vending-open {
 }
 
 .vending-shuffle-card {
-    flex: 0 0 92px;
-    width: 92px;
-    height: 102px;
-    padding: 4px;
+    flex: 0 0 calc(92px * var(--vm));
+    width: calc(92px * var(--vm));
+    height: calc(102px * var(--vm));
+    padding: calc(4px * var(--vm));
     box-sizing: border-box;
 }
 
@@ -7205,23 +7250,23 @@ body.vending-open {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border: 2px solid #1a1420;
+    border: calc(2px * var(--vm)) solid #1a1420;
     background: #2a2848;
     image-rendering: pixelated;
-    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+    box-shadow: calc(2px * var(--vm)) calc(2px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
 }
 
 .vending-shuffle-status {
     margin: 0;
-    font-size: 10px;
+    font-size: calc(10px * var(--vm));
     text-align: center;
     letter-spacing: 0.2em;
     color: #7ae8ff;
 }
 
 .vending-result-headline {
-    margin: 0 0 2px;
-    font-size: 9px;
+    margin: 0 0 calc(2px * var(--vm));
+    font-size: calc(9px * var(--vm));
     text-align: center;
     color: #4ae86a;
     flex-shrink: 0;
@@ -7233,13 +7278,13 @@ body.vending-open {
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    gap: 2px;
+    gap: calc(2px * var(--vm));
 }
 
 .vending-result-layout {
     display: flex;
     flex: 1;
-    gap: 8px;
+    gap: calc(8px * var(--vm));
     align-items: stretch;
     width: 100%;
     min-height: 0;
@@ -7256,12 +7301,12 @@ body.vending-open {
     flex-shrink: 0;
     margin: 0;
     object-fit: contain;
-    border: 2px solid #ffe86a;
+    border: calc(2px * var(--vm)) solid #ffe86a;
     image-rendering: pixelated;
     background: rgba(0, 0, 0, 0.25);
     box-shadow:
-        0 0 10px rgba(255, 232, 106, 0.45),
-        3px 3px 0 rgba(0, 0, 0, 0.5);
+        0 0 calc(10px * var(--vm)) rgba(255, 232, 106, 0.45),
+        calc(3px * var(--vm)) calc(3px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
     animation: vending-result-pop 0.6s ease-out;
 }
 
@@ -7276,8 +7321,8 @@ body.vending-open {
 }
 
 .vending-result-name {
-    margin: 0 0 4px;
-    font-size: 10px;
+    margin: 0 0 calc(4px * var(--vm));
+    font-size: calc(10px * var(--vm));
     line-height: 1.2;
     color: #fff;
     letter-spacing: 0.04em;
@@ -7286,8 +7331,8 @@ body.vending-open {
 }
 
 .vending-result-meta {
-    margin: 0 0 4px;
-    font-size: 8px;
+    margin: 0 0 calc(4px * var(--vm));
+    font-size: calc(8px * var(--vm));
     line-height: 1.35;
     color: #7ae8ff;
     letter-spacing: 0.06em;
@@ -7306,13 +7351,13 @@ body.vending-open {
 }
 
 .vending-result-spells li {
-    margin: 0 0 3px;
-    padding: 3px 5px;
-    font-size: 7px;
+    margin: 0 0 calc(3px * var(--vm));
+    padding: calc(3px * var(--vm)) calc(5px * var(--vm));
+    font-size: calc(7px * var(--vm));
     line-height: 1.4;
     color: #d8f0ff;
     background: rgba(0, 40, 120, 0.4);
-    border-left: 2px solid #4a9ae8;
+    border-left: calc(2px * var(--vm)) solid #4a9ae8;
 }
 
 .vending-result-spells li.vending-spell-def {
@@ -7323,17 +7368,17 @@ body.vending-open {
 .vending-result-equip {
     flex-shrink: 0;
     width: 100%;
-    margin: 4px 0 0;
-    padding: 7px 8px;
+    margin: calc(4px * var(--vm)) 0 0;
+    padding: calc(7px * var(--vm)) calc(8px * var(--vm));
     font-family: silkscreen, monospace;
-    font-size: 8px;
+    font-size: calc(8px * var(--vm));
     letter-spacing: 0.06em;
     color: #0a1a8a;
     background: linear-gradient(180deg, #4ae86a 0%, #2a9a40 100%);
-    border: 2px solid #1a1420;
+    border: calc(2px * var(--vm)) solid #1a1420;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.35),
-        0 2px 0 #1a1420;
+        inset 0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.35),
+        0 calc(2px * var(--vm)) 0 #1a1420;
     cursor: pointer;
     animation: vending-result-pop 0.7s ease-out;
 }
@@ -7359,9 +7404,9 @@ body.vending-open {
 }
 
 .vending-monitor-label {
-    margin: 6px 0 0;
+    margin: calc(6px * var(--vm)) 0 0;
     font-family: silkscreen, monospace;
-    font-size: 7px;
+    font-size: calc(7px * var(--vm));
     letter-spacing: 0.12em;
     text-align: center;
     color: #8a8498;
@@ -7370,35 +7415,35 @@ body.vending-open {
 .vending-control-deck {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--vm));
 }
 
 .vending-btn-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--vm));
 }
 
 .vending-btn {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--vm));
     width: 100%;
-    padding: 10px 12px 10px 14px;
+    padding: calc(10px * var(--vm)) calc(12px * var(--vm)) calc(10px * var(--vm)) calc(14px * var(--vm));
     font-family: silkscreen, monospace;
-    font-size: 9px;
+    font-size: calc(9px * var(--vm));
     letter-spacing: 0.04em;
     text-align: left;
     color: #fff8ea;
     cursor: pointer;
     background:
-        repeating-conic-gradient(#5a5468 0% 25%, #4a4458 0% 50%) 50% / 3px 3px,
+        repeating-conic-gradient(#5a5468 0% 25%, #4a4458 0% 50%) 50% / calc(3px * var(--vm)) calc(3px * var(--vm)),
         linear-gradient(180deg, #6a6478 0%, #4a4458 100%);
-    border: 3px solid #1a1420;
+    border: calc(3px * var(--vm)) solid #1a1420;
     box-shadow:
-        inset 0 -3px 0 rgba(0, 0, 0, 0.25),
-        3px 3px 0 rgba(0, 0, 0, 0.5);
+        inset 0 calc(-3px * var(--vm)) 0 rgba(0, 0, 0, 0.25),
+        calc(3px * var(--vm)) calc(3px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
     transition: transform 0.05s ease;
 }
 
@@ -7414,15 +7459,15 @@ body.vending-open {
 
 .vending-btn-draw {
     flex-direction: column;
-    gap: 4px;
+    gap: calc(4px * var(--vm));
     line-height: 1.2;
 }
 
 .vending-btn-price {
     display: block;
-    font-size: calc(8px * var(--ui-scale, 1));
+    font-size: calc(8px * var(--vm));
     color: #ffd838;
-    text-shadow: 1px 1px 0 #283818;
+    text-shadow: calc(1px * var(--vm)) calc(1px * var(--vm)) 0 #283818;
 }
 
 .vending-btn-unaffordable .vending-btn-price {
@@ -7450,39 +7495,39 @@ body.vending-open {
 
 .vending-btn-led {
     flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border: 2px solid #1a1420;
+    width: calc(8px * var(--vm));
+    height: calc(8px * var(--vm));
+    border: calc(2px * var(--vm)) solid #1a1420;
     background: #3a3448;
 }
 
 .vending-keypad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-    padding: 6px;
+    gap: calc(4px * var(--vm));
+    padding: calc(6px * var(--vm));
     background: #2a2438;
-    border: 2px solid #1a1420;
+    border: calc(2px * var(--vm)) solid #1a1420;
 }
 
 .vending-keypad span {
-    height: 14px;
+    height: calc(14px * var(--vm));
     background: #4a4458;
-    border: 1px solid #1a1420;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border: calc(1px * var(--vm)) solid #1a1420;
+    box-shadow: inset 0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.1);
 }
 
 .vending-exit {
     width: 100%;
-    padding: 8px;
+    padding: calc(8px * var(--vm));
     font-family: silkscreen, monospace;
-    font-size: 8px;
+    font-size: calc(8px * var(--vm));
     letter-spacing: 0.08em;
     color: #ff9a9a;
     cursor: pointer;
     background: #3a2430;
-    border: 2px solid #1a1420;
-    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+    border: calc(2px * var(--vm)) solid #1a1420;
+    box-shadow: calc(2px * var(--vm)) calc(2px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
 }
 
 .vending-exit:active {
@@ -7494,24 +7539,24 @@ body.vending-open {
 .vending-card-slot {
     position: absolute;
     background: #1a1420;
-    border: 2px solid #0a0810;
+    border: calc(2px * var(--vm)) solid #0a0810;
 }
 
 .vending-chips-slot {
-    right: 10px;
-    bottom: 52px;
-    width: 28px;
-    height: 6px;
-    border-radius: 3px;
+    right: calc(10px * var(--vm));
+    bottom: calc(52px * var(--vm));
+    width: calc(28px * var(--vm));
+    height: calc(6px * var(--vm));
+    border-radius: calc(3px * var(--vm));
 }
 
 .vending-card-slot {
     left: 50%;
-    bottom: 8px;
-    width: 80px;
-    height: 8px;
+    bottom: calc(8px * var(--vm));
+    width: calc(80px * var(--vm));
+    height: calc(8px * var(--vm));
     transform: translateX(-50%);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+    box-shadow: inset 0 calc(2px * var(--vm)) calc(4px * var(--vm)) rgba(0, 0, 0, 0.6);
 }
 
 /* ── Trainer stats screen ── */
@@ -7641,12 +7686,12 @@ body.vending-open {
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 6px 10px;
-    margin: 0 0 10px;
-    padding: 6px 10px;
-    border: 2px solid #3a6a48;
+    gap: calc(6px * var(--vm)) calc(10px * var(--vm));
+    margin: 0 0 calc(10px * var(--vm));
+    padding: calc(6px * var(--vm)) calc(10px * var(--vm));
+    border: calc(2px * var(--vm)) solid #3a6a48;
     background: linear-gradient(180deg, rgba(20, 48, 32, 0.92) 0%, rgba(12, 28, 20, 0.95) 100%);
-    box-shadow: inset 0 0 0 1px rgba(140, 220, 160, 0.2);
+    box-shadow: inset 0 0 0 calc(1px * var(--vm)) rgba(140, 220, 160, 0.2);
 }
 
 .vending-result-mint.hidden {
@@ -7655,17 +7700,17 @@ body.vending-open {
 
 .vending-result-mint-tag {
     font-family: silkscreen, monospace;
-    font-size: 7px;
+    font-size: calc(7px * var(--vm));
     letter-spacing: 0.1em;
     color: #b8f0c0;
-    padding: 2px 6px;
-    border: 1px solid #4a8a58;
+    padding: calc(2px * var(--vm)) calc(6px * var(--vm));
+    border: calc(1px * var(--vm)) solid #4a8a58;
     background: rgba(0, 0, 0, 0.25);
 }
 
 .vending-result-mint-detail {
     font-family: silkscreen, monospace;
-    font-size: 6px;
+    font-size: calc(6px * var(--vm));
     letter-spacing: 0.04em;
     color: #d8ece0;
     line-height: 1.45;
