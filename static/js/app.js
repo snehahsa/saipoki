@@ -4690,7 +4690,7 @@ function vendingShowCardResult(card, mint = null) {
     }
 }
 
-const VENDING_GRADE_FLASH_MS = 1500
+const VENDING_GRADE_FLASH_MS = 4200
 
 function vendingResetGradeFlash() {
     const flash = document.getElementById("vending-grade-flash")
@@ -4733,12 +4733,20 @@ function vendingPlayGradeUpgradeFlash(mintInfo) {
 
     const beepPattern = [
         [0, 880],
-        [110, 1100],
-        [260, 1320],
-        [400, 1100],
-        [560, 1560],
-        [700, 1760],
-        [900, 1980],
+        [260, 1100],
+        [520, 1320],
+        [780, 1100],
+        [1040, 1560],
+        [1300, 1760],
+        [1560, 1980],
+        [1820, 1760],
+        [2080, 1980],
+        [2340, 2200],
+        [2600, 1980],
+        [2860, 2200],
+        [3120, 1760],
+        [3380, 1980],
+        [3640, 2200],
     ]
     for (const [delay, freq] of beepPattern) {
         setTimeout(() => vendingBeep(freq, 0.045, 0.085), delay)
