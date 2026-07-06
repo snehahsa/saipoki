@@ -306,6 +306,51 @@ function apiAuthBody(extra = {}) {
     return body
 }
 
+let recoveringServerUser = false
+
+function isUserNotFoundApiError(response, data) {
+    if (Number(response?.status) !== 404) return false
+    return String(data?.error || "").toLowerCase().includes("user not found")
+}
+
+async function recoverMissingServerUser() {
+    if (recoveringServerUser || !isSignedIn()) return false
+    recoveringServerUser = true
+    try {
+        let data = await authenticate()
+        if (!data) return false
+
+        if (guestPlayMode()) {
+            const guestId = getActiveGuestId()
+            if (guestId) {
+                await window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
+                const fresh = await authenticate()
+                if (fresh) data = fresh
+            }
+        }
+
+        applySessionFromAuth(data)
+        touchGuestServerBackup()
+        return true
+    } finally {
+        recoveringServerUser = false
+    }
+}
+
+async function postGameApi(path, extra = {}, { retryUser = true } = {}) {
+    const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiAuthBody(extra)),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (retryUser && isUserNotFoundApiError(response, data)) {
+        const recovered = await recoverMissingServerUser()
+        if (recovered) return postGameApi(path, extra, { retryUser: false })
+    }
+    return { response, data }
+}
+
 function hidePlayLanding() {
     document.getElementById("play-landing")?.classList.add("is-hidden")
     document.body.classList.add("play-in-app")
@@ -2128,12 +2173,7 @@ async function vaultCardUpgrade() {
     if (upgradeBtn) upgradeBtn.disabled = true
 
     try {
-        const response = await fetch("/api/vault/upgrade", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody({ card_id: vaultCardPopupOpenId })),
-        })
-        const data = await response.json()
+        const { response, data } = await postGameApi("/api/vault/upgrade", { card_id: vaultCardPopupOpenId })
         if (!response.ok || !data.success) {
             throw new Error(data.error || "Upgrade failed")
         }
@@ -2396,12 +2436,7 @@ async function animateFishingProgress(durationMs, resolveAtMs, label, signal, on
 }
 
 async function completeFishingCastSession(sessionId) {
-    const response = await fetch("/api/fishing/cast/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiAuthBody({ session_id: sessionId })),
-    })
-    const data = await response.json()
+    const { response, data } = await postGameApi("/api/fishing/cast/complete", { session_id: sessionId })
     if (response.status === 425 && data.error === "Cast still in progress") {
         await sleep(Number(data.wait_ms) || 500)
         return completeFishingCastSession(sessionId)
@@ -2443,16 +2478,11 @@ function promptFishingRetry({ title, message }) {
 }
 
 async function performFishingCastAttempt(gearId, questKey, quest) {
-    const startResponse = await fetch("/api/fishing/cast/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiAuthBody({
-            quest_key: questKey,
-            mode: activeFishingMode,
-            gear_id: gearId,
-        })),
+    const { response: startResponse, data: startData } = await postGameApi("/api/fishing/cast/start", {
+        quest_key: questKey,
+        mode: activeFishingMode,
+        gear_id: gearId,
     })
-    const startData = await startResponse.json()
     if (!startResponse.ok || !startData.success) {
         window.RetroAudio?.sfx?.("cancel")
         showQuickbarHint(startData.error || "Could not start fishing")
@@ -2994,12 +3024,7 @@ async function grantGear(item, source = "") {
     syncQuickbar()
 
     try {
-        const response = await fetch("/api/gear/grant", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody({ item: gearId, source })),
-        })
-        const data = await response.json()
+        const { response, data } = await postGameApi("/api/gear/grant", { item: gearId, source })
         if (!response.ok || !data.success) {
             console.warn("Could not grant gear:", data.error || gearId)
             session.gear_slots = priorSlots
@@ -3042,12 +3067,7 @@ async function removeGear(item, source = "") {
     syncPlayerGearToGame()
 
     try {
-        const response = await fetch("/api/gear/remove", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody({ item: gearId, source })),
-        })
-        const data = await response.json()
+        const { response, data } = await postGameApi("/api/gear/remove", { item: gearId, source })
         if (!response.ok || !data.success) {
             session.gear_slots = priorSlots
             syncQuickbar()
@@ -3210,12 +3230,7 @@ async function grantNpcBalance(grantId, source = "") {
     if (!isSignedIn() || !grantId) return
 
     try {
-        const response = await fetch("/api/economy/npc-grant", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody({ grantId, source })),
-        })
-        const data = await response.json()
+        const { response, data } = await postGameApi("/api/economy/npc-grant", { grantId, source })
         if (!response.ok || !data.success) {
             console.warn("Could not grant balance:", data.error || grantId)
             return
@@ -3249,12 +3264,7 @@ async function receivePokecard(cardId, source = "unknown", opts = {}) {
 async function addCardToVault(cardId, source = "unknown") {
     if (!isSignedIn() || !cardId) return { success: false, error: "Missing card" }
 
-    const response = await fetch("/api/vault/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiAuthBody({ card_id: cardId, source })),
-    })
-    const data = await response.json()
+    const { response, data } = await postGameApi("/api/vault/add", { card_id: cardId, source })
     if (response.ok && data.success && session) {
         applyVaultFromServer(data.vault, data.vault_detail)
     }
@@ -3277,12 +3287,7 @@ async function grantHold(item, source = "") {
     window.TelegramGame.setPlayerHolds?.(session.holds)
 
     try {
-        const response = await fetch("/api/holds/grant", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody({ item: holdId, source })),
-        })
-        const data = await response.json()
+        const { response, data } = await postGameApi("/api/holds/grant", { item: holdId, source })
         if (!response.ok || !data.success) {
             console.warn("Could not grant hold:", data.error || holdId)
             session.holds = priorHolds
@@ -3344,12 +3349,7 @@ async function completeQuestStep(stepId, questId = null, opts = {}) {
 
     const wasComplete = isQuestStepComplete(stepId)
 
-    const response = await fetch("/api/quests/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiAuthBody({ step_id: stepId, quest_id: questId })),
-    })
-    const data = await response.json()
+    const { response, data } = await postGameApi("/api/quests/complete", { step_id: stepId, quest_id: questId })
     if (response.ok && data.success && session) {
         session.quest_progress = normalizeQuestProgress(data.quest_progress)
         renderQuestBoard()
@@ -3374,12 +3374,7 @@ async function completeQuestStep(stepId, questId = null, opts = {}) {
 async function removeQuest(questId) {
     if (!isSignedIn()) return { success: false, error: "Not signed in" }
 
-    const response = await fetch("/api/quests/remove", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiAuthBody({ quest_id: questId })),
-    })
-    const data = await response.json()
+    const { response, data } = await postGameApi("/api/quests/remove", { quest_id: questId })
     if (response.ok && data.success && session) {
         session.quest_progress = normalizeQuestProgress(data.quest_progress)
         renderQuestBoard()
@@ -3977,12 +3972,7 @@ async function openTrainerStats(returnScreen = "menu") {
     if (grid) grid.innerHTML = `<p class="poketab-empty">LOADING STATS...</p>`
     if (historyEl) historyEl.replaceChildren()
     try {
-        const res = await fetch("/api/trainer/stats", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody()),
-        })
-        const data = await res.json()
+        const { response: res, data } = await postGameApi("/api/trainer/stats")
         if (!res.ok || !data.success) throw new Error(data.error || "Could not load stats")
         const stats = data.stats || {}
         session.trainer_stats = stats
@@ -4829,12 +4819,7 @@ async function vendingPerformDraw() {
 
     let winner = null
     try {
-        const response = await fetch("/api/vending/spin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(apiAuthBody()),
-        })
-        const data = await response.json()
+        const { response, data } = await postGameApi("/api/vending/spin")
         if (!response.ok || data.success === false) {
             throw new Error(data.error || "Spin failed")
         }
@@ -5406,10 +5391,14 @@ async function completeSessionBootstrap() {
 
     if (guestPlayMode()) {
         const guestId = getActiveGuestId()
-        if (guestId && window.SaiPokePlay?.getGuestServerBackup?.(guestId)) {
-            await window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
-            data = await authenticate()
-            if (!data) return false
+        if (guestId) {
+            if (window.SaiPokePlay?.getGuestServerBackup?.(guestId)) {
+                await window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
+                data = await authenticate()
+                if (!data) return false
+            } else {
+                await window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
+            }
         }
 
         const backup = window.SaiPokePlay?.getGuestServerBackup?.(guestId)

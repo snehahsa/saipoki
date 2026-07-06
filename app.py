@@ -2215,10 +2215,20 @@ def _request_auth_user():
 
 
 def _auth_user_from_request():
-    user, _, err = _request_auth_user()
+    user, data, err = _request_auth_user()
     if err:
         return None, err
-    return str(user["id"]), None
+    telegram_id = str(user["id"])
+    now = int(time.time())
+    with get_db() as conn:
+        ensure_user_row(
+            conn,
+            telegram_id,
+            user=user,
+            is_test=request_is_test_mode(data),
+            now=now,
+        )
+    return telegram_id, None
 
 
 POKETAB_NOTIFY_SECRET = os.getenv("POKETAB_NOTIFY_SECRET", "poketab-local-dev")
