@@ -4614,6 +4614,7 @@ async function vendingConfirmEquip() {
 
 function vendingShowCardResult(card, mint = null) {
     vendingShowView("vending-view-result")
+    const resultView = document.getElementById("vending-view-result")
     const headlineEl = document.getElementById("vending-result-headline")
     const mintWrap = document.getElementById("vending-result-mint")
     const mintTag = document.getElementById("vending-result-mint-tag")
@@ -4624,6 +4625,7 @@ function vendingShowCardResult(card, mint = null) {
     const spellsEl = document.getElementById("vending-result-spells")
 
     const mintInfo = mint || vendingLastMint
+    resultView?.classList.toggle("vending-view-result--grade-up", Boolean(mintInfo?.grade_changed))
     if (headlineEl) {
         if (mintInfo?.grade_changed) {
             headlineEl.textContent = `GRADE UP!  ${formatGradeLabel(mintInfo.previous_grade)} → ${formatGradeLabel(mintInfo.grade)}`
@@ -4686,6 +4688,68 @@ function vendingShowCardResult(card, mint = null) {
             }
         }
     }
+}
+
+const VENDING_GRADE_FLASH_MS = 1500
+
+function vendingResetGradeFlash() {
+    const flash = document.getElementById("vending-grade-flash")
+    const glass = document.getElementById("vending-monitor-glass")
+    flash?.classList.add("hidden")
+    flash?.setAttribute("aria-hidden", "true")
+    glass?.classList.remove("vending-monitor-glass--grade-flash")
+}
+
+function vendingReplayCssAnimation(...elements) {
+    for (const el of elements) {
+        if (!el) continue
+        el.style.animation = "none"
+        void el.offsetWidth
+        el.style.animation = ""
+    }
+}
+
+function vendingPlayGradeUpgradeFlash(mintInfo) {
+    const flash = document.getElementById("vending-grade-flash")
+    const glass = document.getElementById("vending-monitor-glass")
+    const tierEl = document.getElementById("vending-grade-flash-tier")
+    const subEl = document.getElementById("vending-grade-flash-sub")
+    const whiteEl = flash?.querySelector(".vending-grade-flash-white")
+    const strobeEl = flash?.querySelector(".vending-grade-flash-strobe")
+    if (!flash) return Promise.resolve()
+
+    if (tierEl) tierEl.textContent = "GRADE UP!"
+    if (subEl) {
+        const label = String(mintInfo?.grade_label || "SILVER").toUpperCase()
+        subEl.textContent = `${label} FORGED`
+    }
+
+    glass?.classList.remove("vending-monitor-glass--grade-flash")
+    vendingReplayCssAnimation(whiteEl, strobeEl, tierEl, subEl, glass)
+
+    flash.classList.remove("hidden")
+    flash.setAttribute("aria-hidden", "false")
+    glass?.classList.add("vending-monitor-glass--grade-flash")
+
+    const beepPattern = [
+        [0, 880],
+        [110, 1100],
+        [260, 1320],
+        [400, 1100],
+        [560, 1560],
+        [700, 1760],
+        [900, 1980],
+    ]
+    for (const [delay, freq] of beepPattern) {
+        setTimeout(() => vendingBeep(freq, 0.045, 0.085), delay)
+    }
+
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            vendingResetGradeFlash()
+            resolve()
+        }, VENDING_GRADE_FLASH_MS)
+    })
 }
 
 function vendingRandomCard() {
@@ -4805,6 +4869,7 @@ function openVendingScreen() {
 function closeVendingScreen() {
     clearInterval(vendingBootTimer)
     vendingBootTimer = null
+    vendingResetGradeFlash()
     const screen = document.getElementById("vending-screen")
     screen?.classList.add("hidden")
     document.body.classList.remove("vending-open")
@@ -4908,6 +4973,10 @@ async function vendingPerformDraw() {
     await new Promise((r) => setTimeout(r, 3600))
     clearInterval(barTimer)
     vendingBeep(1320, 0.12, 0.07)
+
+    if (vendingLastMint?.grade_changed) {
+        await vendingPlayGradeUpgradeFlash(vendingLastMint)
+    }
 
     vendingShowCardResult(winner, vendingLastMint)
     vendingSetLeds("ok")
