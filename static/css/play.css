@@ -52,24 +52,22 @@ body.play-body {
     object-fit: cover;
     object-position: center 42%;
     transform: scale(1);
-    animation: play-bg-zoom 48s ease-in-out infinite alternate;
+    animation: play-bg-zoom 48s linear infinite;
     will-change: transform, opacity;
 }
 
 @keyframes play-bg-intro {
     from {
         opacity: 0;
-        transform: scale(1.06);
     }
     to {
         opacity: 1;
-        transform: scale(1);
     }
 }
 
 @keyframes play-bg-zoom {
     from { transform: scale(1); }
-    to { transform: scale(1.08); }
+    to { transform: scale(1.12); }
 }
 
 .play-bg__shade {
@@ -736,7 +734,7 @@ body.play-mode:not(.play-in-app) .play-bg {
 body.play-mode:not(.play-in-app) .play-bg__image {
     animation:
         play-bg-intro 2.8s ease-out forwards,
-        play-bg-zoom 48s ease-in-out 2.8s infinite alternate;
+        play-bg-zoom 48s linear 2.8s infinite;
 }
 
 body.play-mode.play-in-app:not(.game-active) #retro-pixel-bg {
