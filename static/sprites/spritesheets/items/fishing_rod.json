@@ -1,0 +1,51 @@
+{
+  "id": "fishing_rod",
+  "file": "fish.png",
+  "frame": {
+    "x": 313,
+    "y": 383,
+    "w": 669,
+    "h": 470
+  },
+  "useFacings": [
+    "left"
+  ],
+  "faces": {
+    "down": {
+      "eligible": false,
+      "rect": {
+        "x": -28.265,
+        "y": -44.355,
+        "w": 60.21,
+        "h": 42.3
+      }
+    },
+    "left": {
+      "eligible": true,
+      "rect": {
+        "x": -14.955,
+        "y": 14.195,
+        "w": 36.795,
+        "h": 25.85
+      }
+    },
+    "right": {
+      "eligible": false,
+      "rect": {
+        "x": -21.545,
+        "y": -44.355,
+        "w": 60.21,
+        "h": 42.3
+      }
+    },
+    "up": {
+      "eligible": false,
+      "rect": {
+        "x": -28.265,
+        "y": -44.355,
+        "w": 60.21,
+        "h": 42.3
+      }
+    }
+  }
+}

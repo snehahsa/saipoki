@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js'
-import bundledGearManifest from '../../gather-clone/frontend/public/sprites/spritesheets/items/manifest.json'
+import bundledGearManifest from '../../static/sprites/spritesheets/items/manifest.json'
 
 export type GearSpriteAttach = {
     file: string

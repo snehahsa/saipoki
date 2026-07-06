@@ -7,10 +7,13 @@ from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parent
-ITEMS_DIR = ROOT / "gather-clone/frontend/public/sprites/spritesheets/items"
-ITEMS_MANIFEST_PATH = ITEMS_DIR / "manifest.json"
-# Flask serves static/sprites before gather-clone — keep both manifests in sync.
-STATIC_ITEMS_MANIFEST_PATH = ROOT / "static/sprites/spritesheets/items/manifest.json"
+# Authoritative gear attach configs — committed under static/ for Railway (no submodule).
+STATIC_ITEMS_DIR = ROOT / "static/sprites/spritesheets/items"
+STATIC_ITEMS_MANIFEST_PATH = STATIC_ITEMS_DIR / "manifest.json"
+# Legacy path kept for local gather-clone dev; static/ wins when both exist.
+LEGACY_ITEMS_DIR = ROOT / "gather-clone/frontend/public/sprites/spritesheets/items"
+ITEMS_DIR = STATIC_ITEMS_DIR
+ITEMS_MANIFEST_PATH = STATIC_ITEMS_MANIFEST_PATH
 
 GEAR_SLOT_COUNT = 3
 GEAR_FACINGS = ("down", "left", "right", "up")
@@ -111,7 +114,7 @@ GEAR_ITEMS = {
             "anchorX": 0.5,
             "anchorY": 0.85,
         },
-        "useFacings": ["left", "right"],
+        "useFacings": ["left"],
         "pickup_popup": {
             "headline": "GEAR SLOT!",
             "title": "Pro Fishing Rod",
@@ -171,7 +174,11 @@ def _read_json(path: Path) -> Optional[dict]:
 
 
 def load_saved_item_config(item_id: str) -> dict:
-    return _read_json(item_config_path(item_id)) or {}
+    saved = _read_json(item_config_path(item_id))
+    if saved:
+        return saved
+    legacy_path = LEGACY_ITEMS_DIR / f"{item_id}.json"
+    return _read_json(legacy_path) or {}
 
 
 def default_face_attach(item_id: str) -> dict:
@@ -282,19 +289,23 @@ def save_item_config(item_id: str, payload: dict) -> dict:
         "faces": faces,
     }
 
-    ITEMS_DIR.mkdir(parents=True, exist_ok=True)
+    STATIC_ITEMS_DIR.mkdir(parents=True, exist_ok=True)
     item_config_path(item_id).write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    legacy_path = LEGACY_ITEMS_DIR / f"{item_id}.json"
+    if legacy_path.parent.is_dir():
+        legacy_path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     sync_items_manifest()
     return out
 
 
 def sync_items_manifest() -> None:
-    ITEMS_DIR.mkdir(parents=True, exist_ok=True)
+    STATIC_ITEMS_DIR.mkdir(parents=True, exist_ok=True)
     manifest = {"items": [gear_item_client_meta(item_id) for item_id in GEAR_ITEMS]}
     payload = json.dumps(manifest, indent=2) + "\n"
-    ITEMS_MANIFEST_PATH.write_text(payload, encoding="utf-8")
-    STATIC_ITEMS_MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     STATIC_ITEMS_MANIFEST_PATH.write_text(payload, encoding="utf-8")
+    LEGACY_ITEMS_DIR.mkdir(parents=True, exist_ok=True)
+    legacy_manifest = LEGACY_ITEMS_DIR / "manifest.json"
+    legacy_manifest.write_text(payload, encoding="utf-8")
 
 
 def empty_gear_slots() -> list[Optional[str]]:
