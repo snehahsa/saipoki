@@ -2967,7 +2967,9 @@ def animation_manifest():
 def gear_items_manifest():
     from gear_catalog import gear_items_manifest_payload
 
-    return jsonify(gear_items_manifest_payload())
+    response = jsonify(gear_items_manifest_payload())
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/sprites/<path:filename>")
