@@ -1992,6 +1992,69 @@ function vaultProgressLabel(stack) {
     return `${prog.copies}/${prog.next_cost}`
 }
 
+const VAULT_GRADE_FX_TIERS = {
+    2: { count: 4, dur: 16, sparks: 0 },
+    3: { count: 8, dur: 11, sparks: 0 },
+    4: { count: 12, dur: 8, sparks: 0 },
+    5: { count: 16, dur: 5.5, sparks: 8 },
+}
+
+function createVaultGradeFxElement(grade, variant = "slot") {
+    const g = Math.max(2, Math.min(Number(grade) || 2, 5))
+    const tier = VAULT_GRADE_FX_TIERS[g]
+    const fx = document.createElement("div")
+    fx.className = `vault-grade-fx vault-grade-fx--g${g} vault-grade-fx--${variant}`
+    fx.setAttribute("aria-hidden", "true")
+    fx.style.setProperty("--fx-dur", `${tier.dur}s`)
+
+    const ring = document.createElement("span")
+    ring.className = "vault-grade-fx-ring"
+    fx.appendChild(ring)
+
+    if (g >= 4) {
+        const aura = document.createElement("span")
+        aura.className = "vault-grade-fx-aura"
+        fx.appendChild(aura)
+    }
+
+    if (g >= 5) {
+        const orbitA = document.createElement("span")
+        orbitA.className = "vault-grade-fx-orbit"
+        fx.appendChild(orbitA)
+        const orbitB = document.createElement("span")
+        orbitB.className = "vault-grade-fx-orbit vault-grade-fx-orbit--rev"
+        fx.appendChild(orbitB)
+    }
+
+    for (let i = 0; i < tier.count; i += 1) {
+        const particle = document.createElement("span")
+        particle.className = "vault-grade-fx-particle"
+        particle.style.setProperty("--fx-i", String(i))
+        particle.style.setProperty("--fx-n", String(tier.count))
+        fx.appendChild(particle)
+    }
+
+    for (let s = 0; s < tier.sparks; s += 1) {
+        const spark = document.createElement("span")
+        spark.className = "vault-grade-fx-spark"
+        spark.style.setProperty("--fx-i", String(s))
+        spark.style.setProperty("--fx-n", String(tier.sparks))
+        fx.appendChild(spark)
+    }
+
+    return fx
+}
+
+function mountVaultGradeFx(visualEl, grade, variant = "slot") {
+    if (!visualEl) return
+    visualEl.querySelector(".vault-grade-fx")?.remove()
+    const g = Math.max(1, Math.min(Number(grade) || 1, 5))
+    visualEl.dataset.grade = String(g)
+    visualEl.classList.toggle("vault-slot-visual--fx", g >= 2)
+    if (g < 2) return
+    visualEl.prepend(createVaultGradeFxElement(g, variant))
+}
+
 function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
     const slot = document.createElement("button")
     slot.type = "button"
@@ -2006,6 +2069,10 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
             "aria-label",
             `${item.name || stack.card_id}, ${formatGradeLabel(stack.grade)}, ${formatVaultMultiplierSimple(stack.multiplier)}${progressHint ? `, ${progressHint}` : ""}`,
         )
+
+        const visual = document.createElement("div")
+        visual.className = "vault-slot-visual"
+        const fxVariant = String(slotClass).includes("game-drawer") ? "drawer" : "bag"
 
         const frame = document.createElement("div")
         frame.className = "vault-slot-frame"
@@ -2026,7 +2093,9 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
             frame.appendChild(copyBadge)
         }
 
-        slot.appendChild(frame)
+        visual.appendChild(frame)
+        mountVaultGradeFx(visual, stack.grade, fxVariant)
+        slot.appendChild(visual)
 
         const gradeBadge = document.createElement("span")
         gradeBadge.className = "vault-slot-grade"
@@ -2093,6 +2162,11 @@ function renderVaultCardPopup(stack) {
     const panel = popup.querySelector(".vault-card-popup-panel")
 
     if (panel) panel.dataset.grade = String(prog.grade)
+
+    const popupVisual = document.getElementById("vault-card-popup-visual")
+    const popupFrame = document.getElementById("vault-card-popup-frame")
+    if (popupFrame) popupFrame.dataset.grade = String(prog.grade)
+    mountVaultGradeFx(popupVisual, prog.grade, "popup")
 
     const art = document.getElementById("vault-card-popup-art")
     if (art) {
