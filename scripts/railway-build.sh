@@ -38,16 +38,21 @@ elif [ -f data/defaultmap.json ]; then
   cp data/defaultmap.json game-server/data/defaultmap.json
 fi
 
-if command -v npm >/dev/null 2>&1; then
+GAME_CLIENT_MARKER="gather-clone/frontend/utils/pixi/realmPreload.ts"
+if command -v npm >/dev/null 2>&1 && [ -f "${GAME_CLIENT_MARKER}" ]; then
   cd game-client
   npm ci
   npm run build
   echo "game.js built: $(wc -c < ../static/game/game.js) bytes"
 else
   if [ -f static/game/game.js ]; then
-    echo "npm not available — using committed static/game/game.js ($(wc -c < static/game/game.js) bytes)"
+    if [ ! -f "${GAME_CLIENT_MARKER}" ]; then
+      echo "gather-clone not checked out — using committed static/game/game.js ($(wc -c < static/game/game.js) bytes)"
+    else
+      echo "npm not available — using committed static/game/game.js ($(wc -c < static/game/game.js) bytes)"
+    fi
   else
-    echo "ERROR: npm missing and static/game/game.js not found" >&2
+    echo "ERROR: cannot build game.js (need npm + gather-clone or committed static/game/game.js)" >&2
     exit 1
   fi
 fi
