@@ -5897,6 +5897,7 @@ body.poketab-open {
     height: 100%;
     object-fit: cover;
     display: block;
+    image-rendering: pixelated;
 }
 
 .vault-slot-grade,
@@ -5904,12 +5905,15 @@ body.poketab-open {
 .vault-slot-copies {
     position: absolute;
     font-family: silkscreen, monospace;
-    font-size: 5px;
-    letter-spacing: 0.06em;
-    line-height: 1;
-    padding: 2px 3px;
-    border: 1px solid #1a1208;
+    font-size: 7px;
+    letter-spacing: 0.04em;
+    line-height: 1.15;
+    padding: 3px 4px;
+    border: 2px solid #1a1208;
     z-index: 2;
+    image-rendering: pixelated;
+    text-shadow: 1px 1px 0 #1a1208;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
 }
 
 .vault-slot-grade {
@@ -7663,15 +7667,17 @@ body.vending-open {
     text-align: center;
 }
 
-/* ── Vault card grading popup ── */
+/* ── Vault card grading popup (chunky pixel CRT) ── */
 .vault-card-popup {
     position: fixed;
     inset: 0;
     z-index: 100010;
     display: grid;
     place-items: center;
-    padding: 12px;
+    padding: 16px;
     image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
 }
 
 .vault-card-popup.hidden {
@@ -7682,111 +7688,159 @@ body.vending-open {
     position: absolute;
     inset: 0;
     border: 0;
-    background: rgba(8, 6, 14, 0.72);
-    backdrop-filter: blur(2px);
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.18) 0px,
+            rgba(0, 0, 0, 0.18) 1px,
+            transparent 1px,
+            transparent 3px
+        ),
+        rgba(6, 4, 10, 0.82);
     cursor: pointer;
 }
 
 .vault-card-popup-panel {
     position: relative;
-    width: min(100%, 360px);
-    max-height: min(92vh, 640px);
+    width: min(100%, 420px);
+    max-height: min(94vh, 720px);
     overflow: auto;
-    border: 3px solid #2a2218;
+    border: 4px solid #1a140c;
     background:
-        linear-gradient(165deg, #3a3228 0%, #221c16 38%, #14100c 100%);
+        repeating-conic-gradient(#3a3428 0% 25%, #2e2820 0% 50%) 50% / 8px 8px,
+        linear-gradient(180deg, #4a4034 0%, #221c16 55%, #14100c 100%);
     box-shadow:
-        0 0 0 2px #f0e0b8,
-        0 12px 0 #120e0a,
-        0 18px 40px rgba(0, 0, 0, 0.55);
-    padding: 14px 14px 12px;
+        inset 0 0 0 2px #d8c8a0,
+        inset 0 0 0 4px #1a140c,
+        6px 6px 0 #0a0806,
+        10px 10px 0 rgba(0, 0, 0, 0.35);
+    padding: 18px 16px 16px;
+    image-rendering: pixelated;
+}
+
+.vault-card-popup-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.07) 0px,
+        rgba(0, 0, 0, 0.07) 1px,
+        transparent 1px,
+        transparent 4px
+    );
+    z-index: 0;
 }
 
 .vault-card-popup-panel[data-grade="2"] .vault-card-popup-glow {
-    background: radial-gradient(circle at 30% 20%, rgba(180, 210, 240, 0.35), transparent 55%);
+    background: radial-gradient(circle at 28% 18%, rgba(180, 210, 240, 0.42), transparent 58%);
 }
 
 .vault-card-popup-panel[data-grade="3"] .vault-card-popup-glow {
-    background: radial-gradient(circle at 30% 20%, rgba(255, 210, 80, 0.4), transparent 55%);
+    background: radial-gradient(circle at 28% 18%, rgba(255, 210, 80, 0.48), transparent 58%);
 }
 
 .vault-card-popup-panel[data-grade="4"] .vault-card-popup-glow {
-    background: radial-gradient(circle at 30% 20%, rgba(200, 160, 255, 0.38), transparent 55%);
+    background: radial-gradient(circle at 28% 18%, rgba(200, 160, 255, 0.45), transparent 58%);
 }
 
 .vault-card-popup-panel[data-grade="5"] .vault-card-popup-glow {
-    background: radial-gradient(circle at 30% 20%, rgba(255, 100, 180, 0.42), transparent 58%);
+    background: radial-gradient(circle at 28% 18%, rgba(255, 100, 180, 0.5), transparent 60%);
 }
 
 .vault-card-popup-glow {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.9;
+    opacity: 0.85;
+    mix-blend-mode: screen;
 }
 
 .vault-card-popup-close {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 2;
-    width: 28px;
-    height: 28px;
-    border: 2px solid #2a2218;
-    background: #f5ead0;
-    color: #2a2218;
-    font-size: 18px;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    border: 3px solid #1a140c;
+    background:
+        repeating-conic-gradient(#ffe566 0% 25%, #f5d84a 0% 50%) 50% / 4px 4px,
+        #ffe566;
+    color: #1a140c;
+    font-family: silkscreen, monospace;
+    font-size: 20px;
     line-height: 1;
     cursor: pointer;
+    box-shadow: 3px 3px 0 #1a140c;
+    image-rendering: pixelated;
 }
 
 .vault-card-popup-close:active {
-    transform: translateY(1px);
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 #1a140c;
 }
 
 .vault-card-popup-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: 10px;
+    margin-bottom: 14px;
     position: relative;
     z-index: 1;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #1a140c;
 }
 
 .vault-card-popup-grade-pill {
     font-family: silkscreen, monospace;
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    padding: 4px 8px;
-    border: 2px solid #1a140c;
-    background: linear-gradient(180deg, #4a4034 0%, #2a2418 100%);
-    color: #fff4d8;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    padding: 6px 10px;
+    border: 3px solid #1a140c;
+    background:
+        repeating-conic-gradient(#5a4c3c 0% 25%, #4a4034 0% 50%) 50% / 4px 4px,
+        #4a4034;
+    color: #fff8e8;
+    text-shadow: 2px 2px 0 #1a140c;
+    box-shadow: 3px 3px 0 #1a140c;
+    image-rendering: pixelated;
 }
 
 .vault-card-popup-mult {
     font-family: silkscreen, monospace;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    color: #a8f0b8;
-    text-shadow: 0 0 8px rgba(120, 220, 140, 0.35);
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    color: #98ffb0;
+    text-shadow: 2px 2px 0 #0a2010;
+    padding: 4px 8px;
+    border: 2px solid #1a4030;
+    background: #142820;
+    box-shadow: inset 0 0 0 1px #3a8a58;
 }
 
 .vault-card-popup-stage {
     display: grid;
-    grid-template-columns: 110px 1fr;
-    gap: 10px;
+    grid-template-columns: 148px 1fr;
+    gap: 14px;
     align-items: start;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     position: relative;
     z-index: 1;
 }
 
 .vault-card-popup-frame {
-    border: 2px solid #1a140c;
-    background: #0e0c0a;
-    padding: 3px;
-    box-shadow: inset 0 0 0 1px rgba(255, 220, 150, 0.2);
+    border: 4px solid #1a140c;
+    background:
+        repeating-conic-gradient(#1a1814 0% 25%, #12100c 0% 50%) 50% / 4px 4px,
+        #0e0c0a;
+    padding: 4px;
+    box-shadow:
+        inset 0 0 0 2px #6a5840,
+        4px 4px 0 #1a140c;
+    image-rendering: pixelated;
 }
 
 .vault-card-popup-art {
@@ -7794,31 +7848,35 @@ body.vending-open {
     width: 100%;
     height: auto;
     object-fit: cover;
+    image-rendering: pixelated;
+    filter: contrast(1.08) saturate(1.05);
 }
 
 .vault-card-popup-tag {
-    margin: 0 0 4px;
+    margin: 0 0 6px;
     font-family: silkscreen, monospace;
-    font-size: 6px;
-    letter-spacing: 0.14em;
-    color: #c8b890;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #d8c890;
+    text-shadow: 1px 1px 0 #1a140c;
 }
 
 .vault-card-popup-name {
-    margin: 0 0 6px;
+    margin: 0 0 8px;
     font-family: silkscreen, monospace;
-    font-size: 11px;
-    line-height: 1.25;
-    color: #fff6e8;
-    text-shadow: 1px 1px 0 #1a1208;
+    font-size: 16px;
+    line-height: 1.3;
+    color: #fff8ea;
+    text-shadow: 2px 2px 0 #1a140c;
 }
 
 .vault-card-popup-meta {
-    margin: 0 0 8px;
+    margin: 0 0 10px;
     font-family: silkscreen, monospace;
-    font-size: 6px;
-    line-height: 1.5;
-    color: #d8ccb0;
+    font-size: 10px;
+    line-height: 1.55;
+    color: #e8dcc0;
+    text-shadow: 1px 1px 0 #1a140c;
 }
 
 .vault-card-popup-spells {
@@ -7827,71 +7885,93 @@ body.vending-open {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    max-height: 88px;
+    gap: 5px;
+    max-height: 120px;
     overflow: auto;
 }
 
 .vault-card-popup-spells li {
     font-family: silkscreen, monospace;
-    font-size: 5px;
-    line-height: 1.4;
-    color: #e8dcc4;
-    padding: 2px 4px;
-    border-left: 2px solid #6a5840;
-    background: rgba(0, 0, 0, 0.2);
+    font-size: 9px;
+    line-height: 1.45;
+    color: #f0e8d4;
+    padding: 4px 6px;
+    border: 2px solid #4a4030;
+    border-left-width: 4px;
+    background:
+        repeating-conic-gradient(#2a2418 0% 25%, #221c14 0% 50%) 50% / 4px 4px,
+        #2a2418;
+    text-shadow: 1px 1px 0 #1a140c;
+    image-rendering: pixelated;
 }
 
 .vault-card-popup-spells li.vault-spell-def {
-    border-left-color: #4a7a9a;
-    color: #c8e0f0;
+    border-left-color: #4a9aba;
+    color: #d0f0ff;
 }
 
 .vault-card-popup-grade-panel {
     position: relative;
     z-index: 1;
-    margin-bottom: 12px;
-    padding: 10px;
-    border: 2px solid #1a140c;
-    background: rgba(0, 0, 0, 0.28);
+    margin-bottom: 14px;
+    padding: 12px;
+    border: 3px solid #1a140c;
+    background:
+        repeating-conic-gradient(#1e1a14 0% 25%, #181410 0% 50%) 50% / 6px 6px,
+        rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 0 0 2px #4a4030;
 }
 
 .vault-card-popup-grade-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 10px;
+    margin-bottom: 10px;
 }
 
 .vault-card-popup-grade-label {
     font-family: silkscreen, monospace;
-    font-size: 6px;
-    letter-spacing: 0.12em;
-    color: #b8a888;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #c8b888;
+    text-shadow: 1px 1px 0 #1a140c;
 }
 
 .vault-card-popup-grade-count {
     font-family: silkscreen, monospace;
-    font-size: 8px;
-    color: #f0e4c8;
+    font-size: 13px;
+    color: #fff4d8;
+    text-shadow: 2px 2px 0 #1a140c;
 }
 
 .vault-card-popup-progress-track {
     position: relative;
-    height: 12px;
-    border: 2px solid #1a140c;
-    background: #1a1814;
+    height: 18px;
+    border: 3px solid #1a140c;
+    background:
+        repeating-conic-gradient(#141210 0% 25%, #0e0c0a 0% 50%) 50% / 4px 4px,
+        #141210;
     overflow: hidden;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.5);
+    image-rendering: pixelated;
 }
 
 .vault-card-popup-progress-fill {
     height: 100%;
     width: 0;
-    background: linear-gradient(90deg, #3a8a50 0%, #88e0a0 55%, #d8ffd8 100%);
-    transition: width 0.35s ease-out;
-    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+    background:
+        repeating-linear-gradient(
+            90deg,
+            #3a9a50 0px,
+            #3a9a50 6px,
+            #58c870 6px,
+            #58c870 12px
+        );
+    transition: width 0.35s steps(8);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25);
+    image-rendering: pixelated;
 }
 
 .vault-card-popup-progress-ticks {
@@ -7903,48 +7983,54 @@ body.vending-open {
 }
 
 .vault-card-popup-progress-ticks span {
-    width: 1px;
-    background: rgba(255, 255, 255, 0.12);
+    width: 2px;
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .vault-card-popup-grade-hint {
-    margin: 0 0 4px;
+    margin: 0 0 6px;
     font-family: silkscreen, monospace;
-    font-size: 6px;
-    line-height: 1.5;
-    color: #d0c4a8;
+    font-size: 10px;
+    line-height: 1.55;
+    color: #e0d4b8;
+    text-shadow: 1px 1px 0 #1a140c;
 }
 
 .vault-card-popup-minted {
     margin: 0;
     font-family: silkscreen, monospace;
-    font-size: 5px;
-    letter-spacing: 0.06em;
-    color: #8a7a64;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    color: #9a8a70;
+    text-shadow: 1px 1px 0 #1a140c;
 }
 
 .vault-card-popup-actions {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     position: relative;
     z-index: 1;
 }
 
 .vault-card-popup-btn {
     font-family: silkscreen, monospace;
-    font-size: 8px;
-    letter-spacing: 0.08em;
-    padding: 10px 12px;
-    border: 2px solid #1a140c;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 14px 14px;
+    border: 3px solid #1a140c;
     cursor: pointer;
     text-align: center;
+    image-rendering: pixelated;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .vault-card-popup-btn--upgrade {
-    background: linear-gradient(180deg, #5ac878 0%, #2a8848 100%);
+    background:
+        repeating-conic-gradient(#68e088 0% 25%, #48c068 0% 50%) 50% / 4px 4px,
+        #48c068;
     color: #0a180c;
-    box-shadow: 0 3px 0 #143820;
+    box-shadow: 4px 4px 0 #1a5030;
 }
 
 .vault-card-popup-btn--upgrade.hidden {
@@ -7957,28 +8043,40 @@ body.vending-open {
 }
 
 .vault-card-popup-btn--upgrade:active:not(:disabled) {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #143820;
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 #1a5030;
 }
 
 .vault-card-popup-btn--ghost {
-    background: #f0e6d0;
-    color: #3a3020;
-    box-shadow: 0 3px 0 #6a5840;
+    background:
+        repeating-conic-gradient(#f8ecd0 0% 25%, #ece0c4 0% 50%) 50% / 4px 4px,
+        #f0e6d0;
+    color: #2a2218;
+    box-shadow: 4px 4px 0 #6a5840;
 }
 
 .vault-card-popup-btn--ghost:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #6a5840;
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 #6a5840;
 }
 
-@media (max-width: 380px) {
+@media (max-width: 420px) {
     .vault-card-popup-stage {
         grid-template-columns: 1fr;
     }
 
     .vault-card-popup-frame {
-        max-width: 140px;
+        max-width: 168px;
         margin: 0 auto;
+    }
+
+    .vault-card-popup-name {
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .vault-card-popup-meta,
+    .vault-card-popup-tag {
+        text-align: center;
     }
 }

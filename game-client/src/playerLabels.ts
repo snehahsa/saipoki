@@ -29,6 +29,8 @@ export function nameColorFromId(id: string): number {
 
 export const LEVEL_LABEL_Y = -60
 export const NAME_LABEL_Y = -50
+/** Above level + name — NPC quest alert (!) */
+export const ALERT_BUBBLE_Y = -82
 export const LABEL_SCALE_LEVEL = 0.068
 export const LABEL_SCALE_NAME = 0.09
 

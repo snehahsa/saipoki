@@ -1920,6 +1920,11 @@ function formatVaultMultiplierSimple(mult) {
     return `×${value.toFixed(2)}`
 }
 
+function formatGradeLabel(grade, { short = false } = {}) {
+    const g = Math.max(1, Math.min(Number(grade) || 1, VAULT_GRADING.max_grade || 5))
+    return short ? `Gr.#${g}` : `Grading #${g}`
+}
+
 function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
     const slot = document.createElement("button")
     slot.type = "button"
@@ -1929,7 +1934,7 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
     if (item) {
         slot.classList.add(filledClass)
         slot.dataset.cardId = stack.card_id
-        slot.setAttribute("aria-label", `${item.name || stack.card_id}, grade ${stack.grade}, ${formatVaultMultiplierSimple(stack.multiplier)}`)
+        slot.setAttribute("aria-label", `${item.name || stack.card_id}, ${formatGradeLabel(stack.grade)}, ${formatVaultMultiplierSimple(stack.multiplier)}`)
 
         const frame = document.createElement("div")
         frame.className = "vault-slot-frame"
@@ -1943,7 +1948,7 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
 
         const gradeBadge = document.createElement("span")
         gradeBadge.className = "vault-slot-grade"
-        gradeBadge.textContent = `G${stack.grade}`
+        gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
 
         const multBadge = document.createElement("span")
         multBadge.className = "vault-slot-mult"
@@ -2025,7 +2030,7 @@ function renderVaultCardPopup(stack) {
     }
 
     const gradePill = document.getElementById("vault-card-popup-grade-pill")
-    if (gradePill) gradePill.textContent = `G${prog.grade}`
+    if (gradePill) gradePill.textContent = formatGradeLabel(prog.grade)
 
     const multEl = document.getElementById("vault-card-popup-mult")
     if (multEl) multEl.textContent = formatVaultMultiplierSimple(prog.multiplier)
@@ -2099,7 +2104,7 @@ function renderVaultCardPopup(stack) {
         upgradeBtn.disabled = !prog.can_upgrade
         const nextLabel = vaultGradeLabel(prog.grade + 1)
         upgradeBtn.textContent = prog.can_upgrade
-            ? `▲ FUSE → ${nextLabel.toUpperCase()} (G${prog.grade + 1})`
+            ? `▲ FUSE → ${nextLabel.toUpperCase()} (${formatGradeLabel(prog.grade + 1)})`
             : "▲ UPGRADE GRADE"
     }
 }
@@ -4596,7 +4601,7 @@ function vendingShowCardResult(card, mint = null) {
     const mintInfo = mint || vendingLastMint
     if (headlineEl) {
         if (mintInfo?.grade_changed) {
-            headlineEl.textContent = `GRADE UP!  G${mintInfo.previous_grade} → G${mintInfo.grade}`
+            headlineEl.textContent = `GRADE UP!  ${formatGradeLabel(mintInfo.previous_grade)} → ${formatGradeLabel(mintInfo.grade)}`
         } else if (mintInfo?.is_duplicate) {
             headlineEl.textContent = "DUPLICATE BANKED"
         } else {
@@ -4615,7 +4620,7 @@ function vendingShowCardResult(card, mint = null) {
                 const cost = mintInfo.next_cost || vaultUpgradeCost(mintInfo.grade)
                 mintDetail.textContent = mintInfo.grade === 1
                     ? `${mintInfo.total_minted}/${cost} pulls — ${Math.max(0, cost - mintInfo.total_minted)} until Silver auto-forge`
-                    : `${mintInfo.copies}/${cost} banked toward G${mintInfo.grade + 1} · ${formatVaultMultiplierSimple(mintInfo.multiplier)} now`
+                    : `${mintInfo.copies}/${cost} banked toward ${formatGradeLabel(mintInfo.grade + 1)} · ${formatVaultMultiplierSimple(mintInfo.multiplier)} now`
             }
         } else {
             mintWrap.classList.add("hidden")

@@ -6,6 +6,7 @@ import { resolveNpcSpriteSpec } from './spriteSheets'
 import { directionToward, shouldNpcNoticePlayer, MIN_NPC_SIGHT_DISTANCE, MAX_NPC_SIGHT_DISTANCE, NPC_REINTERACT_COOLDOWN_MS } from './npcNotice'
 import { NpcFlow, NpcOnComplete, resolveNpcMessages, messageSetId } from './flows'
 import {
+    ALERT_BUBBLE_Y,
     LABEL_SCALE_LEVEL,
     LABEL_SCALE_NAME,
     LEVEL_LABEL_Y,
@@ -170,6 +171,9 @@ export class Npc {
         this.nameLabel = nameText
         this.labelRoot.addChild(levelText)
         this.labelRoot.addChild(nameText)
+        this.labelRoot.sortableChildren = true
+        levelText.zIndex = 1
+        nameText.zIndex = 2
         this.labelRoot.visible = true
     }
 
@@ -190,7 +194,8 @@ export class Npc {
 
     private createAlertBubble() {
         const bubble = new PIXI.Container()
-        bubble.y = -34
+        bubble.y = ALERT_BUBBLE_Y
+        bubble.zIndex = 10
         bubble.visible = false
 
         const fill = new PIXI.Graphics()
@@ -229,7 +234,7 @@ export class Npc {
         mark.y = -13
 
         bubble.addChild(fill, border, mark)
-        this.parent.addChild(bubble)
+        this.labelRoot.addChild(bubble)
         this.alertBubble = bubble
         PIXI.Ticker.shared.add(this.animateAlertBubble)
     }
@@ -237,7 +242,7 @@ export class Npc {
     private animateAlertBubble = ({ deltaTime }: { deltaTime: number }) => {
         if (!this.alertBubble?.visible) return
         this.alertBounce += deltaTime * 0.18
-        this.alertBubble.y = -34 + Math.sin(this.alertBounce) * 2
+        this.alertBubble.y = ALERT_BUBBLE_Y + Math.sin(this.alertBounce) * 2
     }
 
     private showAlertBubble() {
