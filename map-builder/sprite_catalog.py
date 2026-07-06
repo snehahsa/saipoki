@@ -206,22 +206,31 @@ def sync_folder_manifest(sheet: dict, manifest_path: Path) -> dict:
     return sheet
 
 
+def _single_source_dir() -> Path:
+    """Prefer gather-clone singles when present; otherwise use committed static/ copy."""
+    if SINGLE_DIR.is_dir() and any(SINGLE_DIR.glob("*.png")):
+        return SINGLE_DIR
+    if STATIC_SINGLE_DIR.is_dir() and any(STATIC_SINGLE_DIR.glob("*.png")):
+        return STATIC_SINGLE_DIR
+    return SINGLE_DIR if SINGLE_DIR.is_dir() else STATIC_SINGLE_DIR
+
+
 def parse_single() -> dict:
     sprites = []
     max_w = 0
     max_h = 0
 
-    if not SINGLE_DIR.exists():
-        SINGLE_DIR.mkdir(parents=True, exist_ok=True)
+    source_dir = _single_source_dir()
+    source_dir.mkdir(parents=True, exist_ok=True)
 
-    for png_path in sorted(SINGLE_DIR.glob("*.png")):
+    for png_path in sorted(source_dir.glob("*.png")):
         name = png_path.stem
         width, height = png_size(png_path)
         max_w = max(max_w, width)
         max_h = max(max_h, height)
 
         meta: dict = {}
-        sidecar = SINGLE_DIR / f"{name}.json"
+        sidecar = source_dir / f"{name}.json"
         if sidecar.exists():
             meta = json.loads(sidecar.read_text(encoding="utf-8"))
 
@@ -294,20 +303,28 @@ def _single_manifest_payload(single: dict) -> dict:
 def sync_single_manifest() -> dict:
     single = parse_single()
     manifest = _single_manifest_payload(single)
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    # gather-clone is optional on Railway — only write back when submodule is checked out.
+    if (ROOT / "gather-clone/frontend").is_dir():
+        MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return single
 
 
 def publish_single_assets() -> dict:
     """Sync manifest from PNGs and copy sprites + manifest into static/ for the live game."""
     single = sync_single_manifest()
+    if not single.get("sprites") and STATIC_SINGLE_MANIFEST_PATH.is_file():
+        print("publish_single_assets: using existing static/sprites/spritesheets/single/manifest.json")
+        return single
+
     manifest = _single_manifest_payload(single)
 
     STATIC_SINGLE_DIR.mkdir(parents=True, exist_ok=True)
     STATIC_SINGLE_MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
-    if SINGLE_DIR.is_dir():
-        for path in SINGLE_DIR.iterdir():
+    source_dir = _single_source_dir()
+    if source_dir.is_dir() and source_dir != STATIC_SINGLE_DIR:
+        for path in source_dir.iterdir():
             if path.suffix.lower() in {".png", ".json"}:
                 shutil.copy2(path, STATIC_SINGLE_DIR / path.name)
 
