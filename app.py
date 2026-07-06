@@ -596,6 +596,73 @@ def profile_setup_needs_pin(row, telegram_id: Optional[str] = None) -> bool:
     return skin is None and not pin
 
 
+def ensure_user_row(
+    conn,
+    telegram_id: str,
+    *,
+    user: Optional[dict] = None,
+    is_test: bool = False,
+    now: Optional[int] = None,
+) -> bool:
+    """Create a users row when missing. Returns True if a row was inserted."""
+    telegram_id = str(telegram_id)
+    row = conn.execute(
+        "SELECT telegram_id FROM users WHERE telegram_id = ?", (telegram_id,)
+    ).fetchone()
+    if row is not None:
+        return False
+
+    user = user or {}
+    now = now or int(time.time())
+    is_spectator = telegram_id.startswith("spectator:")
+    is_guest = is_guest_user_id(telegram_id)
+    is_wallet = is_wallet_user_id(telegram_id) if wallet_payments_enabled() else False
+    auto_profile = is_test or is_spectator
+
+    if is_wallet:
+        display_name = ""
+    elif is_guest:
+        display_name = ""
+    else:
+        display_name = display_name_from_user(user)
+
+    username = str(user.get("username") or "")
+
+    if is_guest:
+        starting_balance = GUEST_STARTING_BALANCE
+    elif is_test:
+        starting_balance = TEST_STARTING_BALANCE
+    else:
+        starting_balance = 0
+
+    starter_vault = json.dumps(test_starter_vault_entries()) if is_test else "[]"
+    conn.execute(
+        """
+        INSERT INTO users (
+            telegram_id, username, display_name, skin, badges, quest_progress,
+            holds, gear_slots, vault, balance, owned_skins, pin, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, '[]', '{"completed_steps":[],"removed_quests":[]}', ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            telegram_id,
+            username,
+            display_name,
+            AVATAR_DEFAULT_SKIN if auto_profile else None,
+            json.dumps(TEST_PLAYER_HOLDS) if is_test else "[]",
+            json.dumps(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None]),
+            starter_vault,
+            starting_balance,
+            owned_skins_json([AVATAR_DEFAULT_SKIN] if auto_profile else []),
+            "123" if is_test else None,
+            now,
+            now,
+        ),
+    )
+    backfill_quest_triggers(conn, telegram_id)
+    return True
+
+
 def parse_badges(raw) -> list:
     if not raw:
         return []
@@ -1486,50 +1553,23 @@ def auth():
         if row is None:
             is_test = request_is_test_mode(data)
             is_spectator = telegram_id.startswith("spectator:")
-            is_guest = is_guest_user_id(telegram_id)
-            is_wallet = is_wallet_user_id(telegram_id) if wallet_payments_enabled() else False
             auto_profile = is_test or is_spectator
-            if is_guest:
-                starting_balance = GUEST_STARTING_BALANCE
-            elif is_test:
-                starting_balance = TEST_STARTING_BALANCE
-            else:
-                starting_balance = 0
-            starter_vault = json.dumps(test_starter_vault_entries()) if is_test else "[]"
-            conn.execute(
-                """
-                INSERT INTO users (
-                    telegram_id, username, display_name, skin, badges, quest_progress,
-                    holds, gear_slots, vault, balance, owned_skins, pin, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, '[]', '{"completed_steps":[],"removed_quests":[]}', ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    telegram_id,
-                    username,
-                    display_name,
-                    AVATAR_DEFAULT_SKIN if auto_profile else None,
-                    json.dumps(TEST_PLAYER_HOLDS) if is_test else "[]",
-                    json.dumps(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None]),
-                    starter_vault,
-                    starting_balance,
-                    owned_skins_json([AVATAR_DEFAULT_SKIN] if auto_profile else []),
-                    "123" if is_test else None,
-                    now,
-                    now,
-                ),
-            )
+            ensure_user_row(conn, telegram_id, user=user, is_test=is_test, now=now)
             skin = AVATAR_DEFAULT_SKIN if auto_profile else None
             badges = []
             holds = TEST_PLAYER_HOLDS if is_test else []
             gear_slots = list(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None])
             vault = test_starter_vault_entries() if is_test else []
-            balance = starting_balance
+            if is_guest:
+                balance = GUEST_STARTING_BALANCE
+            elif is_test:
+                balance = TEST_STARTING_BALANCE
+            else:
+                balance = 0
             vending_spins = 0
-            owned_skins = parse_owned_skins([AVATAR_DEFAULT_SKIN])
+            owned_skins = parse_owned_skins([AVATAR_DEFAULT_SKIN] if auto_profile else [])
             user_pin = "123" if is_test else None
             quest_progress = quest_progress_for_user([], [])
-            backfill_quest_triggers(conn, telegram_id)
             row_after = conn.execute(
                 "SELECT quest_progress FROM users WHERE telegram_id = ?",
                 (telegram_id,),
@@ -1807,6 +1847,12 @@ def _guest_backup_has_progress(backup: dict) -> bool:
 
 
 def _apply_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> None:
+    ensure_user_row(
+        conn,
+        telegram_id,
+        user={"id": telegram_id, "username": "", "first_name": "", "last_name": ""},
+        now=now,
+    )
     row = conn.execute(
         "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
     ).fetchone()
@@ -1962,7 +2008,9 @@ def save_skin():
     telegram_id = str(user["id"])
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
 
+    now = int(time.time())
     with get_db() as conn:
+        ensure_user_row(conn, telegram_id, user=user, is_test=request_is_test_mode(data), now=now)
         row = conn.execute(
             "SELECT display_name, skin, balance, owned_skins FROM users WHERE telegram_id = ?",
             (telegram_id,),
@@ -1992,11 +2040,18 @@ def save_skin():
     return jsonify({"success": True, **result})
 
 
-def _auth_user_from_request():
+def _request_auth_user():
     data = request.get_json(silent=True) or {}
     user = resolve_auth_user(data)
     if not user:
-        return None, (jsonify({"success": False, "error": auth_session_error_message()}), 401)
+        return None, data, (jsonify({"success": False, "error": auth_session_error_message()}), 401)
+    return user, data, None
+
+
+def _auth_user_from_request():
+    user, _, err = _request_auth_user()
+    if err:
+        return None, err
     return str(user["id"]), None
 
 
@@ -2563,17 +2618,18 @@ def hold_items_catalog():
 
 @app.route("/api/holds/grant", methods=["POST"])
 def grant_hold():
-    telegram_id, err = _auth_user_from_request()
+    user, data, err = _request_auth_user()
     if err:
         return err
 
-    data = request.get_json(silent=True) or {}
+    telegram_id = str(user["id"])
     item = str(data.get("item", "")).strip()
     if item not in HOLD_ITEM_IDS:
         return jsonify({"success": False, "error": "Unknown hold item"}), 400
 
     now = int(time.time())
     with get_db() as conn:
+        ensure_user_row(conn, telegram_id, user=user, is_test=request_is_test_mode(data), now=now)
         row = conn.execute(
             "SELECT holds FROM users WHERE telegram_id = ?", (telegram_id,)
         ).fetchone()
@@ -2606,17 +2662,18 @@ def grant_hold():
 
 @app.route("/api/gear/grant", methods=["POST"])
 def grant_gear():
-    telegram_id, err = _auth_user_from_request()
+    user, data, err = _request_auth_user()
     if err:
         return err
 
-    data = request.get_json(silent=True) or {}
+    telegram_id = str(user["id"])
     item = str(data.get("item", "")).strip()
     if item not in GEAR_ITEM_IDS:
         return jsonify({"success": False, "error": "Unknown gear item"}), 400
 
     now = int(time.time())
     with get_db() as conn:
+        ensure_user_row(conn, telegram_id, user=user, is_test=request_is_test_mode(data), now=now)
         row = conn.execute(
             "SELECT gear_slots FROM users WHERE telegram_id = ?", (telegram_id,)
         ).fetchone()
