@@ -6985,9 +6985,9 @@ body.vending-open {
 
 .vending-body {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(calc(88px * var(--vm)), 1fr) minmax(0, 2.2fr) minmax(calc(88px * var(--vm)), 1fr);
     gap: calc(6px * var(--vm));
-    align-items: start;
+    align-items: stretch;
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -6997,7 +6997,10 @@ body.vending-open {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    min-width: calc(76px * var(--vm));
+    align-self: stretch;
+    height: 100%;
+    min-height: 100%;
+    min-width: 0;
 }
 
 .vending-side-rail {
@@ -7033,6 +7036,8 @@ body.vending-open {
     align-items: stretch;
     gap: calc(8px * var(--vm));
     padding: calc(10px * var(--vm)) calc(8px * var(--vm));
+    min-height: 100%;
+    height: 100%;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 28%),
         linear-gradient(180deg, #322c40 0%, #1a1420 100%);
@@ -7044,6 +7049,11 @@ body.vending-open {
 
 .vending-side-plate-stack {
     justify-content: flex-start;
+}
+
+.vending-side-plate .vending-chips-slot {
+    margin-top: auto;
+    flex-shrink: 0;
 }
 
 .vending-side-label {
@@ -7113,6 +7123,12 @@ body.vending-open {
     gap: calc(8px * var(--vm));
     margin-top: auto;
     padding-top: calc(4px * var(--vm));
+    flex-shrink: 0;
+}
+
+.vending-side-left .vending-side-led-green {
+    margin-top: 0;
+    flex-shrink: 0;
 }
 
 .vending-center {
@@ -7774,7 +7790,7 @@ body.vending-open {
     bottom: auto;
     width: 100%;
     height: calc(5px * var(--vm));
-    margin-top: calc(4px * var(--vm));
+    margin-top: 0;
     border-radius: calc(3px * var(--vm));
 }
 
@@ -7991,8 +8007,8 @@ body.vending-open {
 
 .vault-card-popup-panel {
     position: relative;
-    width: min(100%, 520px);
-    max-height: min(92vh, 680px);
+    width: min(100%, 920px);
+    max-height: min(94vh, 900px);
     overflow: auto;
     border: 4px solid #1a140c;
     border-radius: 2px;
@@ -8125,7 +8141,7 @@ body.vending-open {
 
 .vault-card-popup-stage {
     display: grid;
-    grid-template-columns: minmax(148px, 168px) 1fr;
+    grid-template-columns: minmax(0, min(504px, 52vw)) 1fr;
     gap: 16px;
     align-items: start;
     margin-bottom: 12px;
@@ -8134,6 +8150,8 @@ body.vending-open {
 }
 
 .vault-card-popup-frame {
+    width: min(504px, 52vw);
+    max-width: 504px;
     border: 4px solid #1a140c;
     background:
         repeating-conic-gradient(#1a1814 0% 25%, #12100c 0% 50%) 50% / 4px 4px,
@@ -8363,11 +8381,23 @@ body.vending-open {
     box-shadow: 1px 1px 0 #6a5840;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 720px) {
     .vault-card-popup-panel {
         width: min(100%, 100%);
     }
 
+    .vault-card-popup-stage {
+        grid-template-columns: 1fr;
+    }
+
+    .vault-card-popup-frame {
+        width: min(504px, 88vw);
+        max-width: 504px;
+        margin: 0 auto;
+    }
+}
+
+@media (max-width: 480px) {
     .vault-card-popup-header {
         flex-wrap: wrap;
     }
@@ -8376,13 +8406,9 @@ body.vending-open {
         margin-left: auto;
     }
 
-    .vault-card-popup-stage {
-        grid-template-columns: 1fr;
-    }
-
     .vault-card-popup-frame {
-        max-width: 168px;
-        margin: 0 auto;
+        width: min(336px, 92vw);
+        max-width: 336px;
     }
 
     .vault-card-popup-name {
