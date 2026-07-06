@@ -251,6 +251,7 @@ def parse_vault(
         stacks.extend(legacy_stacks.values())
 
     vault = merge_vaults(stacks) if stacks else []
+    vault = [normalize_stack(entry, card_id=entry.get("card_id")) for entry in vault]
     vault.sort(key=lambda e: (e.get("acquired_at") or 0, e.get("card_id") or ""))
     return vault
 

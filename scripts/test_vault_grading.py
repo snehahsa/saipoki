@@ -80,6 +80,13 @@ def test_merge_vaults_combines_copies():
     assert poke5["copies"] == 1
 
 
+def test_merge_stacks_does_not_double_mint_count():
+  a, _ = mint_card_into_vault([], "poke-007", source="vending")
+  merged = merge_vaults(a, a)
+  assert len(merged) == 1
+  assert merged[0]["total_minted"] == 1
+
+
 def run():
     tests = [
         test_first_mint_creates_stack,
@@ -88,6 +95,7 @@ def run():
         test_legacy_vault_migration_counts_duplicates,
         test_add_card_to_vault_api_shape,
         test_merge_vaults_combines_copies,
+        test_merge_stacks_does_not_double_mint_count,
     ]
     for fn in tests:
         fn()

@@ -1884,13 +1884,16 @@ function vaultStackProgress(stack) {
 
 function normalizeVaultStack(entry, cardId = "") {
     const cid = String(cardId || entry?.card_id || entry?.id || "").trim()
-    const grade = Math.max(1, Math.min(Number(entry?.grade) || 1, VAULT_GRADING.max_grade || 5))
-    const copies = Math.max(0, Number(entry?.copies) || 0)
+    let grade = Math.max(1, Math.min(Number(entry?.grade) || 1, VAULT_GRADING.max_grade || 5))
+    let copies = Math.max(0, Number(entry?.copies) || 0)
+    let totalMinted = Math.max(0, Number(entry?.total_minted) || 0)
+    if (totalMinted <= 0) totalMinted = 1
+    if (grade === 1) copies = 0
     const stack = {
         card_id: cid,
         grade,
         copies,
-        total_minted: Math.max(Number(entry?.total_minted) || 0, copies + 1, 1),
+        total_minted: totalMinted,
         acquired_at: Number(entry?.acquired_at) || 0,
         source: String(entry?.source || "unknown"),
         upgraded_at: Number(entry?.upgraded_at) || 0,
@@ -1917,11 +1920,12 @@ function normalizeVaultDetail(raw) {
             const normalized = normalizeVaultStack(entry, cardId)
             if (byId.has(cardId)) {
                 const prev = byId.get(cardId)
+                const mergedGrade = Math.max(prev.grade, normalized.grade)
                 byId.set(cardId, normalizeVaultStack({
                     ...prev,
-                    grade: Math.max(prev.grade, normalized.grade),
-                    copies: prev.copies + normalized.copies,
-                    total_minted: prev.total_minted + normalized.total_minted,
+                    grade: mergedGrade,
+                    copies: Math.max(prev.copies, normalized.copies),
+                    total_minted: Math.max(prev.total_minted, normalized.total_minted),
                 }, cardId))
             } else {
                 byId.set(cardId, normalized)
@@ -2002,7 +2006,7 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         if (!stack.at_max_grade) {
             const copyBadge = document.createElement("span")
             copyBadge.className = "vault-slot-copies"
-            if (stack.grade === 1 && stack.total_minted > 0) {
+            if (stack.grade === 1) {
                 copyBadge.textContent = `${stack.total_minted}/${stack.next_cost || 3}`
             } else if (stack.copies > 0) {
                 copyBadge.textContent = `+${stack.copies}`

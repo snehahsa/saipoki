@@ -77,13 +77,16 @@ def normalize_stack(entry: dict[str, Any], *, card_id: str | None = None) -> dic
         source=str(entry.get("source") or "unknown"),
         acquired_at=int(entry.get("acquired_at") or 0) or None,
     )
-    stack["grade"] = _clamp_grade(entry.get("grade") or 1)
-    stack["copies"] = max(0, int(entry.get("copies") or 0))
-    stack["total_minted"] = max(
-        int(entry.get("total_minted") or 0),
-        stack["copies"] + (1 if stack["grade"] >= 1 else 0),
-        1 if stack["grade"] > 1 or stack["copies"] > 0 else 0,
-    )
+    grade = _clamp_grade(entry.get("grade") or 1)
+    copies = max(0, int(entry.get("copies") or 0))
+    total_minted = max(0, int(entry.get("total_minted") or 0))
+    if total_minted <= 0:
+        total_minted = 1
+    if grade == 1:
+        copies = 0
+    stack["grade"] = grade
+    stack["copies"] = copies
+    stack["total_minted"] = total_minted
     stack["upgraded_at"] = int(entry.get("upgraded_at") or 0)
     return stack
 
@@ -296,9 +299,13 @@ def merge_stacks(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     merged["grade"] = max(_clamp_grade(left.get("grade")), _clamp_grade(right.get("grade")))
-    merged["copies"] = int(left.get("copies") or 0) + int(right.get("copies") or 0)
-    merged["total_minted"] = int(left.get("total_minted") or 0) + int(right.get("total_minted") or 0)
+    merged["copies"] = max(int(left.get("copies") or 0), int(right.get("copies") or 0))
+    merged["total_minted"] = max(int(left.get("total_minted") or 0), int(right.get("total_minted") or 0))
     merged["upgraded_at"] = max(int(left.get("upgraded_at") or 0), int(right.get("upgraded_at") or 0))
+    if merged["grade"] == 1:
+        merged["copies"] = 0
+    if merged["total_minted"] <= 0:
+        merged["total_minted"] = 1
     try_auto_promote_grade_two(merged)
     return merged
 
