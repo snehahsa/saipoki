@@ -20,7 +20,14 @@ if [ -d static/sprites/animations ]; then
   python3 -c "from animation_catalog import sync_manifest; found = sync_manifest(); print(f'animation manifest: {len(found)} entries')"
 fi
 
-# Gear attach configs live in static/ — sync manifest for game + map builder.
+# Gear attach configs live in static/ — verify present, then sync manifest for map builder on disk.
+GEAR_ITEMS_DIR="static/sprites/spritesheets/items"
+for required in fishing_rod.json manifest.json; do
+  if [ ! -f "${GEAR_ITEMS_DIR}/${required}" ]; then
+    echo "ERROR: missing ${GEAR_ITEMS_DIR}/${required} — gear attach will be wrong on deploy" >&2
+    exit 1
+  fi
+done
 python3 -c "from gear_catalog import sync_items_manifest; sync_items_manifest(); print('gear items manifest synced from static/ configs')"
 
 if [ -f gather-clone/frontend/utils/defaultmap.json ]; then

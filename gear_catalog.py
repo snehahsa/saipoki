@@ -159,6 +159,62 @@ GEAR_ITEMS = {
 
 GEAR_ITEM_IDS = frozenset(GEAR_ITEMS.keys())
 
+# Baked-in attach rects — used when disk manifest/json was rebuilt with legacy formulas.
+GEAR_ITEM_SAVED_DEFAULTS: dict[str, dict] = {
+    "fishing_rod": {
+        "id": "fishing_rod",
+        "file": "fish.png",
+        "frame": {"x": 313, "y": 383, "w": 669, "h": 470},
+        "useFacings": ["left"],
+        "faces": {
+            "down": {
+                "eligible": False,
+                "rect": {"x": -28.265, "y": -44.355, "w": 60.21, "h": 42.3},
+            },
+            "left": {
+                "eligible": True,
+                "rect": {"x": -14.955, "y": 14.195, "w": 36.795, "h": 25.85},
+            },
+            "right": {
+                "eligible": False,
+                "rect": {"x": -21.545, "y": -44.355, "w": 60.21, "h": 42.3},
+            },
+            "up": {
+                "eligible": False,
+                "rect": {"x": -28.265, "y": -44.355, "w": 60.21, "h": 42.3},
+            },
+        },
+    },
+}
+
+
+def _saved_config_has_legacy_attach(item_id: str, saved: dict) -> bool:
+    """Detect legacy formula rebuild (wrong rod hold point — negative left y)."""
+    if item_id != "fishing_rod":
+        return False
+    faces = saved.get("faces")
+    if not isinstance(faces, dict):
+        return False
+    left = faces.get("left")
+    if not isinstance(left, dict):
+        return False
+    rect = left.get("rect")
+    if not isinstance(rect, dict):
+        return False
+    try:
+        y = float(rect.get("y", 0))
+    except (TypeError, ValueError):
+        return False
+    return y < 0
+
+
+def _coalesce_saved_config(item_id: str, saved: Optional[dict]) -> dict:
+    if not saved:
+        return {}
+    if _saved_config_has_legacy_attach(item_id, saved):
+        return {}
+    return saved
+
 
 def item_config_path(item_id: str) -> Path:
     return ITEMS_DIR / f"{item_id}.json"
@@ -201,14 +257,17 @@ def _saved_config_from_manifest(item_id: str) -> dict:
 
 
 def load_saved_item_config(item_id: str) -> dict:
-    saved = _read_json(item_config_path(item_id))
+    saved = _coalesce_saved_config(item_id, _read_json(item_config_path(item_id)))
     if saved:
         return saved
     legacy_path = LEGACY_ITEMS_DIR / f"{item_id}.json"
-    saved = _read_json(legacy_path)
+    saved = _coalesce_saved_config(item_id, _read_json(legacy_path))
     if saved:
         return saved
-    return _saved_config_from_manifest(item_id)
+    saved = _coalesce_saved_config(item_id, _saved_config_from_manifest(item_id))
+    if saved:
+        return saved
+    return dict(GEAR_ITEM_SAVED_DEFAULTS.get(item_id) or {})
 
 
 def default_face_attach(item_id: str) -> dict:
@@ -413,19 +472,12 @@ def gear_item_client_meta(item_id: str) -> dict:
     return meta
 
 
+def gear_items_manifest_payload() -> dict:
+    return {"items": list(gear_catalog_for_client().values())}
+
+
 def gear_catalog_for_client() -> dict:
-    """Serve committed manifest.json — never rewrite on page load (Railway would lose map-builder rects)."""
-    manifest = _read_json(STATIC_ITEMS_MANIFEST_PATH)
-    if manifest and isinstance(manifest.get("items"), list):
-        out: dict[str, dict] = {}
-        for entry in manifest["items"]:
-            if not isinstance(entry, dict):
-                continue
-            item_id = entry.get("id")
-            if item_id in GEAR_ITEM_IDS:
-                out[item_id] = entry
-        if out:
-            return out
+    """Authoritative gear attach catalog — computed, not read from possibly corrupt disk manifest."""
     return {item_id: gear_item_client_meta(item_id) for item_id in GEAR_ITEMS}
 
 

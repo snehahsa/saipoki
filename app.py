@@ -2963,6 +2963,13 @@ def animation_manifest():
     return jsonify({"animations": load_manifest()})
 
 
+@app.route("/sprites/spritesheets/items/manifest.json")
+def gear_items_manifest():
+    from gear_catalog import gear_items_manifest_payload
+
+    return jsonify(gear_items_manifest_payload())
+
+
 @app.route("/sprites/<path:filename>")
 def sprites(filename):
     bases = (
