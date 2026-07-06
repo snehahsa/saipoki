@@ -5624,7 +5624,7 @@ body.poketab-open {
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(100%, 480px);
+    width: min(100%, 640px);
     display: flex;
     transform: translateX(100%);
     animation: drawer-slide-in 0.28s steps(6, end) forwards;
@@ -5730,8 +5730,10 @@ body.poketab-open {
 .game-drawer-main {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     background:
         repeating-conic-gradient(#fff8ea 0% 25%, #f4ecd8 0% 50%) 50% / 4px 4px,
         #fff8ea;
@@ -5808,8 +5810,18 @@ body.poketab-open {
 }
 
 .game-drawer-hero--compact {
-    padding: 8px 10px;
-    margin-bottom: 10px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.game-drawer-hero--compact .game-drawer-hero-icon {
+    width: 36px;
+    height: 36px;
+}
+
+.game-drawer-hero--compact .game-drawer-hero-text {
+    font-size: 7px;
+    line-height: 1.5;
 }
 
 .game-drawer-hero-icon {
@@ -5853,7 +5865,7 @@ body.poketab-open {
 .game-drawer-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    gap: 12px;
     align-content: start;
 }
 
@@ -5861,6 +5873,7 @@ body.poketab-open {
     aspect-ratio: 5 / 7;
     min-height: 0;
     width: 100%;
+    max-width: 100%;
     border: 2px dashed #b8a888;
     background: rgba(255, 255, 255, 0.35);
     display: flex;
@@ -5955,9 +5968,11 @@ body.poketab-open {
 .game-drawer-slot-vault .vault-slot-grade,
 .game-drawer-slot-vault .vault-slot-mult,
 .game-drawer-slot-vault .vault-slot-copies {
-    font-size: 9px;
-    padding: 4px 5px;
+    font-size: 10px;
+    padding: 4px 6px;
     line-height: 1.2;
+    max-width: calc(100% - 4px);
+    white-space: nowrap;
 }
 
 .vault-slot-grade {
@@ -6895,44 +6910,216 @@ body.vending-open {
 .vending-room {
     position: relative;
     z-index: 1;
-    width: min(calc(420px * var(--vm)), 98vw);
+    width: min(calc(520px * var(--vm)), 98vw);
     max-height: calc(100vh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
 }
 
-.vending-wires {
-    position: absolute;
-    top: 8%;
+.vending-machine {
+    position: relative;
+    padding: calc(12px * var(--vm));
+    background:
+        repeating-conic-gradient(#4a4458 0% 25%, #3a3448 0% 50%) 50% / calc(4px * var(--vm)) calc(4px * var(--vm)),
+        linear-gradient(180deg, #5a5468 0%, #3a3448 100%);
+    border: calc(4px * var(--vm)) solid #1a1420;
+    box-shadow:
+        inset 0 0 0 calc(2px * var(--vm)) #8a8498,
+        calc(8px * var(--vm)) calc(8px * var(--vm)) 0 rgba(0, 0, 0, 0.65);
+}
+
+.vending-top-panel {
     display: flex;
-    flex-direction: column;
-    gap: calc(18px * var(--vm));
-    pointer-events: none;
+    align-items: center;
+    gap: calc(10px * var(--vm));
+    margin-bottom: calc(10px * var(--vm));
+    padding: calc(8px * var(--vm)) calc(10px * var(--vm));
+    background: #2a2438;
+    border: calc(2px * var(--vm)) solid #1a1420;
+    box-shadow: inset 0 calc(-2px * var(--vm)) 0 rgba(0, 0, 0, 0.35);
 }
 
-.vending-wires-left {
-    left: calc(-28px * var(--vm));
+.vending-led-bank {
+    display: flex;
+    align-items: center;
+    gap: calc(6px * var(--vm));
+    padding: calc(4px * var(--vm)) calc(6px * var(--vm));
+    background: #1a1420;
+    border: calc(2px * var(--vm)) solid #0a0810;
+    box-shadow: inset 0 0 calc(8px * var(--vm)) rgba(0, 0, 0, 0.55);
 }
 
-.vending-wires-right {
-    right: calc(-28px * var(--vm));
-}
-
-.vending-wire {
-    display: block;
-    width: calc(36px * var(--vm));
-    height: calc(5px * var(--vm));
-    border-radius: 0;
-    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+.vending-top-wire {
+    flex: 1;
+    min-width: calc(40px * var(--vm));
+    height: calc(4px * var(--vm));
+    margin-left: auto;
+    border-radius: calc(2px * var(--vm));
+    background: linear-gradient(
+        90deg,
+        #e84a4a 0%,
+        #e84a4a 18%,
+        #e8c84a 18%,
+        #e8c84a 36%,
+        #4ae86a 36%,
+        #4ae86a 54%,
+        #4a9ae8 54%,
+        #4a9ae8 72%,
+        #a84ae8 72%,
+        #a84ae8 90%,
+        #e8e8f0 90%,
+        #e8e8f0 100%
+    );
+    box-shadow: 0 0 calc(6px * var(--vm)) rgba(122, 232, 255, 0.35);
     animation: vending-wire-pulse 1.4s steps(2) infinite;
 }
 
-.vending-wires-left .vending-wire:nth-child(1) { transform: rotate(-18deg); animation-delay: 0s; }
-.vending-wires-left .vending-wire:nth-child(2) { transform: rotate(8deg); width: calc(44px * var(--vm)); animation-delay: 0.3s; }
-.vending-wires-left .vending-wire:nth-child(3) { transform: rotate(-6deg); animation-delay: 0.6s; }
-.vending-wires-right .vending-wire:nth-child(1) { transform: rotate(14deg); animation-delay: 0.15s; }
-.vending-wires-right .vending-wire:nth-child(2) { transform: rotate(-10deg); width: calc(40px * var(--vm)); animation-delay: 0.45s; }
-.vending-wires-right .vending-wire:nth-child(3) { transform: rotate(4deg); animation-delay: 0.75s; }
+.vending-body {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: calc(8px * var(--vm));
+    align-items: stretch;
+}
+
+.vending-side {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    min-width: calc(76px * var(--vm));
+}
+
+.vending-side-rail {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: calc(12px * var(--vm));
+    width: calc(18px * var(--vm));
+    padding: calc(6px * var(--vm)) 0;
+}
+
+.vending-side-rail .vending-wire {
+    display: block;
+    width: 100%;
+    height: calc(5px * var(--vm));
+    border-radius: 0;
+    box-shadow: calc(2px * var(--vm)) calc(2px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
+    animation: vending-wire-pulse 1.4s steps(2) infinite;
+    transform: none;
+}
+
+.vending-side-left .vending-side-rail .vending-wire:nth-child(1) { animation-delay: 0s; }
+.vending-side-left .vending-side-rail .vending-wire:nth-child(2) { animation-delay: 0.25s; }
+.vending-side-left .vending-side-rail .vending-wire:nth-child(3) { animation-delay: 0.5s; }
+.vending-side-right .vending-side-rail .vending-wire:nth-child(1) { animation-delay: 0.1s; }
+.vending-side-right .vending-side-rail .vending-wire:nth-child(2) { animation-delay: 0.35s; }
+.vending-side-right .vending-side-rail .vending-wire:nth-child(3) { animation-delay: 0.6s; }
+
+.vending-side-plate {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: calc(8px * var(--vm));
+    padding: calc(10px * var(--vm)) calc(8px * var(--vm));
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 28%),
+        linear-gradient(180deg, #322c40 0%, #1a1420 100%);
+    border: calc(2px * var(--vm)) solid #0a0810;
+    box-shadow:
+        inset 0 0 calc(14px * var(--vm)) rgba(0, 0, 0, 0.45),
+        inset 0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.08);
+}
+
+.vending-side-plate-stack {
+    justify-content: flex-start;
+}
+
+.vending-side-label {
+    font-family: silkscreen, monospace;
+    font-size: calc(5px * var(--vm));
+    letter-spacing: 0.16em;
+    text-align: center;
+    color: #7ae8ff;
+    text-shadow: 0 0 calc(4px * var(--vm)) rgba(122, 232, 255, 0.45);
+}
+
+.vending-side-btn {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(6px * var(--vm));
+    width: 100%;
+    min-height: calc(64px * var(--vm));
+    padding: calc(10px * var(--vm)) calc(6px * var(--vm));
+    text-align: center;
+    line-height: 1.25;
+}
+
+.vending-side-plate-stack .vending-side-btn {
+    min-height: calc(52px * var(--vm));
+}
+
+.vending-side-btn-text {
+    display: block;
+    font-size: calc(7px * var(--vm));
+    letter-spacing: 0.05em;
+    line-height: 1.35;
+}
+
+.vending-side-led {
+    display: block;
+    width: calc(8px * var(--vm));
+    height: calc(8px * var(--vm));
+    margin: 0 auto;
+    border: calc(2px * var(--vm)) solid #1a1420;
+    border-radius: 50%;
+    background: #2a2438;
+    box-shadow: inset calc(1px * var(--vm)) calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.15);
+}
+
+.vending-side-led-green {
+    background: #4ae86a;
+    box-shadow: 0 0 calc(8px * var(--vm)) #4ae86a;
+    animation: vending-led-blink 1.2s steps(2) infinite;
+}
+
+.vending-side-led-amber {
+    background: #e8c84a;
+    box-shadow: 0 0 calc(8px * var(--vm)) #e8c84a;
+    animation: vending-led-blink 0.9s steps(2) infinite 0.2s;
+}
+
+.vending-side-led-cyan {
+    background: #4a9ae8;
+    box-shadow: 0 0 calc(8px * var(--vm)) #4a9ae8;
+    animation: vending-led-blink 1.5s steps(2) infinite 0.4s;
+}
+
+.vending-side-led-row {
+    display: flex;
+    justify-content: center;
+    gap: calc(8px * var(--vm));
+    margin-top: auto;
+    padding-top: calc(4px * var(--vm));
+}
+
+.vending-center {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.vending-bottom-deck {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: calc(8px * var(--vm));
+    align-items: center;
+    margin-top: calc(8px * var(--vm));
+    padding: calc(10px * var(--vm));
+    background: #2a2438;
+    border: calc(2px * var(--vm)) solid #1a1420;
+    box-shadow: inset 0 calc(2px * var(--vm)) calc(8px * var(--vm)) rgba(0, 0, 0, 0.35);
+}
 
 .vending-wire-red { background: #e84a4a; }
 .vending-wire-yellow { background: #e8c84a; }
@@ -6946,26 +7133,21 @@ body.vending-open {
     50% { opacity: 1; filter: brightness(1.2); }
 }
 
-.vending-machine {
-    position: relative;
-    padding: calc(14px * var(--vm)) calc(14px * var(--vm)) calc(16px * var(--vm));
-    background:
-        repeating-conic-gradient(#4a4458 0% 25%, #3a3448 0% 50%) 50% / calc(4px * var(--vm)) calc(4px * var(--vm)),
-        linear-gradient(180deg, #5a5468 0%, #3a3448 100%);
-    border: calc(4px * var(--vm)) solid #1a1420;
-    box-shadow:
-        inset 0 0 0 calc(2px * var(--vm)) #8a8498,
-        calc(8px * var(--vm)) calc(8px * var(--vm)) 0 rgba(0, 0, 0, 0.65);
+.vending-machine[data-led-state="busy"] .vending-side-led-green,
+.vending-machine[data-led-state="boot"] .vending-side-led-green {
+    animation-duration: 0.3s;
 }
 
-.vending-top-panel {
-    display: flex;
-    align-items: center;
-    gap: calc(8px * var(--vm));
-    margin-bottom: calc(10px * var(--vm));
-    padding: calc(6px * var(--vm)) calc(8px * var(--vm));
-    background: #2a2438;
-    border: calc(2px * var(--vm)) solid #1a1420;
+.vending-machine[data-led-state="error"] .vending-side-led-amber {
+    background: #e84a4a;
+    box-shadow: 0 0 calc(10px * var(--vm)) #e84a4a;
+    animation-duration: 0.35s;
+}
+
+.vending-machine[data-led-state="ok"] .vending-side-led-cyan,
+.vending-machine[data-led-state="ready"] .vending-side-led-cyan {
+    background: #4ae86a;
+    box-shadow: 0 0 calc(10px * var(--vm)) #4ae86a;
 }
 
 .vending-brand {
@@ -7018,7 +7200,9 @@ body.vending-open {
 }
 
 .vending-monitor-wrap {
-    margin-bottom: calc(12px * var(--vm));
+    margin-bottom: 0;
+    flex: 1;
+    min-height: 0;
 }
 
 .vending-monitor-bezel {
@@ -7412,29 +7596,17 @@ body.vending-open {
     color: #8a8498;
 }
 
-.vending-control-deck {
-    display: flex;
-    flex-direction: column;
-    gap: calc(10px * var(--vm));
-}
-
-.vending-btn-row {
-    display: flex;
-    flex-direction: column;
-    gap: calc(8px * var(--vm));
-}
-
 .vending-btn {
     position: relative;
     display: flex;
     align-items: center;
     gap: calc(8px * var(--vm));
     width: 100%;
-    padding: calc(10px * var(--vm)) calc(12px * var(--vm)) calc(10px * var(--vm)) calc(14px * var(--vm));
+    padding: calc(10px * var(--vm)) calc(8px * var(--vm));
     font-family: silkscreen, monospace;
     font-size: calc(9px * var(--vm));
     letter-spacing: 0.04em;
-    text-align: left;
+    text-align: center;
     color: #fff8ea;
     cursor: pointer;
     background:
@@ -7445,6 +7617,11 @@ body.vending-open {
         inset 0 calc(-3px * var(--vm)) 0 rgba(0, 0, 0, 0.25),
         calc(3px * var(--vm)) calc(3px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
     transition: transform 0.05s ease;
+}
+
+.vending-btn .vending-btn-price {
+    font-size: calc(6px * var(--vm));
+    margin-top: calc(2px * var(--vm));
 }
 
 .vending-btn:active:not(:disabled) {
@@ -7465,7 +7642,7 @@ body.vending-open {
 
 .vending-btn-price {
     display: block;
-    font-size: calc(8px * var(--vm));
+    font-size: calc(6px * var(--vm));
     color: #ffd838;
     text-shadow: calc(1px * var(--vm)) calc(1px * var(--vm)) 0 #283818;
 }
@@ -7504,6 +7681,8 @@ body.vending-open {
 .vending-keypad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    grid-column: 1;
+    grid-row: 2;
     gap: calc(4px * var(--vm));
     padding: calc(6px * var(--vm));
     background: #2a2438;
@@ -7518,7 +7697,11 @@ body.vending-open {
 }
 
 .vending-exit {
-    width: 100%;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: auto;
+    min-width: calc(88px * var(--vm));
+    height: 100%;
     padding: calc(8px * var(--vm));
     font-family: silkscreen, monospace;
     font-size: calc(8px * var(--vm));
@@ -7531,32 +7714,36 @@ body.vending-open {
 }
 
 .vending-exit:active {
-    transform: translate(1px, 1px);
-    box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+    transform: translate(calc(1px * var(--vm)), calc(1px * var(--vm)));
+    box-shadow: calc(1px * var(--vm)) calc(1px * var(--vm)) 0 rgba(0, 0, 0, 0.5);
 }
 
 .vending-chips-slot,
 .vending-card-slot {
-    position: absolute;
     background: #1a1420;
     border: calc(2px * var(--vm)) solid #0a0810;
 }
 
-.vending-chips-slot {
-    right: calc(10px * var(--vm));
-    bottom: calc(52px * var(--vm));
-    width: calc(28px * var(--vm));
-    height: calc(6px * var(--vm));
-    border-radius: calc(3px * var(--vm));
+.vending-card-slot {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+    height: calc(10px * var(--vm));
+    transform: none;
+    box-shadow: inset 0 calc(2px * var(--vm)) calc(4px * var(--vm)) rgba(0, 0, 0, 0.6);
 }
 
-.vending-card-slot {
-    left: 50%;
-    bottom: calc(8px * var(--vm));
-    width: calc(80px * var(--vm));
-    height: calc(8px * var(--vm));
-    transform: translateX(-50%);
-    box-shadow: inset 0 calc(2px * var(--vm)) calc(4px * var(--vm)) rgba(0, 0, 0, 0.6);
+.vending-chips-slot {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    height: calc(6px * var(--vm));
+    margin-top: calc(6px * var(--vm));
+    border-radius: calc(3px * var(--vm));
 }
 
 /* ── Trainer stats screen ── */

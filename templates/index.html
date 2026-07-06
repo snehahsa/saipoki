@@ -966,110 +966,130 @@
 <div id="vending-screen" class="vending-screen hidden" role="dialog" aria-labelledby="vending-title" aria-modal="true">
     <div class="vending-backdrop" aria-hidden="true"></div>
     <div class="vending-room">
-        <div class="vending-wires vending-wires-left" aria-hidden="true">
-            <span class="vending-wire vending-wire-red"></span>
-            <span class="vending-wire vending-wire-yellow"></span>
-            <span class="vending-wire vending-wire-green"></span>
-        </div>
-        <div class="vending-wires vending-wires-right" aria-hidden="true">
-            <span class="vending-wire vending-wire-blue"></span>
-            <span class="vending-wire vending-wire-purple"></span>
-            <span class="vending-wire vending-wire-white"></span>
-        </div>
-
         <div class="vending-machine" id="vending-machine">
-            <div class="vending-top-panel" aria-hidden="true">
-                <span class="vending-led vending-led-power" title="Power"></span>
-                <span class="vending-led vending-led-busy" title="Busy"></span>
-                <span class="vending-led vending-led-ok" title="Ready"></span>
-                <span class="vending-led vending-led-error" title="Error"></span>
+            <header class="vending-top-panel" aria-hidden="true">
+                <div class="vending-led-bank">
+                    <span class="vending-led vending-led-power" title="Power"></span>
+                    <span class="vending-led vending-led-busy" title="Busy"></span>
+                    <span class="vending-led vending-led-ok" title="Ready"></span>
+                    <span class="vending-led vending-led-error" title="Error"></span>
+                </div>
                 <span class="vending-brand">POKÉCARD VTM-9000</span>
-            </div>
+                <div class="vending-top-wire" aria-hidden="true"></div>
+            </header>
 
-            <div class="vending-monitor-wrap">
-                <div class="vending-monitor-bezel">
-                    <div class="vending-monitor-glass">
-                        <div class="vending-scanlines" aria-hidden="true"></div>
-                        <div class="vending-monitor-glow" aria-hidden="true"></div>
-                        <div class="vending-monitor-inner" id="vending-monitor-inner">
-                            <div class="vending-view vending-view-boot" id="vending-view-boot">
-                                <pre class="vending-boot-text" id="vending-boot-text"></pre>
-                            </div>
-                            <div class="vending-view vending-view-menu hidden" id="vending-view-menu">
-                                <p class="vending-menu-title">SELECT OPERATION</p>
-                                <p class="vending-menu-line" id="vending-menu-draw-line">&gt; DRAW  — SPIN 1,000 $POKE</p>
-                                <p class="vending-menu-line">&gt; SELL   — LIST IN VAULT</p>
-                                <p class="vending-menu-line">&gt; BUY    — MARKETPLACE</p>
-                                <p class="vending-menu-cursor" aria-hidden="true">█</p>
-                            </div>
-                            <div class="vending-view vending-view-error hidden" id="vending-view-error">
-                                <p class="vending-error-code" id="vending-error-code">ERR</p>
-                                <p class="vending-error-msg" id="vending-error-msg"></p>
-                            </div>
-                            <div class="vending-view vending-view-soon hidden" id="vending-view-soon">
-                                <p class="vending-soon-title" id="vending-soon-title">COMING SOON</p>
-                                <p class="vending-soon-msg" id="vending-soon-msg">Feature not wired yet.</p>
-                                <p class="vending-soon-cursor" aria-hidden="true">█</p>
-                            </div>
-                            <div class="vending-view vending-view-shuffle hidden" id="vending-view-shuffle">
-                                <p class="vending-shuffle-label">SHUFFLING DECK...</p>
-                                <div class="vending-shuffle-window">
-                                    <div class="vending-shuffle-pointer" aria-hidden="true"></div>
-                                    <div class="vending-shuffle-track-wrap">
-                                        <div class="vending-shuffle-track" id="vending-shuffle-track"></div>
+            <div class="vending-body">
+                <aside class="vending-side vending-side-left" aria-label="Draw controls">
+                    <div class="vending-side-rail" aria-hidden="true">
+                        <span class="vending-wire vending-wire-red"></span>
+                        <span class="vending-wire vending-wire-yellow"></span>
+                        <span class="vending-wire vending-wire-green"></span>
+                    </div>
+                    <div class="vending-side-plate">
+                        <span class="vending-side-label">SLOT A</span>
+                        <button type="button" class="vending-side-btn vending-btn vending-btn-draw" id="vending-btn-draw">
+                            <span class="vending-btn-led" aria-hidden="true"></span>
+                            <span class="vending-side-btn-text">DRAW<br>POKÉCARD</span>
+                        </button>
+                        <span class="vending-side-led vending-side-led-green" aria-hidden="true"></span>
+                    </div>
+                </aside>
+
+                <div class="vending-center">
+                    <div class="vending-monitor-wrap">
+                        <div class="vending-monitor-bezel">
+                            <div class="vending-monitor-glass">
+                                <div class="vending-scanlines" aria-hidden="true"></div>
+                                <div class="vending-monitor-glow" aria-hidden="true"></div>
+                                <div class="vending-monitor-inner" id="vending-monitor-inner">
+                                    <div class="vending-view vending-view-boot" id="vending-view-boot">
+                                        <pre class="vending-boot-text" id="vending-boot-text"></pre>
+                                    </div>
+                                    <div class="vending-view vending-view-menu hidden" id="vending-view-menu">
+                                        <p class="vending-menu-title">SELECT OPERATION</p>
+                                        <p class="vending-menu-line" id="vending-menu-draw-line">&gt; DRAW  — SPIN 1,000 $POKE</p>
+                                        <p class="vending-menu-line">&gt; SELL   — LIST IN VAULT</p>
+                                        <p class="vending-menu-line">&gt; BUY    — MARKETPLACE</p>
+                                        <p class="vending-menu-cursor" aria-hidden="true">█</p>
+                                    </div>
+                                    <div class="vending-view vending-view-error hidden" id="vending-view-error">
+                                        <p class="vending-error-code" id="vending-error-code">ERR</p>
+                                        <p class="vending-error-msg" id="vending-error-msg"></p>
+                                    </div>
+                                    <div class="vending-view vending-view-soon hidden" id="vending-view-soon">
+                                        <p class="vending-soon-title" id="vending-soon-title">COMING SOON</p>
+                                        <p class="vending-soon-msg" id="vending-soon-msg">Feature not wired yet.</p>
+                                        <p class="vending-soon-cursor" aria-hidden="true">█</p>
+                                    </div>
+                                    <div class="vending-view vending-view-shuffle hidden" id="vending-view-shuffle">
+                                        <p class="vending-shuffle-label">SHUFFLING DECK...</p>
+                                        <div class="vending-shuffle-window">
+                                            <div class="vending-shuffle-pointer" aria-hidden="true"></div>
+                                            <div class="vending-shuffle-track-wrap">
+                                                <div class="vending-shuffle-track" id="vending-shuffle-track"></div>
+                                            </div>
+                                        </div>
+                                        <p class="vending-shuffle-status" id="vending-shuffle-status">▮▮▮▯▯▯</p>
+                                    </div>
+                                    <div class="vending-view vending-view-result hidden" id="vending-view-result">
+                                        <p class="vending-result-headline" id="vending-result-headline">CARD DISPENSED!</p>
+                                        <div class="vending-result-mint hidden" id="vending-result-mint">
+                                            <span class="vending-result-mint-tag" id="vending-result-mint-tag">DUPLICATE</span>
+                                            <span class="vending-result-mint-detail" id="vending-result-mint-detail"></span>
+                                        </div>
+                                        <div class="vending-result-layout">
+                                            <img class="vending-result-card" id="vending-result-card" alt="">
+                                            <div class="vending-result-details">
+                                                <p class="vending-result-name" id="vending-result-name"></p>
+                                                <p class="vending-result-meta" id="vending-result-meta"></p>
+                                                <ul class="vending-result-spells" id="vending-result-spells"></ul>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="vending-result-equip hidden" id="vending-btn-equip">
+                                            ▶ EQUIP TO VAULT
+                                        </button>
                                     </div>
                                 </div>
-                                <p class="vending-shuffle-status" id="vending-shuffle-status">▮▮▮▯▯▯</p>
                             </div>
-                            <div class="vending-view vending-view-result hidden" id="vending-view-result">
-                                <p class="vending-result-headline" id="vending-result-headline">CARD DISPENSED!</p>
-                                <div class="vending-result-mint hidden" id="vending-result-mint">
-                                    <span class="vending-result-mint-tag" id="vending-result-mint-tag">DUPLICATE</span>
-                                    <span class="vending-result-mint-detail" id="vending-result-mint-detail"></span>
-                                </div>
-                                <div class="vending-result-layout">
-                                    <img class="vending-result-card" id="vending-result-card" alt="">
-                                    <div class="vending-result-details">
-                                        <p class="vending-result-name" id="vending-result-name"></p>
-                                        <p class="vending-result-meta" id="vending-result-meta"></p>
-                                        <ul class="vending-result-spells" id="vending-result-spells"></ul>
-                                    </div>
-                                </div>
-                                <button type="button" class="vending-result-equip hidden" id="vending-btn-equip">
-                                    ▶ EQUIP TO VAULT
-                                </button>
-                            </div>
+                            <p class="vending-monitor-label" id="vending-title">CRT OUTPUT</p>
                         </div>
                     </div>
-                    <p class="vending-monitor-label" id="vending-title">CRT OUTPUT</p>
-                </div>
-            </div>
 
-            <div class="vending-control-deck">
-                <div class="vending-btn-row">
-                    <button type="button" class="vending-btn vending-btn-draw" id="vending-btn-draw">
-                        <span class="vending-btn-led" aria-hidden="true"></span>
-                        DRAW POKÉCARD
-                    </button>
-                    <button type="button" class="vending-btn vending-btn-sell" id="vending-btn-sell">
-                        <span class="vending-btn-led" aria-hidden="true"></span>
-                        SELL A POKÉCARD
-                    </button>
-                    <button type="button" class="vending-btn vending-btn-buy" id="vending-btn-buy">
-                        <span class="vending-btn-led" aria-hidden="true"></span>
-                        BUY A POKÉCARD
-                    </button>
+                    <div class="vending-bottom-deck">
+                        <div class="vending-card-slot" aria-hidden="true"></div>
+                        <div class="vending-keypad" aria-hidden="true">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </div>
+                        <button type="button" class="vending-exit" id="vending-exit">EJECT / EXIT</button>
+                    </div>
                 </div>
-                <div class="vending-keypad" aria-hidden="true">
-                    <span></span><span></span><span></span>
-                    <span></span><span></span><span></span>
-                    <span></span><span></span><span></span>
-                </div>
-                <button type="button" class="vending-exit" id="vending-exit">EJECT / EXIT</button>
-            </div>
 
-            <div class="vending-chips-slot" aria-hidden="true"></div>
-            <div class="vending-card-slot" aria-hidden="true"></div>
+                <aside class="vending-side vending-side-right" aria-label="Trade controls">
+                    <div class="vending-side-rail" aria-hidden="true">
+                        <span class="vending-wire vending-wire-blue"></span>
+                        <span class="vending-wire vending-wire-purple"></span>
+                        <span class="vending-wire vending-wire-white"></span>
+                    </div>
+                    <div class="vending-side-plate vending-side-plate-stack">
+                        <span class="vending-side-label">SLOT B</span>
+                        <button type="button" class="vending-side-btn vending-btn vending-btn-sell" id="vending-btn-sell">
+                            <span class="vending-btn-led" aria-hidden="true"></span>
+                            <span class="vending-side-btn-text">SELL<br>POKÉCARD</span>
+                        </button>
+                        <button type="button" class="vending-side-btn vending-btn vending-btn-buy" id="vending-btn-buy">
+                            <span class="vending-btn-led" aria-hidden="true"></span>
+                            <span class="vending-side-btn-text">BUY<br>POKÉCARD</span>
+                        </button>
+                        <div class="vending-side-led-row" aria-hidden="true">
+                            <span class="vending-side-led vending-side-led-amber"></span>
+                            <span class="vending-side-led vending-side-led-cyan"></span>
+                        </div>
+                    </div>
+                    <div class="vending-chips-slot" aria-hidden="true"></div>
+                </aside>
+            </div>
         </div>
     </div>
 </div>

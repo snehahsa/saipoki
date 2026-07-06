@@ -4538,7 +4538,7 @@ function vendingUpdateDrawButton() {
     const canAfford = balance >= cost
     btn.disabled = vendingBusy || !canAfford
     btn.classList.toggle("vending-btn-unaffordable", !canAfford && !vendingBusy)
-    btn.innerHTML = `<span class="vending-btn-led" aria-hidden="true"></span>DRAW POKÉCARD<span class="vending-btn-price">${formatChipsAmount(cost)} $POKE</span>`
+    btn.innerHTML = `<span class="vending-btn-led" aria-hidden="true"></span><span class="vending-side-btn-text">DRAW<br>POKÉCARD</span><span class="vending-btn-price">${formatChipsAmount(cost)} $POKE</span>`
     if (menuLine) {
         menuLine.textContent = `> DRAW  — SPIN ${formatChipsAmount(cost)} $POKE`
     }
