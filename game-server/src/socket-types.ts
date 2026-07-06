@@ -5,6 +5,7 @@ export const JoinGame = z.object({
     username: z.string().min(1).max(64),
     skin: z.string().min(1).max(64),
     level: z.number().int().min(1).max(9999).optional(),
+    equippedGear: z.string().min(1).max(64).nullable().optional(),
 })
 
 export const Disconnect = z.any()
@@ -21,6 +22,8 @@ export const Teleport = z.object({
 })
 
 export const ChangedSkin = z.string()
+
+export const ChangedGear = z.string().min(1).max(64).nullable()
 
 export const NewMessage = z.string()
 

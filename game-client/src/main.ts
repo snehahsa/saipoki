@@ -107,6 +107,7 @@ export async function startGame(session: GameSession): Promise<{ success: boolea
         session.username,
         session.skin,
         Number(session.level) || 1,
+        pendingEquippedGear,
     )
     if (!success) {
         activeApp.destroy()

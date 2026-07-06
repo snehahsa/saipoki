@@ -369,6 +369,10 @@ export class PlayApp extends App {
             ) {
                 this.players[uid].setPosition(player.x, player.y)
             }
+            const remoteGear = player.equippedGear ?? null
+            if (remoteGear !== this.players[uid].getEquippedGearId()) {
+                await this.players[uid].setEquippedGear(remoteGear)
+            }
         } else {
             await this.spawnPlayer(
                 player.uid,
@@ -377,6 +381,7 @@ export class PlayApp extends App {
                 player.x,
                 player.y,
                 player.level ?? 1,
+                player.equippedGear ?? null,
             )
         }
     }
@@ -398,10 +403,14 @@ export class PlayApp extends App {
         x: number,
         y: number,
         level: number = 1,
+        equippedGear: string | null = null,
     ) {
         const otherPlayer = new Player(skin, this, username, false, level, uid)
         await otherPlayer.init()
         otherPlayer.setPosition(x, y)
+        if (equippedGear) {
+            await otherPlayer.setEquippedGear(equippedGear)
+        }
         this.layers.object.addChild(otherPlayer.parent)
         this.players[uid] = otherPlayer
         this.sortObjectsByY()
@@ -1030,6 +1039,16 @@ export class PlayApp extends App {
         }
     }
 
+    private onPlayerChangedGear = async (data: any) => {
+        const player = this.players[data.uid]
+        if (!player) return
+        const gearId = data.equippedGear ?? null
+        if (gearId !== player.getEquippedGearId()) {
+            await player.setEquippedGear(gearId)
+            this.sortObjectsByY()
+        }
+    }
+
     private setUpSignalListeners = () => {
         signal.on('requestSkin', this.onRequestSkin)
         signal.on('switchSkin', this.onSwitchSkin)
@@ -1096,6 +1115,7 @@ export class PlayApp extends App {
         server.socket.on('playerMoved', this.onPlayerMoved)
         server.socket.on('playerTeleported', this.onPlayerTeleported)
         server.socket.on('playerChangedSkin', this.onPlayerChangedSkin)
+        server.socket.on('playerChangedGear', this.onPlayerChangedGear)
         server.socket.on('receiveMessage', this.onReceiveMessage)
         server.socket.on('disconnect', this.onDisconnect)
         server.socket.on('kicked', this.onKicked)
@@ -1107,6 +1127,7 @@ export class PlayApp extends App {
         server.socket.off('playerMoved', this.onPlayerMoved)
         server.socket.off('playerTeleported', this.onPlayerTeleported)
         server.socket.off('playerChangedSkin', this.onPlayerChangedSkin)
+        server.socket.off('playerChangedGear', this.onPlayerChangedGear)
         server.socket.off('receiveMessage', this.onReceiveMessage)
         server.socket.off('disconnect', this.onDisconnect)
         server.socket.off('kicked', this.onKicked)
@@ -1124,6 +1145,9 @@ export class PlayApp extends App {
         this.equippedGearId = gearId
         await this.player.setEquippedGear(gearId)
         this.sortObjectsByY()
+        if (server.socket?.connected) {
+            server.socket.emit('changedGear', gearId)
+        }
     }
 
     public tryUseGear = (): { success: boolean; message: string; animId?: string } => {

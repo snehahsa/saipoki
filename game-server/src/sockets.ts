@@ -6,6 +6,7 @@ import {
     MovePlayer,
     Teleport,
     ChangedSkin,
+    ChangedGear,
     NewMessage,
 } from './socket-types'
 import { z } from 'zod'
@@ -116,6 +117,7 @@ export function sockets(io: Server) {
                     joinData.username,
                     joinData.skin,
                     joinData.level ?? 1,
+                    joinData.equippedGear ?? null,
                 )
 
                 const newSession = sessionManager.getPlayerSession(uid)!
@@ -171,6 +173,12 @@ export function sockets(io: Server) {
             const player = session.getPlayer(uid)
             player.skin = data
             emit('playerChangedSkin', { uid, skin: player.skin })
+        })
+
+        on('changedGear', ChangedGear, ({ session, data }) => {
+            const player = session.getPlayer(uid)
+            player.equippedGear = data
+            emit('playerChangedGear', { uid, equippedGear: player.equippedGear })
         })
 
         on('sendMessage', NewMessage, ({ data }) => {

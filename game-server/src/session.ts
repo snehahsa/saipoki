@@ -62,6 +62,7 @@ export interface Player {
     socketId: string
     skin: string
     proximityId: string | null
+    equippedGear: string | null
 }
 
 export const WORLD_ID = 'telegram-world'
@@ -90,9 +91,10 @@ export class SessionManager {
         uid: string,
         username: string,
         skin: string,
-        level: number = 1
+        level: number = 1,
+        equippedGear: string | null = null,
     ) {
-        this.sessions[realmId].addPlayer(socketId, uid, username, skin, level)
+        this.sessions[realmId].addPlayer(socketId, uid, username, skin, level, equippedGear)
         this.playerIdToRealmId[uid] = realmId
         this.socketIdToPlayerId[socketId] = uid
     }
@@ -161,11 +163,20 @@ export class Session {
         }
     }
 
-    public addPlayer(socketId: string, uid: string, username: string, skin: string, level: number = 1) {
+    public addPlayer(
+        socketId: string,
+        uid: string,
+        username: string,
+        skin: string,
+        level: number = 1,
+        equippedGear: string | null = null,
+    ) {
         this.removePlayer(uid)
         const spawnIndex = this.map_data.spawnpoint.roomIndex
         const spawnX = this.map_data.spawnpoint.x
         const spawnY = this.map_data.spawnpoint.y
+
+        const gear = typeof equippedGear === 'string' && equippedGear.trim() ? equippedGear.trim() : null
 
         const player: Player = {
             uid,
@@ -177,6 +188,7 @@ export class Session {
             socketId,
             skin,
             proximityId: null,
+            equippedGear: gear,
         }
 
         this.playerRooms[spawnIndex].add(uid)

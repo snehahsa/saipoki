@@ -488,6 +488,10 @@ export class Player {
         await this.updateGearOverlay()
     }
 
+    public getEquippedGearId(): string | null {
+        return this.equippedGearId
+    }
+
     private gearFacingFromAnimation(): Direction {
         const state = this.animationState
         if (state.includes('left')) return 'left'

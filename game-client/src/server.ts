@@ -33,7 +33,12 @@ class Server {
         this.socket.disconnect()
     }
 
-    public async connect(username: string, skin: string, level: number = 1) {
+    public async connect(
+        username: string,
+        skin: string,
+        level: number = 1,
+        equippedGear: string | null = null,
+    ) {
         this.disconnect()
         const token = ++this.connectionToken
 
@@ -72,7 +77,12 @@ class Server {
 
             this.socket.once('connect', () => {
                 this.connected = true
-                this.socket.emit('joinGame', { username, skin, level: Math.max(1, Number(level) || 1) })
+                this.socket.emit('joinGame', {
+                    username,
+                    skin,
+                    level: Math.max(1, Number(level) || 1),
+                    equippedGear: equippedGear || null,
+                })
             })
 
             this.socket.once('joinedRealm', () => {
