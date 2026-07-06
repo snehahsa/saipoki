@@ -297,7 +297,7 @@
                 <div class="poketab-duel-card poketab-duel-card-danger">
                     <p class="poketab-duel-title">CHALLENGE!</p>
                     <p class="poketab-duel-body">${escapeHtml(inv.challenger?.display_name || "Trainer")}</p>
-                    <p class="poketab-duel-wager">${formatChips(inv.bet)} $POKE</p>
+                    <p class="poketab-duel-wager">${formatChips(inv.bet)} CHIPS</p>
                     <div class="poketab-duel-actions">
                         <button type="button" class="poketab-duel-btn accept" data-battle-accept="${inv.id}">FIGHT</button>
                         <button type="button" class="poketab-duel-btn decline" data-battle-decline="${inv.id}">NO</button>
@@ -310,7 +310,7 @@
                 <div class="poketab-duel-card poketab-duel-card-warn">
                     <p class="poketab-duel-title">SENT</p>
                     <p class="poketab-duel-body">vs ${escapeHtml(inv.opponent?.display_name || "Trainer")}</p>
-                    <p class="poketab-duel-wager">${formatChips(inv.bet)} $POKE</p>
+                    <p class="poketab-duel-wager">${formatChips(inv.bet)} CHIPS</p>
                     <p class="poketab-duel-body">AWAITING REPLY...</p>
                 </div>
             `)
@@ -319,7 +319,7 @@
             chunks.push(`
                 <div class="poketab-duel-card poketab-duel-card-live">
                     <p class="poketab-duel-title">LIVE</p>
-                    <p class="poketab-duel-wager">${formatChips(battle.bet)} $POKE</p>
+                    <p class="poketab-duel-wager">${formatChips(battle.bet)} CHIPS</p>
                     <button type="button" class="poketab-duel-btn accept" data-battle-resume="1">GO</button>
                 </div>
             `)
@@ -329,7 +329,7 @@
 
     function updateBalanceDisplay(balance) {
         const el = document.getElementById("poketab-battle-balance")
-        if (el) el.textContent = `> BALANCE: ${formatChips(balance)} $POKE`
+        if (el) el.textContent = `> BALANCE: ${formatChips(balance)} CHIPS`
     }
 
     function updateEligibleHint(data) {
@@ -387,7 +387,7 @@
                     <div class="poketab-row poketab-battle-opp-row">
                         <div class="poketab-row-main">
                             <div class="poketab-row-name">${friendTag}${escapeHtml(opp.display_name)}</div>
-                            <div class="poketab-battle-opp-meta">${readyCards} ready · ${formatChips(opp.balance)} $POKE</div>
+                            <div class="poketab-battle-opp-meta">${readyCards} ready · ${formatChips(opp.balance)} CHIPS</div>
                         </div>
                         <button type="button" class="poketab-action-btn poketab-battle-challenge-btn${alreadySent ? " is-sent" : ""}"
                             data-challenge-id="${escapeHtml(tid)}"
@@ -674,7 +674,7 @@
             <div class="poketab-gb-scene">
                 <div class="poketab-gb-hud">
                     <div class="poketab-gb-timer"><div style="width:${turnPct}%"></div></div>
-                    <div class="poketab-gb-wager">⚡ ${formatChips(battle.bet)} $POKE</div>
+                    <div class="poketab-gb-wager">⚡ ${formatChips(battle.bet)} CHIPS</div>
                 </div>
                 <div class="poketab-gb-field">
                     <div class="poketab-gb-opp-panel">

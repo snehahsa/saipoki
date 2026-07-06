@@ -489,15 +489,15 @@
         <div class="balance-line balance-line--profile" aria-live="polite">
             <span class="poke-chips poke-chips--sm" aria-hidden="true"></span>
             <span id="profile-balance">0</span>
-            <span class="profile-balance-label"> Chips</span>
+            <span class="profile-balance-label"> CHIPS</span>
         </div>
 
-        <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Buy and sell Chips">
-            <p class="profile-section-title">Chips Exchange</p>
-            <p class="profile-section-note">1 $POKEQUEST = 1 Chip. Buy sends on-chain to treasury; sell debits Chips and queues $POKEQUEST to your wallet.</p>
+        <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Buy and sell CHIPS">
+            <p class="profile-section-title">CHIPS Exchange</p>
+            <p class="profile-section-note">1 $POKEQUEST = 1 CHIPS. Buy sends on-chain to treasury; sell debits CHIPS and queues $POKEQUEST to your wallet.</p>
             <div class="profile-chips-actions">
-                <button class="profile-chips-btn profile-chips-btn--buy" id="profile-deposit-btn" type="button" data-kins-buy>Buy Chips</button>
-                <button class="profile-chips-btn profile-chips-btn--sell" id="profile-withdraw-btn" type="button">Sell Chips</button>
+                <button class="profile-chips-btn profile-chips-btn--buy" id="profile-deposit-btn" type="button" data-kins-buy>Buy CHIPS</button>
+                <button class="profile-chips-btn profile-chips-btn--sell" id="profile-withdraw-btn" type="button">Sell CHIPS</button>
             </div>
             <div class="profile-chips-form hidden" id="profile-chips-form">
                 <input
@@ -543,7 +543,7 @@
 
         <section class="profile-section" aria-label="Avatar shop">
             <p class="profile-section-title">Avatar Shop</p>
-            <p class="profile-section-note">Spend Chips to unlock new looks.</p>
+            <p class="profile-section-note">Spend CHIPS to unlock new looks.</p>
             <div class="profile-skin-grid-wrap">
                 <div id="profile-shop-grid" class="profile-skin-grid profile-skin-grid--shop" role="list"></div>
             </div>
@@ -609,10 +609,10 @@
             <div class="lb-pulse-grid" id="lb-pulse-grid" aria-live="polite">
                 <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-trainers">—</span><span class="lb-pulse-label">Trainers</span></div>
                 <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-battles">—</span><span class="lb-pulse-label">Battles fought</span></div>
-                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-wagered">—</span><span class="lb-pulse-label">$POKE wagered</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-wagered">—</span><span class="lb-pulse-label">CHIPS wagered</span></div>
                 <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-cards">—</span><span class="lb-pulse-label">Cards in vaults</span></div>
                 <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-wins">—</span><span class="lb-pulse-label">Arena wins</span></div>
-                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-circulating">—</span><span class="lb-pulse-label">$POKE circulating</span></div>
+                <div class="lb-pulse-card"><span class="lb-pulse-val" id="lb-pulse-circulating">—</span><span class="lb-pulse-label">CHIPS circulating</span></div>
             </div>
 
             <div class="lb-tabs" id="lb-tabs" role="tablist" aria-label="Leaderboard categories"></div>
@@ -678,10 +678,10 @@
             <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-chips poke-chips--sm hud-chips" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
             <div class="hud-line">coord: <span id="stat-coord" class="hud-v">—, —</span></div>
         </div>
-        <div class="game-hud-deposit hidden" id="game-hud-deposit" aria-label="Buy and sell Chips">
+        <div class="game-hud-deposit hidden" id="game-hud-deposit" aria-label="Buy and sell CHIPS">
             <div class="game-hud-chips-actions">
-                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--buy" id="game-hud-buy-toggle" data-kins-buy>Buy Chips</button>
-                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--sell" id="game-hud-sell-toggle">Sell Chips</button>
+                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--buy" id="game-hud-buy-toggle" data-kins-buy>Buy CHIPS</button>
+                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--sell" id="game-hud-sell-toggle">Sell CHIPS</button>
             </div>
             <div class="game-hud-chips-form hidden" id="game-hud-chips-form">
                 <input
@@ -1016,7 +1016,7 @@
                                     </div>
                                     <div class="vending-view vending-view-menu hidden" id="vending-view-menu">
                                         <p class="vending-menu-title">SELECT OPERATION</p>
-                                        <p class="vending-menu-line" id="vending-menu-draw-line">&gt; DRAW  — SPIN 1,000 $POKE</p>
+                                        <p class="vending-menu-line" id="vending-menu-draw-line">&gt; DRAW  — SPIN 1,000 CHIPS</p>
                                         <p class="vending-menu-line">&gt; SELL   — LIST IN VAULT</p>
                                         <p class="vending-menu-line">&gt; BUY    — MARKETPLACE</p>
                                         <p class="vending-menu-cursor" aria-hidden="true">█</p>
@@ -1207,11 +1207,11 @@
                                 <div class="poketab-view" data-poketab-view="battle">
                                     <div id="poketab-battle-lobby" class="poketab-battle-lobby">
                                         <p class="poketab-crt-title">⚔ BATTLE ARENA</p>
-                                        <p class="poketab-battle-balance" id="poketab-battle-balance">&gt; BALANCE: 0 $POKE</p>
+                                        <p class="poketab-battle-balance" id="poketab-battle-balance">&gt; BALANCE: 0 CHIPS</p>
                                         <div class="poketab-battle-wager-row">
                                             <label class="poketab-battle-wager-label" for="poketab-battle-wager">WAGER</label>
                                             <input type="number" id="poketab-battle-wager" class="poketab-battle-wager-input" min="1" value="50" inputmode="numeric">
-                                            <span class="poketab-battle-wager-hint">$POKECARD</span>
+                                            <span class="poketab-battle-wager-hint">CHIPS</span>
                                         </div>
                                         <p class="poketab-crt-line poketab-battle-sub" id="poketab-battle-sub">&gt; 1 RANDOM CARD / FIGHT · 3/DAY/CARD</p>
                                         <p class="poketab-crt-line poketab-battle-eligible" id="poketab-battle-eligible"></p>

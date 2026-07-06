@@ -633,7 +633,7 @@ def _pre_battle_check(
             f"You need at least {config.min_vault_cards} battle-ready PokéCard(s) in your vault."
         )
     if bet < MIN_BET:
-        return f"Minimum wager is {MIN_BET} $POKECARD."
+        return f"Minimum wager is {MIN_BET} CHIPS."
     if _user_balance(conn, user_id) < bet:
         return "Insufficient balance for this wager."
     return None
@@ -1325,7 +1325,7 @@ def _serialize_game(game: Game, viewer_id: str, catalog: dict, log: list[str]) -
         },
         "winner_id": game.winner,
         "log": log[-12:],
-        "payout_note": f"Winner receives {int(game.bet * 2 * 0.95):,} $POKECARD (5% burn)" if game.bet else None,
+        "payout_note": f"Winner receives {int(game.bet * 2 * 0.95):,} CHIPS (5% burn)" if game.bet else None,
     }
 
 

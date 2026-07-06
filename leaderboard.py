@@ -30,7 +30,7 @@ CATEGORIES = (
         "id": "whales",
         "title": "High Rollers",
         "emoji": "💰",
-        "tagline": "Total $POKECARD wagered — the whales move markets.",
+        "tagline": "Total CHIPS wagered — the whales move markets.",
         "fomo": "Every bet fuels the arena pot.",
         "value_label": "wagered",
         "sort_key": "stats_wagered",
@@ -76,7 +76,7 @@ CATEGORIES = (
         "title": "Richest Now",
         "emoji": "💎",
         "tagline": "Current balance — liquid power.",
-        "fomo": "Stack $POKECARD before the next drop.",
+        "fomo": "Stack CHIPS before the next drop.",
         "value_label": "balance",
         "sort_key": "balance",
     },
@@ -313,7 +313,7 @@ def _entries_for_category(conn: sqlite3.Connection, cat: dict) -> list[dict]:
         if value <= 0:
             continue
         if sort_key == "balance":
-            display = f"{value:,} $POKE"
+            display = f"{value:,} CHIPS"
         elif sort_key == "stats_wagered":
             display = f"{value:,} wagered"
         else:

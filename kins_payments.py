@@ -184,7 +184,7 @@ def create_withdrawal(
     if amount_kins < MIN_WITHDRAW_KINS or amount_kins > MAX_DEPOSIT_KINS:
         return (
             False,
-            f"Enter between {MIN_WITHDRAW_KINS:,} and {MAX_DEPOSIT_KINS:,} Chips.",
+            f"Enter between {MIN_WITHDRAW_KINS:,} and {MAX_DEPOSIT_KINS:,} CHIPS.",
             {},
         )
 
@@ -197,7 +197,7 @@ def create_withdrawal(
 
     balance = int(row["balance"] or 0)
     if amount_kins > balance:
-        return False, f"Not enough Chips — you have {balance:,}.", {}
+        return False, f"Not enough CHIPS — you have {balance:,}.", {}
 
     now = int(time.time())
     withdrawal_id = secrets.token_hex(16)

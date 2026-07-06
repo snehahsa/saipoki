@@ -74,7 +74,7 @@
     }
 
     function formatSkinPrice(price) {
-        return `${Math.max(0, Number(price) || 0).toLocaleString()} Chips`
+        return `${Math.max(0, Number(price) || 0).toLocaleString()} CHIPS`
     }
 
     function renderExclusiveSkinCard(skin) {

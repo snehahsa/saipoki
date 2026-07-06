@@ -1058,7 +1058,7 @@ function syncWalletEconomyLabels() {
     const kins = requiresKinsPayments()
     const profileLabel = document.querySelector(".profile-balance-label")
     if (profileLabel) {
-        profileLabel.textContent = kins ? " balance (1 $POKEQUEST = 1 Chip)" : " Chips"
+        profileLabel.textContent = kins ? " balance (1 $POKEQUEST = 1 CHIPS)" : " CHIPS"
     }
     const skinBalanceLabel = document.querySelector("#skin-screen .skin-economy-row .skin-economy-label")
     if (skinBalanceLabel && kins) {
@@ -1189,7 +1189,7 @@ async function withdrawKinsBalance(amountKins) {
     })
     const data = await response.json()
     if (!response.ok || !data.success) {
-        throw new Error(data.error || "Could not sell Chips.")
+        throw new Error(data.error || "Could not sell CHIPS.")
     }
     return data
 }
@@ -1205,7 +1205,7 @@ async function handleGameHudChipsSubmit() {
     const submitBtn = document.getElementById("game-hud-chips-submit")
     const isSell = gameHudChipsMode === "sell"
     if (isSell && amount < MIN_WITHDRAW_KINS) {
-        showGameHudChipsToast(`Minimum sell amount is ${formatChipsAmount(MIN_WITHDRAW_KINS)} Chips.`, "error")
+        showGameHudChipsToast(`Minimum sell amount is ${formatChipsAmount(MIN_WITHDRAW_KINS)} CHIPS.`, "error")
         return
     }
     if (submitBtn) submitBtn.disabled = true
@@ -1224,8 +1224,8 @@ async function handleGameHudChipsSubmit() {
         if (input) input.value = ""
         showGameHudChipsToast(
             isSell
-                ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"} — $POKEQUEST payout queued.`
-                : `Bought ${formatChipsAmount(data.amountKins || amount)} Chip${amount === 1 ? "" : "s"}!`,
+                ? `Sold ${formatChipsAmount(data.amountKins || amount)} CHIPS — $POKEQUEST payout queued.`
+                : `Bought ${formatChipsAmount(data.amountKins || amount)} CHIPS!`,
             "success",
         )
         window.RetroAudio?.sfx?.("confirm")
@@ -1269,12 +1269,12 @@ async function handleProfileChipsAction(mode) {
 
     const isSell = mode === "sell"
     if (isSell && amount < MIN_WITHDRAW_KINS) {
-        status.textContent = `Minimum sell amount is ${formatChipsAmount(MIN_WITHDRAW_KINS)} Chips.`
+        status.textContent = `Minimum sell amount is ${formatChipsAmount(MIN_WITHDRAW_KINS)} CHIPS.`
         status.classList.add("error")
         return
     }
     status.textContent = isSell
-        ? "Selling Chips..."
+        ? "Selling CHIPS..."
         : "Approve $POKEQUEST transfer in your wallet..."
     status.classList.remove("error")
 
@@ -1288,8 +1288,8 @@ async function handleProfileChipsAction(mode) {
         if (input) input.value = ""
         closeProfileChipsForm()
         status.textContent = isSell
-            ? `Sold ${formatChipsAmount(data.amountKins || amount)} Chips — $POKEQUEST payout queued.`
-            : `Bought ${formatChipsAmount(data.amountKins || amount)} Chips!`
+            ? `Sold ${formatChipsAmount(data.amountKins || amount)} CHIPS — $POKEQUEST payout queued.`
+            : `Bought ${formatChipsAmount(data.amountKins || amount)} CHIPS!`
     } catch (error) {
         status.textContent = error.message
         status.classList.add("error")
@@ -1371,7 +1371,7 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         } else {
             saveBtn.removeAttribute("data-kins-buy")
             saveBtn.classList.toggle("is-unaffordable", cost > balance)
-            saveBtn.textContent = cost > balance ? "Not enough Chips" : "Buy"
+            saveBtn.textContent = cost > balance ? "Not enough CHIPS" : "Buy"
         }
     }
 
@@ -1384,12 +1384,12 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
             hint.textContent = `Sends ${formatChipsAmount(price)} $POKEQUEST on-chain to unlock this avatar.`
         } else if (!session?.has_skin && !requiresKinsPayments()) {
             hint.textContent = walletRequired()
-                ? "New trainers start with 0 Chips — meet Cristy on the waterfront for a vending trial bonus."
-                : `New trainers start with ${formatChipsAmount(STARTING_BALANCE)} Chips.`
+                ? "New trainers start with 0 CHIPS — meet Cristy on the waterfront for a vending trial bonus."
+                : `New trainers start with ${formatChipsAmount(STARTING_BALANCE)} CHIPS.`
         } else if (cost > balance && cost > 0) {
-            hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips for this avatar.`
+            hint.textContent = `You need ${formatChipsAmount(cost - balance)} more CHIPS for this avatar.`
         } else if (cost > 0) {
-            hint.textContent = `${formatChipsAmount(cost)} Chips will be deducted when you save.`
+            hint.textContent = `${formatChipsAmount(cost)} CHIPS will be deducted when you save.`
         } else {
             hint.textContent = isAvatarOwned(skin) ? "You already own this avatar." : "This avatar is free."
         }
@@ -1403,9 +1403,9 @@ function updateAvatarPriceTag(skin, prefix = "skin") {
         } else if (kinsPay) {
             hint.textContent = `Sends ${formatChipsAmount(price)} $POKEQUEST on-chain to unlock this avatar.`
         } else if (cost > balance && cost > 0) {
-            hint.textContent = `You need ${formatChipsAmount(cost - balance)} more Chips to unlock this avatar.`
+            hint.textContent = `You need ${formatChipsAmount(cost - balance)} more CHIPS to unlock this avatar.`
         } else if (cost > 0) {
-            hint.textContent = `${formatChipsAmount(cost)} Chips will be deducted when you purchase.`
+            hint.textContent = `${formatChipsAmount(cost)} CHIPS will be deducted when you purchase.`
         } else {
             hint.textContent = "This avatar is free — claim it to add to your collection."
         }
@@ -1480,7 +1480,7 @@ function updateProfileActionButton(skin) {
         btn.textContent = `Buy — ${formatChipsAmount(cost)} $POKEQUEST`
         btn.disabled = false
     } else if (cost > balance) {
-        btn.textContent = "Not enough Chips"
+        btn.textContent = "Not enough CHIPS"
         btn.disabled = true
         btn.removeAttribute("data-kins-buy")
         btn.classList.add("is-unaffordable")
@@ -3344,7 +3344,7 @@ async function grantNpcBalance(grantId, source = "") {
             updateBalanceDisplays()
         }
         if (!data.already_granted && Number(data.amount) > 0) {
-            showQuickbarHint(`+${formatChipsAmount(data.amount)} Chips!`)
+            showQuickbarHint(`+${formatChipsAmount(data.amount)} CHIPS!`)
         }
     } catch (error) {
         console.warn("Could not grant balance:", error)
@@ -4061,7 +4061,7 @@ function renderLbYouCard(data, categoryId) {
         `${stats.stats_wagered.toLocaleString()} wagered`,
         `${stats.stats_battles} battles · ${stats.stats_wins}W / ${stats.stats_losses ?? 0}L`,
         `${stats.vault_count} vault cards`,
-        `${stats.balance.toLocaleString()} $POKE balance`,
+        `${stats.balance.toLocaleString()} CHIPS balance`,
     ]
     if (stats.win_rate != null) parts.push(`${stats.win_rate}% win rate`)
     statsEl.textContent = parts.join(" · ")
@@ -4111,8 +4111,8 @@ async function openTrainerStats(returnScreen = "menu") {
                 ["Wins", stats.stats_wins ?? 0],
                 ["Losses", stats.stats_losses ?? 0],
                 ["Total XP", stats.stats_xp ?? 0],
-                ["Wagered", `${(stats.stats_wagered ?? 0).toLocaleString()} $POKE`],
-                ["Balance", `${(stats.balance ?? 0).toLocaleString()} $POKE`],
+                ["Wagered", `${(stats.stats_wagered ?? 0).toLocaleString()} CHIPS`],
+                ["Balance", `${(stats.balance ?? 0).toLocaleString()} CHIPS`],
                 ["Vault cards", stats.vault_count ?? 0],
                 ["Win rate", stats.win_rate != null ? `${stats.win_rate}%` : "—"],
             ].map(([label, val]) => `
@@ -4135,7 +4135,7 @@ async function openTrainerStats(returnScreen = "menu") {
                     const li = document.createElement("li")
                     li.className = `trainer-stats-history-row${row.won ? " won" : " lost"}`
                     const src = row.source === "poketab" ? "PokéTab" : row.source === "telegram" ? "TG" : row.source
-                    const bet = row.bet ? `${Number(row.bet).toLocaleString()} $POKE` : "—"
+                    const bet = row.bet ? `${Number(row.bet).toLocaleString()} CHIPS` : "—"
                     li.textContent = `${row.won ? "WIN" : "LOSS"} · ${src} · ${bet}`
                     historyEl.appendChild(li)
                 }
@@ -4605,9 +4605,9 @@ function vendingUpdateDrawButton() {
     const canAfford = balance >= cost
     btn.disabled = vendingBusy || !canAfford
     btn.classList.toggle("vending-btn-unaffordable", !canAfford && !vendingBusy)
-    btn.innerHTML = `<span class="vending-btn-led" aria-hidden="true"></span><span class="vending-side-btn-text">DRAW<br>POKÉCARD</span><span class="vending-btn-price">${formatChipsAmount(cost)} $POKE</span>`
+    btn.innerHTML = `<span class="vending-btn-led" aria-hidden="true"></span><span class="vending-side-btn-text">DRAW<br>POKÉCARD</span><span class="vending-btn-price">${formatChipsAmount(cost)} CHIPS</span>`
     if (menuLine) {
-        menuLine.textContent = `> DRAW  — SPIN ${formatChipsAmount(cost)} $POKE`
+        menuLine.textContent = `> DRAW  — SPIN ${formatChipsAmount(cost)} CHIPS`
     }
 }
 
@@ -4988,7 +4988,7 @@ async function vendingPerformDraw() {
         vendingShowView("vending-view-error")
         document.getElementById("vending-error-code").textContent = "ERR-FUNDS"
         document.getElementById("vending-error-msg").textContent =
-            `INSUFFICIENT CHIPS.\nNEED ${formatChipsAmount(cost)} $POKE TO SPIN.`
+            `INSUFFICIENT CHIPS.\nNEED ${formatChipsAmount(cost)} CHIPS TO SPIN.`
         vendingSetLeds("error")
         vendingBeep(200, 0.1)
         return
@@ -5779,7 +5779,7 @@ async function init() {
 
             const cost = avatarPurchaseCost(skin)
             if (!requiresKinsPayments() && cost > (session.balance ?? 0)) {
-                throw new Error(`Need ${formatChipsAmount(cost)} Chips — you have ${formatChipsAmount(session.balance)}`)
+                throw new Error(`Need ${formatChipsAmount(cost)} CHIPS — you have ${formatChipsAmount(session.balance)}`)
             }
 
             const data = await saveSkinOrPay(skin, displayName)
@@ -5863,7 +5863,7 @@ async function init() {
             if (!skin) throw new Error("Select an avatar first")
 
             if (!requiresKinsPayments() && cost > (session.balance ?? 0)) {
-                throw new Error(`Need ${formatChipsAmount(cost)} Chips — you have ${formatChipsAmount(session.balance)}`)
+                throw new Error(`Need ${formatChipsAmount(cost)} CHIPS — you have ${formatChipsAmount(session.balance)}`)
             }
 
             const data = await saveSkinOrPay(skin, session.display_name)
@@ -5887,7 +5887,7 @@ async function init() {
             if (requiresKinsPayments() && cost > 0) {
                 status.textContent = `Purchased with ${formatChipsAmount(cost)} $POKEQUEST!`
             } else {
-                status.textContent = cost > 0 ? `Saved! −${formatChipsAmount(cost)} Chips` : "Equipped!"
+                status.textContent = cost > 0 ? `Saved! −${formatChipsAmount(cost)} CHIPS` : "Equipped!"
             }
         } catch (error) {
             status.textContent = error.message

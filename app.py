@@ -1174,7 +1174,7 @@ def _apply_skin_to_user(
                 jsonify(
                     {
                         "success": False,
-                        "error": f"Need {price:,} Chips — you have {balance:,}",
+                        "error": f"Need {price:,} CHIPS — you have {balance:,}",
                         "balance": balance,
                         "cost": cost,
                         "price": price,
@@ -3024,7 +3024,7 @@ def vending_spin():
             return jsonify(
                 {
                     "success": False,
-                    "error": f"Need {cost:,} Chips — you have {balance:,}",
+                    "error": f"Need {cost:,} CHIPS — you have {balance:,}",
                     "balance": balance,
                     "spin_cost": cost,
                 }
