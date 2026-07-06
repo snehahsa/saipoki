@@ -1974,15 +1974,6 @@ function formatGradeLabel(grade, { short = false } = {}) {
     return short ? `G${g}` : `Grading #${g}`
 }
 
-function vaultProgressLabel(stack) {
-    const prog = vaultStackProgress(stack)
-    if (prog.at_max_grade) return "MAX"
-    if (prog.grade === 1) {
-        return `${prog.total_minted}/${prog.next_cost}`
-    }
-    return `+${prog.copies}/${prog.next_cost}`
-}
-
 function vaultProgressTitle(stack) {
     const prog = vaultStackProgress(stack)
     if (prog.at_max_grade) return "Maximum grade reached"
@@ -1990,6 +1981,23 @@ function vaultProgressTitle(stack) {
         return `${prog.total_minted} of ${prog.next_cost} pulls until Silver (Grading #2)`
     }
     return `${prog.copies} of ${prog.next_cost} banked copies until ${formatGradeLabel(prog.grade + 1)}`
+}
+
+function vaultProgressLabel(stack) {
+    const prog = vaultStackProgress(stack)
+    if (prog.at_max_grade) return ""
+    if (prog.grade === 1) {
+        return `${prog.total_minted}/${prog.next_cost}`
+    }
+    if (prog.copies > 0) {
+        return `+${prog.copies}/${prog.next_cost}`
+    }
+    return ""
+}
+
+function vaultSlotShowsMultiplier(stack) {
+    const mult = Number(stack?.multiplier) || 1
+    return mult > 1.01
 }
 
 function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
@@ -2001,7 +2009,11 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
     if (item) {
         slot.classList.add(filledClass)
         slot.dataset.cardId = stack.card_id
-        slot.setAttribute("aria-label", `${item.name || stack.card_id}, ${formatGradeLabel(stack.grade)}, ${formatVaultMultiplierSimple(stack.multiplier)}`)
+        const progressHint = vaultProgressTitle(stack)
+        slot.setAttribute(
+            "aria-label",
+            `${item.name || stack.card_id}, ${formatGradeLabel(stack.grade)}, ${formatVaultMultiplierSimple(stack.multiplier)}${progressHint ? `, ${progressHint}` : ""}`,
+        )
 
         const frame = document.createElement("div")
         frame.className = "vault-slot-frame"
@@ -2013,30 +2025,34 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         img.alt = item.name || "card"
         frame.appendChild(img)
 
-        const gradeBadge = document.createElement("span")
-        gradeBadge.className = "vault-slot-grade"
-        gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
-        gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
+        // Grade 2+ only — G1 uses plain frame; avoids "G1" + "1/3" double numbers.
+        if (stack.grade >= 2) {
+            const gradeBadge = document.createElement("span")
+            gradeBadge.className = "vault-slot-grade"
+            gradeBadge.textContent = formatGradeLabel(stack.grade, { short: true })
+            gradeBadge.title = `Current grade: ${formatGradeLabel(stack.grade)}`
+            slot.appendChild(gradeBadge)
+        }
 
-        const multBadge = document.createElement("span")
-        multBadge.className = "vault-slot-mult"
-        multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
-        multBadge.title = "Battle multiplier"
+        // Meaningful multipliers only — hide ×1 on standard cards (reads like a second "1").
+        if (vaultSlotShowsMultiplier(stack)) {
+            const multBadge = document.createElement("span")
+            multBadge.className = "vault-slot-mult"
+            multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
+            multBadge.title = "Battle multiplier"
+            slot.appendChild(multBadge)
+        }
 
-        if (!stack.at_max_grade) {
+        const progressText = vaultProgressLabel(stack)
+        if (progressText) {
             const copyBadge = document.createElement("span")
             copyBadge.className = "vault-slot-copies"
-            const progressText = vaultProgressLabel(stack)
-            if (progressText) {
-                copyBadge.textContent = stack.grade === 1 ? `↑${progressText}` : progressText
-                copyBadge.title = vaultProgressTitle(stack)
-                frame.appendChild(copyBadge)
-            }
+            copyBadge.textContent = progressText
+            copyBadge.title = vaultProgressTitle(stack)
+            frame.appendChild(copyBadge)
         }
 
         slot.appendChild(frame)
-        slot.appendChild(gradeBadge)
-        slot.appendChild(multBadge)
     } else {
         slot.disabled = true
         slot.textContent = emptyText

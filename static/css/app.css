@@ -5876,6 +5876,10 @@ body.poketab-open {
     overflow: hidden;
 }
 
+.vault-slot-frame[data-grade="1"] {
+    box-shadow: inset 0 0 0 1px rgba(255, 220, 140, 0.22);
+}
+
 .vault-slot-frame[data-grade="2"] {
     box-shadow: inset 0 0 0 1px rgba(192, 210, 230, 0.45), 0 0 8px rgba(160, 190, 220, 0.25);
 }
@@ -5933,6 +5937,7 @@ body.poketab-open {
 .vault-slot-copies {
     bottom: 1px;
     right: 1px;
+    left: auto;
     background: linear-gradient(180deg, #4a3820 0%, #2a1c10 100%);
     color: #ffd98a;
 }
