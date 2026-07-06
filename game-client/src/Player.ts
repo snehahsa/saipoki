@@ -14,6 +14,9 @@ import {
     LABEL_SCALE_NAME,
     LEVEL_LABEL_Y,
     NAME_LABEL_Y,
+    entityLabelTextStyle,
+    formatLevelLabel,
+    nameColorFromId,
     truncateDisplayName,
 } from './playerLabels'
 
@@ -134,14 +137,10 @@ export class Player {
     }
 
     private addUsername() {
-        const lvl = Math.max(1, Number(this.level) || 1)
+        const nameColor = nameColorFromId(this.playerId || this.username)
         const levelText = new PIXI.Text({
-            text: `Lv.${lvl}`,
-            style: {
-                fontFamily: 'silkscreen',
-                fontSize: 128,
-                fill: 0xffffff,
-            },
+            text: formatLevelLabel(this.level),
+            style: entityLabelTextStyle(0xffffff),
         })
         levelText.anchor.set(0.5)
         levelText.scale.set(LABEL_SCALE_LEVEL)
@@ -149,11 +148,7 @@ export class Player {
 
         const nameText = new PIXI.Text({
             text: truncateDisplayName(this.username),
-            style: {
-                fontFamily: 'silkscreen',
-                fontSize: 128,
-                fill: 0xffffff,
-            },
+            style: entityLabelTextStyle(nameColor),
         })
         nameText.anchor.set(0.5)
         nameText.scale.set(LABEL_SCALE_NAME)
@@ -163,6 +158,7 @@ export class Player {
         this.nameLabel = nameText
         this.labelRoot.addChild(levelText)
         this.labelRoot.addChild(nameText)
+        this.labelRoot.visible = true
     }
 
     private syncLabelPosition() {
@@ -183,7 +179,7 @@ export class Player {
     public setLevel(level: number) {
         this.level = Math.max(1, Number(level) || 1)
         if (this.levelLabel) {
-            this.levelLabel.text = `Lv.${this.level}`
+            this.levelLabel.text = formatLevelLabel(this.level)
         }
     }
 
@@ -234,7 +230,12 @@ export class Player {
     }
 
     public async init() {
-        if (this.initialized) return
+        if (this.initialized) {
+            this.attachLabelsToOverlayLayer()
+            this.syncLabelPosition()
+            this.playApp.sortObjectsByY()
+            return
+        }
         await this.loadAnimations()
         this.addUsername()
         this.attachLabelsToOverlayLayer()
@@ -271,6 +272,8 @@ export class Player {
         if (!toward) return
         this.direction = toward
         this.changeAnimationState(`idle_${this.direction}` as AnimationState)
+        this.syncLabelPosition()
+        this.playApp.sortObjectsByY()
     }
 
     public haltForNpcEncounter(npcPos: Point) {
@@ -581,6 +584,8 @@ export class Player {
             { flipX, flipY }
         )
         this.toolSprite.visible = true
+        this.syncLabelPosition()
+        this.playApp.sortObjectsByY()
     }
 
     public keydown = (event: KeyboardEvent) => {

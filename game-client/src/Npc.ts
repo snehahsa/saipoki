@@ -5,6 +5,16 @@ import { bfs } from '@/utils/pixi/pathfinding'
 import { resolveNpcSpriteSpec } from './spriteSheets'
 import { directionToward, shouldNpcNoticePlayer, MIN_NPC_SIGHT_DISTANCE, MAX_NPC_SIGHT_DISTANCE, NPC_REINTERACT_COOLDOWN_MS } from './npcNotice'
 import { NpcFlow, NpcOnComplete, resolveNpcMessages, messageSetId } from './flows'
+import {
+    LABEL_SCALE_LEVEL,
+    LABEL_SCALE_NAME,
+    LEVEL_LABEL_Y,
+    NAME_LABEL_Y,
+    entityLabelTextStyle,
+    formatLevelLabel,
+    npcNameLabelTextStyle,
+    truncateDisplayName,
+} from './playerLabels'
 
 export type NpcConfig = {
     id: string
@@ -19,16 +29,13 @@ export type NpcConfig = {
     onComplete?: NpcOnComplete
 }
 
-function truncateDisplayName(name: string): string {
-    const trimmed = name.trim()
-    if (!trimmed) return 'NPC'
-    return trimmed.length > 10 ? `${trimmed.slice(0, 10)}..` : trimmed
-}
-
 export const NPC_PATROL_RESUME_DELAY_MS = 2000
 
 export class Npc {
     public parent: PIXI.Container = new PIXI.Container()
+    private labelRoot: PIXI.Container = new PIXI.Container()
+    private levelLabel: PIXI.Text | null = null
+    private nameLabel: PIXI.Text | null = null
     private config: NpcConfig
     private playApp: PlayApp
     private sheet: any = null
@@ -139,19 +146,46 @@ export class Npc {
         this.parent.addChild(this.animatedSprite)
     }
 
-    private addNameLabel() {
-        const text = new PIXI.Text({
-            text: truncateDisplayName(this.config.name),
-            style: {
-                fontFamily: 'silkscreen',
-                fontSize: 128,
-                fill: 0xc4b5fd,
-            },
+    private addEntityLabels() {
+        const displayName = truncateDisplayName(
+            String(this.config.name || this.config.id || 'NPC').trim() || 'NPC',
+        )
+        const levelText = new PIXI.Text({
+            text: formatLevelLabel(1),
+            style: entityLabelTextStyle(0xffffff),
         })
-        text.anchor.set(0.5)
-        text.scale.set(0.07)
-        text.y = 8
-        this.parent.addChild(text)
+        levelText.anchor.set(0.5)
+        levelText.scale.set(LABEL_SCALE_LEVEL)
+        levelText.y = LEVEL_LABEL_Y
+
+        const nameText = new PIXI.Text({
+            text: displayName,
+            style: npcNameLabelTextStyle(),
+        })
+        nameText.anchor.set(0.5)
+        nameText.scale.set(LABEL_SCALE_NAME)
+        nameText.y = NAME_LABEL_Y
+
+        this.levelLabel = levelText
+        this.nameLabel = nameText
+        this.labelRoot.addChild(levelText)
+        this.labelRoot.addChild(nameText)
+        this.labelRoot.visible = true
+    }
+
+    private syncLabelPosition() {
+        this.labelRoot.position.set(this.parent.x, this.parent.y)
+    }
+
+    private attachLabelsToOverlayLayer() {
+        if (this.labelRoot.parent) return
+        this.playApp.attachEntityLabels(this.labelRoot)
+        this.syncLabelPosition()
+    }
+
+    private detachLabelsFromOverlayLayer() {
+        if (!this.labelRoot.parent) return
+        this.playApp.detachEntityLabels(this.labelRoot)
     }
 
     private createAlertBubble() {
@@ -221,7 +255,9 @@ export class Npc {
 
     public async init() {
         await this.loadAnimations()
-        this.addNameLabel()
+        this.addEntityLabels()
+        this.attachLabelsToOverlayLayer()
+
         this.createAlertBubble()
 
         const start = this.config.path[0]
@@ -238,6 +274,7 @@ export class Npc {
         this.parent.x = pos.x
         this.parent.y = pos.y
         this.currentTilePosition = { x, y }
+        this.syncLabelPosition()
     }
 
     private convertTilePosToPlayerPos = (x: number, y: number) => ({
@@ -521,6 +558,7 @@ export class Npc {
         }
 
         this.playApp.sortObjectsByY()
+        this.syncLabelPosition()
     }
 
     private stopMoving() {
@@ -546,6 +584,10 @@ export class Npc {
         if (this.resumeAfterEncounterTimer) clearTimeout(this.resumeAfterEncounterTimer)
         PIXI.Ticker.shared.remove(this.move)
         PIXI.Ticker.shared.remove(this.animateAlertBubble)
+        this.detachLabelsFromOverlayLayer()
+        this.labelRoot.destroy({ children: true })
+        this.levelLabel = null
+        this.nameLabel = null
         this.parent.destroy({ children: true })
     }
 }
