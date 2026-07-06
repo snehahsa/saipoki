@@ -38,8 +38,11 @@ from poke_registry import (
     card_client_item,
     load_card_catalog,
     parse_vault,
+    upgrade_card_in_vault,
     vault_card_ids,
+    vault_detail_for_client,
 )
+from vault_grading import grading_config_for_client, merge_vaults
 from quests_catalog import QUEST_CATALOG, QUEST_IDS, QUEST_STEP_IDS, STEP_TO_QUEST
 from quest_engine import (
     backfill_quest_triggers,
@@ -1030,6 +1033,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
         vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
         xp_levels=xp_config_for_client(),
+        vault_grading=grading_config_for_client(),
     )
 
 
@@ -1682,7 +1686,8 @@ def auth():
             "holds": holds,
             "gear_slots": gear_slots,
             "vault": vault_card_ids(vault),
-            "vault_detail": vault,
+            "vault_detail": vault_detail_for_client(vault),
+            "vault_grading": grading_config_for_client(),
             "quest_progress": quest_progress,
             "balance": balance,
             "owned_skins": owned_skins,
@@ -1986,12 +1991,10 @@ def _merge_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> bool:
         fields["quest_progress"] = json.dumps(merged_qp)
 
     merged_vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
-    known_cards = set(vault_card_ids(merged_vault))
-    for card in vault_for_user(backup.get("vault_detail") or backup.get("vault") or []):
-        card_id = str(card.get("card_id") or "").strip()
-        if card_id and card_id not in known_cards:
-            merged_vault.append(card)
-            known_cards.add(card_id)
+    backup_vault = vault_for_user(
+        backup.get("vault_detail") or backup.get("vault") or []
+    )
+    merged_vault = merge_vaults(merged_vault, backup_vault)
     server_vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
     if merged_vault != server_vault:
         fields["vault"] = json.dumps(merged_vault)
@@ -3028,7 +3031,7 @@ def vending_spin():
             return jsonify({"success": False, "error": "Draw failed."}), 500
 
         vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
-        vault, added = add_card_to_vault(vault, card_id, source="vending")
+        vault, mint_info = add_card_to_vault(vault, card_id, source="vending")
 
         new_balance = balance - cost
         new_spins = spins + 1
@@ -3045,13 +3048,14 @@ def vending_spin():
             "success": True,
             "card_id": card_id,
             "card": winner,
-            "added": added,
+            "mint": mint_info,
+            "added": bool(mint_info.get("added")),
             "balance": new_balance,
             "vending_spins": new_spins,
             "spin_cost": cost,
             "next_spin_cost": vending_spin_cost(new_spins),
             "vault": vault_card_ids(vault),
-            "vault_detail": vault,
+            "vault_detail": vault_detail_for_client(vault),
         }
     )
 
@@ -3080,7 +3084,7 @@ def vault_add_card():
             return jsonify({"success": False, "error": "User not found"}), 404
 
         vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
-        vault, added = add_card_to_vault(vault, card_id, source=source)
+        vault, mint_info = add_card_to_vault(vault, card_id, source=source)
 
         conn.execute(
             "UPDATE users SET vault = ?, updated_at = ? WHERE telegram_id = ?",
@@ -3091,11 +3095,63 @@ def vault_add_card():
     return jsonify(
         {
             "success": True,
-            "added": added,
+            "mint": mint_info,
+            "added": bool(mint_info.get("added")),
             "card_id": card_id,
             "card_name": card.get("name"),
             "vault": vault_card_ids(vault),
-            "vault_detail": vault,
+            "vault_detail": vault_detail_for_client(vault),
+        }
+    )
+
+
+@app.route("/api/vault/upgrade", methods=["POST"])
+def vault_upgrade_card():
+    """Spend banked duplicate copies to raise a vault card's grade."""
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    card_id = str(data.get("card_id", "")).strip()
+    if not card_id:
+        return jsonify({"success": False, "error": "card_id required"}), 400
+
+    catalog = load_card_catalog(Path(app.root_path) / "poke.json")
+    if card_id not in catalog:
+        return jsonify({"success": False, "error": "Unknown card"}), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT vault FROM users WHERE telegram_id = ?", (telegram_id,)
+        ).fetchone()
+        if row is None:
+            return jsonify({"success": False, "error": "User not found"}), 404
+
+        vault = vault_for_user(row["vault"] if "vault" in row.keys() else None)
+        vault, result = upgrade_card_in_vault(vault, card_id)
+        if not result.get("success"):
+            status = 400 if result.get("error") in {
+                "insufficient_copies",
+                "max_grade",
+                "card_not_in_vault",
+            } else 400
+            return jsonify({**result, "vault_detail": vault_detail_for_client(vault)}), status
+
+        conn.execute(
+            "UPDATE users SET vault = ?, updated_at = ? WHERE telegram_id = ?",
+            (json.dumps(vault), now, telegram_id),
+        )
+
+    card = catalog[card_id]
+    return jsonify(
+        {
+            **result,
+            "card_id": card_id,
+            "card_name": card.get("name"),
+            "vault": vault_card_ids(vault),
+            "vault_detail": vault_detail_for_client(vault),
         }
     )
 

@@ -16,6 +16,15 @@ const VENDING_SPIN_FIRST_COST = Number(window.APP_CONFIG.vendingSpinFirstCost) |
 const VENDING_SPIN_REPEAT_COST = Number(window.APP_CONFIG.vendingSpinRepeatCost) || 2000
 const GAME_JS_URL = window.APP_CONFIG.assets?.gameJs || "/static/game/game.js"
 const XP_LEVELS = window.APP_CONFIG.xpLevels || { levels: [], xp_rewards: { quest_step: 5, battle_win: 20 } }
+const VAULT_GRADING = window.APP_CONFIG.vaultGrading || {
+    max_grade: 5,
+    upgrade_costs: { 1: 3, 2: 4, 3: 5, 4: 6 },
+    multipliers: { 1: 1, 2: 1.22, 3: 1.48, 4: 1.78, 5: 2.15 },
+    labels: { 1: "Standard", 2: "Silver", 3: "Gold", 4: "Platinum", 5: "Mythic" },
+}
+
+let vaultCardPopupOpenId = null
+let vendingLastMint = null
 
 let itemGetCloseResolve = null
 let itemGetQueue = Promise.resolve()
@@ -1612,22 +1621,21 @@ function renderBagGrid() {
     }
 
     for (let i = 0; i < BAG_SLOT_COUNT; i++) {
-        const slot = document.createElement("div")
-        slot.className = "bag-slot"
-        const item = items[i]
-
-        if (item) {
-            slot.classList.add("bag-slot-filled")
-            const img = document.createElement("img")
-            img.className = "bag-card-img"
-            img.src = item.src
-            img.alt = item.name || "card"
-            slot.appendChild(img)
+        const stack = getVaultStacks()[i]
+        if (stack) {
+            const slot = buildVaultSlotElement(stack, {
+                slotClass: "bag-slot bag-slot-vault",
+                filledClass: "bag-slot-filled",
+                emptyText: "empty",
+            })
+            slot.addEventListener("click", () => openVaultCardPopup(stack.card_id))
+            grid.appendChild(slot)
         } else {
+            const slot = document.createElement("div")
+            slot.className = "bag-slot"
             slot.textContent = "empty"
+            grid.appendChild(slot)
         }
-
-        grid.appendChild(slot)
     }
 }
 
@@ -1651,22 +1659,21 @@ function renderGameVaultGrid() {
     }
 
     for (let i = 0; i < BAG_SLOT_COUNT; i++) {
-        const slot = document.createElement("div")
-        slot.className = "game-drawer-slot"
-        const item = items[i]
-
-        if (item) {
-            slot.classList.add("game-drawer-slot-filled")
-            const img = document.createElement("img")
-            img.className = "bag-card-img"
-            img.src = item.src
-            img.alt = item.name || "card"
-            slot.appendChild(img)
+        const stack = getVaultStacks()[i]
+        if (stack) {
+            const slot = buildVaultSlotElement(stack, {
+                slotClass: "game-drawer-slot game-drawer-slot-vault",
+                filledClass: "game-drawer-slot-filled",
+                emptyText: "—",
+            })
+            slot.addEventListener("click", () => openVaultCardPopup(stack.card_id))
+            grid.appendChild(slot)
         } else {
+            const slot = document.createElement("div")
+            slot.className = "game-drawer-slot"
             slot.textContent = "—"
+            grid.appendChild(slot)
         }
-
-        grid.appendChild(slot)
     }
 }
 
@@ -1782,11 +1789,377 @@ function normalizeVault(raw) {
         .filter(Boolean)
 }
 
-function applyVaultFromServer(vault) {
-    if (!session || !Array.isArray(vault)) return
-    session.vault = normalizeVault(vault)
+function vaultGradeMultiplier(grade) {
+    const g = Math.max(1, Math.min(Number(grade) || 1, VAULT_GRADING.max_grade || 5))
+    const mult = VAULT_GRADING.multipliers?.[g] ?? VAULT_GRADING.multipliers?.[String(g)]
+    return Number(mult) || 1
+}
+
+function vaultGradeLabel(grade) {
+    const g = Math.max(1, Math.min(Number(grade) || 1, VAULT_GRADING.max_grade || 5))
+    return VAULT_GRADING.labels?.[g] ?? VAULT_GRADING.labels?.[String(g)] ?? "Standard"
+}
+
+function vaultUpgradeCost(grade) {
+    const g = Number(grade) || 1
+    if (g >= (VAULT_GRADING.max_grade || 5)) return null
+    const cost = VAULT_GRADING.upgrade_costs?.[g] ?? VAULT_GRADING.upgrade_costs?.[String(g)]
+    return Number(cost) || 3
+}
+
+function vaultStackProgress(stack) {
+    const grade = Math.max(1, Math.min(Number(stack?.grade) || 1, VAULT_GRADING.max_grade || 5))
+    const copies = Math.max(0, Number(stack?.copies) || 0)
+    const totalMinted = Math.max(0, Number(stack?.total_minted) || 0)
+    const nextCost = vaultUpgradeCost(grade)
+    const atMax = grade >= (VAULT_GRADING.max_grade || 5)
+    let progress = 1
+    let canUpgrade = false
+    if (!atMax && nextCost) {
+        if (grade === 1) {
+            progress = Math.min(1, totalMinted / nextCost)
+        } else {
+            progress = Math.min(1, copies / nextCost)
+            canUpgrade = copies >= nextCost
+        }
+    }
+    return {
+        grade,
+        copies,
+        total_minted: totalMinted,
+        next_cost: nextCost,
+        progress,
+        can_upgrade: canUpgrade,
+        multiplier: vaultGradeMultiplier(grade),
+        grade_label: vaultGradeLabel(grade),
+        at_max_grade: atMax,
+        auto_promote_ready: grade === 1 && nextCost && totalMinted >= nextCost,
+    }
+}
+
+function normalizeVaultStack(entry, cardId = "") {
+    const cid = String(cardId || entry?.card_id || entry?.id || "").trim()
+    const grade = Math.max(1, Math.min(Number(entry?.grade) || 1, VAULT_GRADING.max_grade || 5))
+    const copies = Math.max(0, Number(entry?.copies) || 0)
+    const stack = {
+        card_id: cid,
+        grade,
+        copies,
+        total_minted: Math.max(Number(entry?.total_minted) || 0, copies + 1, 1),
+        acquired_at: Number(entry?.acquired_at) || 0,
+        source: String(entry?.source || "unknown"),
+        upgraded_at: Number(entry?.upgraded_at) || 0,
+    }
+    return { ...stack, ...vaultStackProgress(stack) }
+}
+
+function normalizeVaultDetail(raw) {
+    if (!Array.isArray(raw)) return []
+    const byId = new Map()
+
+    for (const entry of raw) {
+        let cardId = ""
+        let isStack = false
+        if (typeof entry === "string") {
+            cardId = entry.trim()
+        } else if (entry && typeof entry === "object") {
+            cardId = String(entry.card_id || entry.id || "").trim()
+            isStack = "grade" in entry || "copies" in entry || "total_minted" in entry
+        }
+        if (!cardId) continue
+
+        if (isStack) {
+            const normalized = normalizeVaultStack(entry, cardId)
+            if (byId.has(cardId)) {
+                const prev = byId.get(cardId)
+                byId.set(cardId, normalizeVaultStack({
+                    ...prev,
+                    grade: Math.max(prev.grade, normalized.grade),
+                    copies: prev.copies + normalized.copies,
+                    total_minted: prev.total_minted + normalized.total_minted,
+                }, cardId))
+            } else {
+                byId.set(cardId, normalized)
+            }
+        } else if (!byId.has(cardId)) {
+            byId.set(cardId, normalizeVaultStack({ card_id: cardId, grade: 1, copies: 0, total_minted: 1 }, cardId))
+        } else {
+            const prev = byId.get(cardId)
+            prev.total_minted += 1
+            if (prev.grade >= 2) prev.copies += 1
+            byId.set(cardId, normalizeVaultStack(prev, cardId))
+        }
+    }
+
+    return Array.from(byId.values()).sort((a, b) => {
+        const ta = a.acquired_at || 0
+        const tb = b.acquired_at || 0
+        if (ta !== tb) return ta - tb
+        return String(a.card_id).localeCompare(String(b.card_id))
+    })
+}
+
+function getVaultStacks() {
+    if (Array.isArray(session?.vault_detail) && session.vault_detail.length) {
+        return normalizeVaultDetail(session.vault_detail)
+    }
+    return normalizeVaultDetail(getVaultCardIds().map((id) => ({ card_id: id, grade: 1, copies: 0, total_minted: 1 })))
+}
+
+function getVaultStack(cardId) {
+    return getVaultStacks().find((stack) => stack.card_id === cardId) || null
+}
+
+function vaultCardIdsFromDetail(detail) {
+    return normalizeVaultDetail(detail).map((stack) => stack.card_id).filter(Boolean)
+}
+
+function formatVaultMultiplierSimple(mult) {
+    const value = Number(mult) || 1
+    if (Number.isInteger(value)) return `×${value}`
+    return `×${value.toFixed(2)}`
+}
+
+function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
+    const slot = document.createElement("button")
+    slot.type = "button"
+    slot.className = slotClass
+    const item = catalogCard(stack.card_id)
+
+    if (item) {
+        slot.classList.add(filledClass)
+        slot.dataset.cardId = stack.card_id
+        slot.setAttribute("aria-label", `${item.name || stack.card_id}, grade ${stack.grade}, ${formatVaultMultiplierSimple(stack.multiplier)}`)
+
+        const frame = document.createElement("div")
+        frame.className = "vault-slot-frame"
+        frame.dataset.grade = String(stack.grade)
+
+        const img = document.createElement("img")
+        img.className = "bag-card-img"
+        img.src = item.src
+        img.alt = item.name || "card"
+        frame.appendChild(img)
+
+        const gradeBadge = document.createElement("span")
+        gradeBadge.className = "vault-slot-grade"
+        gradeBadge.textContent = `G${stack.grade}`
+
+        const multBadge = document.createElement("span")
+        multBadge.className = "vault-slot-mult"
+        multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
+
+        if (!stack.at_max_grade) {
+            const copyBadge = document.createElement("span")
+            copyBadge.className = "vault-slot-copies"
+            if (stack.grade === 1 && stack.total_minted > 0) {
+                copyBadge.textContent = `${stack.total_minted}/${stack.next_cost || 3}`
+            } else if (stack.copies > 0) {
+                copyBadge.textContent = `+${stack.copies}`
+            }
+            if (copyBadge.textContent) frame.appendChild(copyBadge)
+        }
+
+        slot.appendChild(frame)
+        slot.appendChild(gradeBadge)
+        slot.appendChild(multBadge)
+    } else {
+        slot.disabled = true
+        slot.textContent = emptyText
+    }
+
+    return slot
+}
+
+function applyVaultFromServer(vault, vaultDetail) {
+    if (!session) return
+    if (Array.isArray(vaultDetail) && vaultDetail.length) {
+        session.vault_detail = normalizeVaultDetail(vaultDetail)
+    } else if (Array.isArray(vault)) {
+        session.vault_detail = normalizeVaultDetail(vault.map((id) => (
+            typeof id === "string"
+                ? { card_id: id, grade: 1, copies: 0, total_minted: 1 }
+                : id
+        )))
+    }
+    session.vault = vaultCardIdsFromDetail(session.vault_detail)
     renderBagGrid()
     renderGameVaultGrid()
+    if (vaultCardPopupOpenId) {
+        const stack = getVaultStack(vaultCardPopupOpenId)
+        if (stack) renderVaultCardPopup(stack)
+        else closeVaultCardPopup()
+    }
+    touchGuestServerBackup()
+}
+
+function vaultGradeHint(stack) {
+    const prog = vaultStackProgress(stack)
+    if (prog.at_max_grade) {
+        return "Mythic tier — maximum battle multiplier unlocked."
+    }
+    if (prog.grade === 1) {
+        return `Pull ${prog.next_cost} of this species to auto-forge Silver (G2). ${prog.total_minted}/${prog.next_cost} minted.`
+    }
+    if (prog.can_upgrade) {
+        return `Ready to fuse ${prog.next_cost} banked copies into ${vaultGradeLabel(prog.grade + 1)}.`
+    }
+    const need = Math.max(0, (prog.next_cost || 0) - prog.copies)
+    return `Bank ${need} more duplicate${need === 1 ? "" : "s"} to upgrade to ${vaultGradeLabel(prog.grade + 1)} (×${vaultGradeMultiplier(prog.grade + 1).toFixed(2)}).`
+}
+
+function renderVaultCardPopup(stack) {
+    const popup = document.getElementById("vault-card-popup")
+    if (!popup || !stack) return
+
+    const item = catalogCard(stack.card_id)
+    const prog = vaultStackProgress(stack)
+    const panel = popup.querySelector(".vault-card-popup-panel")
+
+    if (panel) panel.dataset.grade = String(prog.grade)
+
+    const art = document.getElementById("vault-card-popup-art")
+    if (art) {
+        art.src = item?.src || ""
+        art.alt = item?.name || stack.card_id
+    }
+
+    const gradePill = document.getElementById("vault-card-popup-grade-pill")
+    if (gradePill) gradePill.textContent = `G${prog.grade}`
+
+    const multEl = document.getElementById("vault-card-popup-mult")
+    if (multEl) multEl.textContent = formatVaultMultiplierSimple(prog.multiplier)
+
+    const tagEl = document.getElementById("vault-card-popup-tag")
+    if (tagEl) tagEl.textContent = String(prog.grade_label || "STANDARD").toUpperCase()
+
+    const nameEl = document.getElementById("vault-card-popup-name")
+    if (nameEl) nameEl.textContent = item?.name || stack.card_id
+
+    const metaEl = document.getElementById("vault-card-popup-meta")
+    if (metaEl) {
+        const parts = [
+            item?.type ? vendingTypeLabel(item.type) : null,
+            item?.hp != null ? `HP ${item.hp}` : null,
+            item?.lvl != null ? `LV ${item.lvl}` : null,
+            `Battle ${formatVaultMultiplierSimple(prog.multiplier)}`,
+        ].filter(Boolean)
+        metaEl.textContent = parts.join("  ·  ")
+    }
+
+    const spellsEl = document.getElementById("vault-card-popup-spells")
+    if (spellsEl) {
+        spellsEl.replaceChildren()
+        const spells = Array.isArray(item?.spells) ? item.spells : []
+        if (!spells.length) {
+            const li = document.createElement("li")
+            li.textContent = "No move data on file."
+            spellsEl.appendChild(li)
+        } else {
+            for (const spell of spells) {
+                const li = document.createElement("li")
+                if (spell.is_defence) {
+                    li.className = "vault-spell-def"
+                    li.textContent = `${spell.name} — DEF · PP ${spell.max_count}`
+                } else {
+                    li.textContent = `${spell.name} — ${spell.attack} DMG · PP ${spell.max_count}`
+                }
+                spellsEl.appendChild(li)
+            }
+        }
+    }
+
+    const countEl = document.getElementById("vault-card-popup-grade-count")
+    if (countEl) {
+        if (prog.at_max_grade) {
+            countEl.textContent = "MAX"
+        } else if (prog.grade === 1) {
+            countEl.textContent = `${prog.total_minted} / ${prog.next_cost}`
+        } else {
+            countEl.textContent = `${prog.copies} / ${prog.next_cost}`
+        }
+    }
+
+    const fillEl = document.getElementById("vault-card-popup-progress-fill")
+    if (fillEl) fillEl.style.width = `${Math.round(prog.progress * 100)}%`
+
+    const hintEl = document.getElementById("vault-card-popup-grade-hint")
+    if (hintEl) hintEl.textContent = vaultGradeHint(stack)
+
+    const mintedEl = document.getElementById("vault-card-popup-minted")
+    if (mintedEl) {
+        mintedEl.textContent = prog.total_minted > 0
+            ? `${prog.total_minted} lifetime pull${prog.total_minted === 1 ? "" : "s"} from vending & quests`
+            : ""
+    }
+
+    const upgradeBtn = document.getElementById("vault-card-popup-upgrade")
+    if (upgradeBtn) {
+        upgradeBtn.classList.toggle("hidden", !prog.can_upgrade)
+        upgradeBtn.disabled = !prog.can_upgrade
+        const nextLabel = vaultGradeLabel(prog.grade + 1)
+        upgradeBtn.textContent = prog.can_upgrade
+            ? `▲ FUSE → ${nextLabel.toUpperCase()} (G${prog.grade + 1})`
+            : "▲ UPGRADE GRADE"
+    }
+}
+
+function openVaultCardPopup(cardId) {
+    const stack = getVaultStack(cardId)
+    if (!stack) return
+    vaultCardPopupOpenId = cardId
+    renderVaultCardPopup(stack)
+    document.getElementById("vault-card-popup")?.classList.remove("hidden")
+}
+
+function closeVaultCardPopup() {
+    vaultCardPopupOpenId = null
+    document.getElementById("vault-card-popup")?.classList.add("hidden")
+}
+
+async function vaultCardUpgrade() {
+    if (!vaultCardPopupOpenId || !isSignedIn()) return
+    const upgradeBtn = document.getElementById("vault-card-popup-upgrade")
+    if (upgradeBtn) upgradeBtn.disabled = true
+
+    try {
+        const response = await fetch("/api/vault/upgrade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(apiAuthBody({ card_id: vaultCardPopupOpenId })),
+        })
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || "Upgrade failed")
+        }
+        applyVaultFromServer(data.vault, data.vault_detail)
+        if (data.grade_changed) {
+            vendingBeep(880, 0.06)
+            vendingBeep(1180, 0.1, 0.08)
+        }
+        const stack = getVaultStack(vaultCardPopupOpenId)
+        if (stack) renderVaultCardPopup(stack)
+    } catch (err) {
+        const hintEl = document.getElementById("vault-card-popup-grade-hint")
+        if (hintEl) hintEl.textContent = String(err.message || "Could not upgrade.")
+    } finally {
+        const stack = getVaultStack(vaultCardPopupOpenId)
+        const upgradeBtnFinal = document.getElementById("vault-card-popup-upgrade")
+        if (upgradeBtnFinal && stack) upgradeBtnFinal.disabled = !stack.can_upgrade
+    }
+}
+
+function bindVaultCardPopup() {
+    const close = () => closeVaultCardPopup()
+    document.getElementById("vault-card-popup-scrim")?.addEventListener("click", close)
+    document.getElementById("vault-card-popup-close")?.addEventListener("click", close)
+    document.getElementById("vault-card-popup-dismiss")?.addEventListener("click", close)
+    document.getElementById("vault-card-popup-upgrade")?.addEventListener("click", () => {
+        void vaultCardUpgrade()
+    })
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && vaultCardPopupOpenId) closeVaultCardPopup()
+    })
 }
 
 function catalogCard(cardId) {
@@ -1794,11 +2167,20 @@ function catalogCard(cardId) {
 }
 
 function getVaultCardIds() {
+    if (Array.isArray(session?.vault_detail) && session.vault_detail.length) {
+        return vaultCardIdsFromDetail(session.vault_detail)
+    }
     return normalizeVault(session?.vault)
 }
 
 function getVaultDisplayItems() {
-    return getVaultCardIds().map((id) => catalogCard(id)).filter(Boolean)
+    return getVaultStacks()
+        .map((stack) => {
+            const item = catalogCard(stack.card_id)
+            if (!item) return null
+            return { ...item, ...stack }
+        })
+        .filter(Boolean)
 }
 
 function resolveCardItem(itemOrId) {
@@ -2869,7 +3251,7 @@ async function addCardToVault(cardId, source = "unknown") {
     })
     const data = await response.json()
     if (response.ok && data.success && session) {
-        applyVaultFromServer(data.vault)
+        applyVaultFromServer(data.vault, data.vault_detail)
     }
     return data
 }
@@ -3890,8 +4272,11 @@ async function enterGame() {
             quest_progress: normalizeQuestProgress(fresh.quest_progress),
             holds: normalizeHolds(fresh.holds),
             gear_slots: normalizeGearSlots(fresh.gear_slots),
-            vault: normalizeVault(fresh.vault),
+            vault_detail: normalizeVaultDetail(
+                fresh.vault_detail || fresh.vault?.map?.((id) => ({ card_id: id, grade: 1, copies: 0, total_minted: 1 })) || []
+            ),
         }
+        session.vault = vaultCardIdsFromDetail(session.vault_detail)
         touchGuestServerBackup()
         if (guestPlayMode()) {
             const guestId = getActiveGuestId()
@@ -4197,12 +4582,45 @@ async function vendingConfirmEquip() {
     }
 }
 
-function vendingShowCardResult(card) {
+function vendingShowCardResult(card, mint = null) {
     vendingShowView("vending-view-result")
+    const headlineEl = document.getElementById("vending-result-headline")
+    const mintWrap = document.getElementById("vending-result-mint")
+    const mintTag = document.getElementById("vending-result-mint-tag")
+    const mintDetail = document.getElementById("vending-result-mint-detail")
     const imgEl = document.getElementById("vending-result-card")
     const nameEl = document.getElementById("vending-result-name")
     const metaEl = document.getElementById("vending-result-meta")
     const spellsEl = document.getElementById("vending-result-spells")
+
+    const mintInfo = mint || vendingLastMint
+    if (headlineEl) {
+        if (mintInfo?.grade_changed) {
+            headlineEl.textContent = `GRADE UP!  G${mintInfo.previous_grade} → G${mintInfo.grade}`
+        } else if (mintInfo?.is_duplicate) {
+            headlineEl.textContent = "DUPLICATE BANKED"
+        } else {
+            headlineEl.textContent = "CARD DISPENSED!"
+        }
+    }
+
+    if (mintWrap && mintTag && mintDetail) {
+        if (mintInfo?.is_duplicate || mintInfo?.grade_changed) {
+            mintWrap.classList.remove("hidden")
+            if (mintInfo.grade_changed) {
+                mintTag.textContent = `${String(mintInfo.grade_label || "SILVER").toUpperCase()} FORGED`
+                mintDetail.textContent = `${formatVaultMultiplierSimple(mintInfo.multiplier)} battle power · ${mintInfo.copies}/${mintInfo.next_cost || "—"} banked toward next tier`
+            } else {
+                mintTag.textContent = mintInfo.grade === 1 ? "MINT +1" : "DUPLICATE +1"
+                const cost = mintInfo.next_cost || vaultUpgradeCost(mintInfo.grade)
+                mintDetail.textContent = mintInfo.grade === 1
+                    ? `${mintInfo.total_minted}/${cost} pulls — ${Math.max(0, cost - mintInfo.total_minted)} until Silver auto-forge`
+                    : `${mintInfo.copies}/${cost} banked toward G${mintInfo.grade + 1} · ${formatVaultMultiplierSimple(mintInfo.multiplier)} now`
+            }
+        } else {
+            mintWrap.classList.add("hidden")
+        }
+    }
 
     if (imgEl) {
         imgEl.src = card?.src || ""
@@ -4214,6 +4632,7 @@ function vendingShowCardResult(card) {
             vendingTypeLabel(card?.type),
             card?.hp != null ? `HP ${card.hp}` : null,
             card?.lvl != null ? `LV ${card.lvl}` : null,
+            mintInfo?.multiplier ? formatVaultMultiplierSimple(mintInfo.multiplier) : null,
         ].filter(Boolean)
         metaEl.textContent = parts.join("  ·  ")
     }
@@ -4418,7 +4837,8 @@ async function vendingPerformDraw() {
             session.balance = Number(data.balance) || 0
             session.vending_spins = Number(data.vending_spins) || 0
             updateBalanceDisplays()
-            applyVaultFromServer(data.vault)
+            applyVaultFromServer(data.vault, data.vault_detail)
+            vendingLastMint = data.mint || null
         }
         winner = resolveCardItem(data.card_id) || data.card
         if (!winner) throw new Error("Draw failed")
@@ -4463,7 +4883,7 @@ async function vendingPerformDraw() {
     clearInterval(barTimer)
     vendingBeep(1320, 0.12, 0.07)
 
-    vendingShowCardResult(winner)
+    vendingShowCardResult(winner, vendingLastMint)
     vendingSetLeds("ok")
     vendingPendingWinner = winner
     vendingShowEquipButton()
@@ -4902,7 +5322,10 @@ function applySessionFromAuth(data) {
     session.quest_progress = normalizeQuestProgress(session.quest_progress)
     session.holds = normalizeHolds(session.holds)
     session.gear_slots = normalizeGearSlots(session.gear_slots)
-    session.vault = normalizeVault(session.vault)
+    session.vault_detail = normalizeVaultDetail(
+        data.vault_detail || data.vault?.map?.((id) => ({ card_id: id, grade: 1, copies: 0, total_minted: 1 })) || []
+    )
+    session.vault = vaultCardIdsFromDetail(session.vault_detail)
     session.balance = Number(session.balance) || 0
     session.vending_spins = Number(session.vending_spins) || 0
     session.level = Number(session.level ?? session.trainer_stats?.level) || 0
@@ -5085,7 +5508,7 @@ async function init() {
             stack.appendChild(toast)
             setTimeout(() => toast.remove(), 2800)
         },
-        getVault: () => normalizeVault(session?.vault),
+        getVault: () => getVaultStacks(),
         getBalance: () => Number(session?.balance) || 0,
         onBalanceUpdate: () =>
             fetch("/api/auth", {
@@ -5101,7 +5524,7 @@ async function init() {
                             updateBalanceDisplays()
                         }
                         if (Array.isArray(data.vault)) {
-                            applyVaultFromServer(data.vault)
+                            applyVaultFromServer(data.vault, data.vault_detail)
                         }
                         if (data.trainer_stats) {
                             applyTrainerStats(data.trainer_stats)
@@ -5327,6 +5750,7 @@ async function init() {
     bindGameTouchGuard()
     bindGameDrawer()
     bindVendingMachine()
+    bindVaultCardPopup()
 
     if (PLAY_MODE) {
         preloadEssentials().catch(() => {})

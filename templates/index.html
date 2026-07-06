@@ -834,7 +834,7 @@
                             <p class="game-drawer-hero-text">Store &amp; track your PokéCards</p>
                         </div>
                         <div class="game-drawer-grid" id="game-vault-grid"></div>
-                        <p class="game-drawer-hint">More tabs &amp; items coming soon</p>
+                        <p class="game-drawer-hint">Tap a card to grade · fuse duplicates into higher tiers</p>
                     </section>
                 </div>
             </div>
@@ -915,6 +915,48 @@
             <div id="game-gear-popup-actions" class="game-gear-popup-actions"></div>
         </div>
     </div>
+    <div id="vault-card-popup" class="vault-card-popup hidden" role="dialog" aria-labelledby="vault-card-popup-name" aria-modal="true">
+        <button type="button" class="vault-card-popup-scrim" id="vault-card-popup-scrim" aria-label="Close card details"></button>
+        <div class="vault-card-popup-panel" data-grade="1">
+            <button type="button" class="vault-card-popup-close" id="vault-card-popup-close" aria-label="Close">×</button>
+            <div class="vault-card-popup-glow" aria-hidden="true"></div>
+            <header class="vault-card-popup-header">
+                <span class="vault-card-popup-grade-pill" id="vault-card-popup-grade-pill">G1</span>
+                <span class="vault-card-popup-mult" id="vault-card-popup-mult">×1.00</span>
+            </header>
+            <div class="vault-card-popup-stage">
+                <div class="vault-card-popup-frame">
+                    <img class="vault-card-popup-art" id="vault-card-popup-art" alt="" width="140" height="196" decoding="async">
+                </div>
+                <div class="vault-card-popup-info">
+                    <p class="vault-card-popup-tag" id="vault-card-popup-tag">STANDARD ISSUE</p>
+                    <h2 class="vault-card-popup-name" id="vault-card-popup-name">Pokémon</h2>
+                    <p class="vault-card-popup-meta" id="vault-card-popup-meta"></p>
+                    <ul class="vault-card-popup-spells" id="vault-card-popup-spells"></ul>
+                </div>
+            </div>
+            <section class="vault-card-popup-grade-panel">
+                <div class="vault-card-popup-grade-head">
+                    <span class="vault-card-popup-grade-label">GRADE PROGRESS</span>
+                    <span class="vault-card-popup-grade-count" id="vault-card-popup-grade-count">0 / 3</span>
+                </div>
+                <div class="vault-card-popup-progress-track" aria-hidden="true">
+                    <div class="vault-card-popup-progress-fill" id="vault-card-popup-progress-fill"></div>
+                    <div class="vault-card-popup-progress-ticks">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+                <p class="vault-card-popup-grade-hint" id="vault-card-popup-grade-hint"></p>
+                <p class="vault-card-popup-minted" id="vault-card-popup-minted"></p>
+            </section>
+            <div class="vault-card-popup-actions">
+                <button type="button" class="vault-card-popup-btn vault-card-popup-btn--upgrade hidden" id="vault-card-popup-upgrade">
+                    ▲ UPGRADE GRADE
+                </button>
+                <button type="button" class="vault-card-popup-btn vault-card-popup-btn--ghost" id="vault-card-popup-dismiss">CLOSE</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div id="vending-screen" class="vending-screen hidden" role="dialog" aria-labelledby="vending-title" aria-modal="true">
@@ -976,7 +1018,11 @@
                                 <p class="vending-shuffle-status" id="vending-shuffle-status">▮▮▮▯▯▯</p>
                             </div>
                             <div class="vending-view vending-view-result hidden" id="vending-view-result">
-                                <p class="vending-result-headline">CARD DISPENSED!</p>
+                                <p class="vending-result-headline" id="vending-result-headline">CARD DISPENSED!</p>
+                                <div class="vending-result-mint hidden" id="vending-result-mint">
+                                    <span class="vending-result-mint-tag" id="vending-result-mint-tag">DUPLICATE</span>
+                                    <span class="vending-result-mint-detail" id="vending-result-mint-detail"></span>
+                                </div>
                                 <div class="vending-result-layout">
                                     <img class="vending-result-card" id="vending-result-card" alt="">
                                     <div class="vending-result-details">
@@ -1201,6 +1247,7 @@
         vendingSpinFirstCost: {{ vending_spin_first_cost|tojson }},
         vendingSpinRepeatCost: {{ vending_spin_repeat_cost|tojson }},
         xpLevels: {{ xp_levels|tojson }},
+        vaultGrading: {{ vault_grading|tojson }},
         testMode: {{ test_mode|tojson }},
         testPlayerSlug: {{ test_player_slug|tojson }},
         playMode: {{ play_mode|tojson }},

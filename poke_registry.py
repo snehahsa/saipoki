@@ -7,6 +7,16 @@ import re
 import time
 from pathlib import Path
 
+from vault_grading import (
+    empty_stack,
+    merge_vaults,
+    mint_card_into_vault,
+    normalize_stack,
+    try_auto_promote_grade_two,
+    upgrade_card_in_vault as _upgrade_vault_stack,
+    vault_detail_for_client,
+)
+
 ROOT = Path(__file__).resolve().parent
 POKE_JSON_PATH = ROOT / "poke.json"
 CARD_ID_PREFIX = "poke"
@@ -172,7 +182,7 @@ def parse_vault(
     *,
     poke_json_path: Path | None = None,
 ) -> list[dict]:
-    """Parse stored vault JSON; migrate legacy ids to catalog poke-NNN ids."""
+    """Parse stored vault JSON; migrate legacy flat lists into graded stacks."""
     if not raw:
         items: list = []
     elif isinstance(raw, list):
@@ -186,34 +196,61 @@ def parse_vault(
         return []
 
     valid = set(valid_card_ids or ())
-    vault: list[dict] = []
-    seen: set[str] = set()
+    legacy_rows: list[dict] = []
+    stacks: list[dict] = []
 
     for entry in items:
         if isinstance(entry, str):
             card_id = entry.strip()
             source = "unknown"
             acquired_at = 0
+            is_stack = False
         elif isinstance(entry, dict):
             card_id = str(entry.get("card_id") or entry.get("id") or "").strip()
             source = normalize_vault_source(entry.get("source"))
             acquired_at = int(entry.get("acquired_at") or 0)
+            is_stack = any(
+                key in entry
+                for key in ("grade", "copies", "total_minted", "upgraded_at")
+            )
         else:
             continue
 
         resolved = resolve_stored_card_id(card_id, valid, poke_json_path)
-        if not resolved or resolved in seen:
+        if not resolved:
             continue
 
-        seen.add(resolved)
-        vault.append(
-            {
-                "card_id": resolved,
-                "acquired_at": acquired_at,
-                "source": source,
-            }
-        )
+        if is_stack:
+            stacks.append(normalize_stack(entry, card_id=resolved))
+        else:
+            legacy_rows.append(
+                {
+                    "card_id": resolved,
+                    "acquired_at": acquired_at,
+                    "source": source,
+                }
+            )
 
+    if legacy_rows:
+        legacy_stacks: dict[str, dict] = {}
+        for row in legacy_rows:
+            cid = row["card_id"]
+            if cid not in legacy_stacks:
+                stack = empty_stack(
+                    cid,
+                    source=row.get("source") or "unknown",
+                    acquired_at=row.get("acquired_at") or None,
+                )
+                stack["total_minted"] = 1
+                legacy_stacks[cid] = stack
+            else:
+                stack = legacy_stacks[cid]
+                stack["total_minted"] = int(stack.get("total_minted") or 0) + 1
+        for stack in legacy_stacks.values():
+            try_auto_promote_grade_two(stack)
+        stacks.extend(legacy_stacks.values())
+
+    vault = merge_vaults(stacks) if stacks else []
     vault.sort(key=lambda e: (e.get("acquired_at") or 0, e.get("card_id") or ""))
     return vault
 
@@ -228,25 +265,31 @@ def add_card_to_vault(
     *,
     source: str = "unknown",
     allow_duplicate: bool = False,
-) -> tuple[list[dict], bool]:
-    """Return (updated_vault, added). By default one copy per catalog id."""
+) -> tuple[list[dict], dict]:
+    """Mint a catalog card into the vault stack (duplicates bank toward grading)."""
+    del allow_duplicate  # legacy kwarg — stacking is always enabled
     card_id = str(card_id or "").strip()
     if not card_id:
-        return vault, False
+        return vault, {"added": False, "error": "invalid_card"}
 
-    if not allow_duplicate and any(entry.get("card_id") == card_id for entry in vault):
-        return vault, False
-
-    updated = list(vault)
-    updated.append(
-        {
-            "card_id": card_id,
-            "acquired_at": int(time.time()),
-            "source": normalize_vault_source(source),
-        }
+    updated, info = mint_card_into_vault(
+        vault,
+        card_id,
+        source=normalize_vault_source(source),
     )
     updated.sort(key=lambda e: (e.get("acquired_at") or 0, e.get("card_id") or ""))
-    return updated, True
+    return updated, info
+
+
+def upgrade_card_in_vault(
+    vault: list[dict],
+    card_id: str,
+) -> tuple[list[dict], dict]:
+    """Spend banked copies to raise grade (manual tiers after Silver)."""
+    updated, result = _upgrade_vault_stack(vault, card_id)
+    if result.get("success"):
+        updated.sort(key=lambda e: (e.get("acquired_at") or 0, e.get("card_id") or ""))
+    return updated, result
 
 
 def card_client_item(card: dict, *, src: str, pickup_message: str | None = None) -> dict:
