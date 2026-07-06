@@ -54,6 +54,7 @@ export class Player {
     public playerId: string = ''
     private levelLabel: PIXI.Text | null = null
     private nameLabel: PIXI.Text | null = null
+    private labelRoot: PIXI.Container = new PIXI.Container()
     public parent: PIXI.Container = new PIXI.Container()
     private textMessage: PIXI.Text = new PIXI.Text({})
     private textTimeout: ReturnType<typeof setTimeout> | null = null
@@ -160,8 +161,23 @@ export class Player {
 
         this.levelLabel = levelText
         this.nameLabel = nameText
-        this.parent.addChild(levelText)
-        this.parent.addChild(nameText)
+        this.labelRoot.addChild(levelText)
+        this.labelRoot.addChild(nameText)
+    }
+
+    private syncLabelPosition() {
+        this.labelRoot.position.set(this.parent.x, this.parent.y)
+    }
+
+    private attachLabelsToOverlayLayer() {
+        if (this.labelRoot.parent) return
+        this.playApp.attachEntityLabels(this.labelRoot)
+        this.syncLabelPosition()
+    }
+
+    private detachLabelsFromOverlayLayer() {
+        if (!this.labelRoot.parent) return
+        this.playApp.detachEntityLabels(this.labelRoot)
     }
 
     public setLevel(level: number) {
@@ -184,7 +200,7 @@ export class Player {
         }
 
         if (this.textMessage) {
-            this.parent.removeChild(this.textMessage)
+            this.labelRoot.removeChild(this.textMessage)
         }
 
         message = formatText(message, 40)
@@ -202,7 +218,7 @@ export class Player {
         text.anchor.y = 0
         text.scale.set(0.07)
         text.y = -text.height - 42
-        this.parent.addChild(text)
+        this.labelRoot.addChild(text)
         this.textMessage = text
 
         signal.emit('newMessage', {
@@ -212,7 +228,7 @@ export class Player {
 
         this.textTimeout = setTimeout(() => {
             if (this.textMessage) {
-                this.parent.removeChild(this.textMessage)
+                this.labelRoot.removeChild(this.textMessage)
             }
         }, 10000)
     }
@@ -221,6 +237,7 @@ export class Player {
         if (this.initialized) return
         await this.loadAnimations()
         this.addUsername()
+        this.attachLabelsToOverlayLayer()
         this.initialized = true
         if (this.equippedGearId) {
             await this.updateGearOverlay()
@@ -233,6 +250,7 @@ export class Player {
         this.parent.x = pos.x
         this.parent.y = pos.y
         this.currentTilePosition = { x, y }
+        this.syncLabelPosition()
     }
 
     public setPosition(x: number, y: number) {
@@ -240,6 +258,7 @@ export class Player {
         this.parent.x = pos.x
         this.parent.y = pos.y
         this.currentTilePosition = { x, y }
+        this.syncLabelPosition()
         this.emitLocalPositionDebug()
     }
 
@@ -399,6 +418,7 @@ export class Player {
         }
 
         this.playApp.sortObjectsByY()
+        this.syncLabelPosition()
 
         if (this.isLocal) {
             this.playApp.moveCameraToPlayer()
@@ -473,12 +493,21 @@ export class Player {
         return 'down'
     }
 
-    private lastGearRect: { texW: number; texH: number; rect: GearAttachRect } | null = null
+    private lastGearRect: {
+        texW: number
+        texH: number
+        rect: GearAttachRect
+        flipX?: boolean
+        flipY?: boolean
+    } | null = null
 
     private repositionGearOverlay() {
         if (!this.toolSprite?.visible || !this.animatedSprite || !this.lastGearRect) return
-        const { texW, texH, rect } = this.lastGearRect
-        placeGearToolLocalOnCharacter(this.toolSprite, this.animatedSprite, texW, texH, rect)
+        const { texW, texH, rect, flipX, flipY } = this.lastGearRect
+        placeGearToolLocalOnCharacter(this.toolSprite, this.animatedSprite, texW, texH, rect, {
+            flipX,
+            flipY,
+        })
     }
 
     private ensureToolSpriteOnStage() {
@@ -540,13 +569,16 @@ export class Player {
             h: spriteMeta.h ?? texSize.h,
         }
         const rect = resolveGearAttachRect(facing, spriteMeta, legacyFrame)
-        this.lastGearRect = { texW: texSize.w, texH: texSize.h, rect }
+        const flipX = Boolean(spriteMeta.flipX)
+        const flipY = Boolean(spriteMeta.flipY)
+        this.lastGearRect = { texW: texSize.w, texH: texSize.h, rect, flipX, flipY }
         placeGearToolLocalOnCharacter(
             this.toolSprite,
             this.animatedSprite,
             texSize.w,
             texSize.h,
-            rect
+            rect,
+            { flipX, flipY }
         )
         this.toolSprite.visible = true
     }
@@ -599,5 +631,10 @@ export class Player {
 
     public destroy() {
         PIXI.Ticker.shared.remove(this.move)
+        this.detachLabelsFromOverlayLayer()
+        this.labelRoot.destroy({ children: true })
+        this.levelLabel = null
+        this.nameLabel = null
+        this.textMessage = new PIXI.Text({})
     }
 }

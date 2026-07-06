@@ -867,7 +867,6 @@
         </div>
         <div id="game-quickbar" class="game-quickbar" role="toolbar" aria-label="Quick gear slots">
             <div class="game-quickbar-anchor">
-                <div id="game-gear-mode-menu" class="game-gear-mode-menu hidden" role="menu" aria-label="Fishing catch type"></div>
                 <div class="game-quickbar-box">
                     <p class="game-quickbar-label" aria-hidden="true">GEAR</p>
                     <div class="game-quickbar-slots">
@@ -899,6 +898,21 @@
                     <div id="game-fishing-bar-fill" class="game-fishing-bar-fill"></div>
                 </div>
             </div>
+        </div>
+    </div>
+    <div id="game-gear-popup" class="game-gear-popup hidden" role="dialog" aria-labelledby="game-gear-popup-label" aria-modal="true">
+        <button type="button" class="game-gear-popup-scrim" id="game-gear-popup-scrim" aria-label="Close gear menu"></button>
+        <div class="game-gear-popup-panel">
+            <button type="button" class="game-gear-popup-close" id="game-gear-popup-close" aria-label="Close">×</button>
+            <div class="game-gear-popup-hero">
+                <div class="game-gear-popup-icon-ring" aria-hidden="true">
+                    <img class="game-gear-popup-icon" id="game-gear-popup-icon" alt="" width="72" height="72" decoding="async">
+                </div>
+                <p class="game-gear-popup-tag" id="game-gear-popup-tag">EQUIPPED</p>
+                <p class="game-gear-popup-label" id="game-gear-popup-label"></p>
+                <p class="game-gear-popup-desc" id="game-gear-popup-desc"></p>
+            </div>
+            <div id="game-gear-popup-actions" class="game-gear-popup-actions"></div>
         </div>
     </div>
 </div>

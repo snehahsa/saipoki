@@ -1104,7 +1104,12 @@ body {
 }
 
 .gear-eligible-toggle {
-    margin: 8px 0 12px;
+    margin: 8px 0 4px;
+}
+
+#btn-gear-mirror-opposite {
+    width: 100%;
+    margin: 4px 0 12px;
 }
 
 .gear-attach-body .animal-frame-sidebar {

@@ -270,6 +270,31 @@ def load_saved_item_config(item_id: str) -> dict:
     return dict(GEAR_ITEM_SAVED_DEFAULTS.get(item_id) or {})
 
 
+def default_flip_x_for_facing(item_id: str, facing: str, saved_face: Optional[dict] = None) -> bool:
+    """Default horizontal flip when art direction opposes player facing."""
+    if saved_face and "flipX" in saved_face:
+        return bool(saved_face["flipX"])
+    base = GEAR_ITEMS.get(item_id, {}).get("sprite") or {}
+    art_dir = str(base.get("direction") or "left").strip()
+    if art_dir == "left" and facing == "right":
+        return True
+    if art_dir == "right" and facing == "left":
+        return True
+    return False
+
+
+def default_flip_y_for_facing(item_id: str, facing: str, saved_face: Optional[dict] = None) -> bool:
+    if saved_face and "flipY" in saved_face:
+        return bool(saved_face["flipY"])
+    base = GEAR_ITEMS.get(item_id, {}).get("sprite") or {}
+    art_dir = str(base.get("direction") or "").strip()
+    if art_dir == "up" and facing == "down":
+        return True
+    if art_dir == "down" and facing == "up":
+        return True
+    return False
+
+
 def default_face_attach(item_id: str) -> dict:
     base = dict(GEAR_ITEMS[item_id].get("sprite") or {})
     return {
@@ -314,6 +339,8 @@ def resolve_faces(item_id: str, saved: Optional[dict] = None) -> dict[str, dict]
         faces[facing] = {
             "eligible": bool(eligible),
             "rect": rect,
+            "flipX": default_flip_x_for_facing(item_id, facing, raw),
+            "flipY": default_flip_y_for_facing(item_id, facing, raw),
         }
     return faces
 
@@ -353,6 +380,10 @@ def save_item_config(item_id: str, payload: dict) -> dict:
         else:
             legacy = {**default_face_attach(item_id), **raw}
             faces[facing]["rect"] = rect_from_legacy(facing, legacy, frame_w, frame_h)
+        if "flipX" in raw:
+            faces[facing]["flipX"] = bool(raw["flipX"])
+        if "flipY" in raw:
+            faces[facing]["flipY"] = bool(raw["flipY"])
 
     use_facings_in = payload.get("useFacings")
     if isinstance(use_facings_in, list):
@@ -456,6 +487,8 @@ def gear_item_client_meta(item_id: str) -> dict:
         facing: {
             "rect": dict(cfg["rect"]),
             "eligible": bool(cfg["eligible"]),
+            "flipX": bool(cfg.get("flipX")),
+            "flipY": bool(cfg.get("flipY")),
         }
         for facing, cfg in faces.items()
     }

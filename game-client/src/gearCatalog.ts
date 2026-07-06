@@ -18,6 +18,8 @@ export type GearSpriteAttach = {
 export type GearFaceAttach = {
     rect?: GearAttachRect
     eligible?: boolean
+    flipX?: boolean
+    flipY?: boolean
     offsetX?: number
     offsetY?: number
     scale?: number

@@ -457,7 +457,7 @@
                 <header class="animal-frame-header">
                     <div>
                         <h2 id="gear-attach-title">Gear attach</h2>
-                        <p class="animal-frame-subtitle">Pick a player view · drag item to attach · corner handle to scale · check eligible for use-on-click</p>
+                        <p class="animal-frame-subtitle">Pick a player view · drag item to attach · flip for opposite directions · corner handle to scale</p>
                     </div>
                     <div class="animal-frame-header-actions">
                         <button type="button" class="btn btn-primary btn-sm" id="btn-gear-attach-save">Save attach</button>
@@ -476,6 +476,15 @@
                             <input type="checkbox" id="gear-face-eligible">
                             Use eligible on this view
                         </label>
+                        <label class="audit-toggle gear-eligible-toggle">
+                            <input type="checkbox" id="gear-face-flip-x">
+                            Flip horizontal
+                        </label>
+                        <label class="audit-toggle gear-eligible-toggle">
+                            <input type="checkbox" id="gear-face-flip-y">
+                            Flip vertical
+                        </label>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-gear-mirror-opposite">Mirror from opposite</button>
                         <p class="prop-meta">Position/size relative to 48×48 character (saved as rect).</p>
                         <label class="field field-inline">
                             <span>X</span>
@@ -510,6 +519,6 @@
     </div>
 
     <script src="/static/gear-overlay-math.js?v=1"></script>
-    <script src="/static/builder.js?v=33"></script>
+    <script src="/static/builder.js?v=34"></script>
 </body>
 </html>

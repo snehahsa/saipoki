@@ -381,6 +381,16 @@ export class PlayApp extends App {
         }
     }
 
+    public attachEntityLabels(container: PIXI.Container) {
+        this.layers.labels.addChild(container)
+    }
+
+    public detachEntityLabels(container: PIXI.Container) {
+        if (container.parent === this.layers.labels) {
+            this.layers.labels.removeChild(container)
+        }
+    }
+
     private async spawnPlayer(
         uid: string,
         skin: string,

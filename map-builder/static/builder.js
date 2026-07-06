@@ -2276,6 +2276,50 @@ function gearItemThumbStyle(item) {
     ].join(";")
 }
 
+function defaultGearFlipX(facing, item, saved) {
+    if (saved && saved.flipX !== undefined) return Boolean(saved.flipX)
+    const artDir = item?.sprite?.direction || "left"
+    if (artDir === "left" && facing === "right") return true
+    if (artDir === "right" && facing === "left") return true
+    return false
+}
+
+function defaultGearFlipY(facing, item, saved) {
+    if (saved && saved.flipY !== undefined) return Boolean(saved.flipY)
+    const artDir = item?.sprite?.direction || ""
+    if (artDir === "up" && facing === "down") return true
+    if (artDir === "down" && facing === "up") return true
+    return false
+}
+
+function gearOppositeFacing(direction) {
+    if (direction === "left") return "right"
+    if (direction === "right") return "left"
+    if (direction === "up") return "down"
+    if (direction === "down") return "up"
+    return null
+}
+
+function mirrorGearRectForOpposite(rect, fromDirection, toDirection) {
+    if (!rect) return rect
+    const frameW = GEAR_CHAR_FRAME_PX
+    const frameH = GEAR_CHAR_FRAME_PX
+    const out = { ...rect }
+    if (
+        (fromDirection === "left" && toDirection === "right") ||
+        (fromDirection === "right" && toDirection === "left")
+    ) {
+        out.x = frameW - rect.x - rect.w
+    }
+    if (
+        (fromDirection === "up" && toDirection === "down") ||
+        (fromDirection === "down" && toDirection === "up")
+    ) {
+        out.y = frameH - rect.y - rect.h
+    }
+    return out
+}
+
 function defaultGearFacesFromItem(item) {
     const frame = gearItemFrame(item)
     const useFacings = item?.useFacings || ["left", "right"]
@@ -2293,6 +2337,8 @@ function defaultGearFacesFromItem(item) {
         faces[facing] = {
             eligible: saved.eligible !== undefined ? Boolean(saved.eligible) : useFacings.includes(facing),
             rect,
+            flipX: defaultGearFlipX(facing, item, saved),
+            flipY: defaultGearFlipY(facing, item, saved),
         }
     }
     return faces
@@ -2347,6 +2393,8 @@ function currentGearFace() {
     return {
         eligible: false,
         rect: { x: 0, y: 0, w: 20, h: 14 },
+        flipX: false,
+        flipY: false,
     }
 }
 
@@ -2356,16 +2404,26 @@ function syncGearFaceInputsFromState() {
     const rect = face.rect
     document.getElementById("gear-attach-active-view").textContent = `Editing: ${editor.direction}`
     document.getElementById("gear-face-eligible").checked = Boolean(face.eligible)
+    document.getElementById("gear-face-flip-x").checked = Boolean(face.flipX)
+    document.getElementById("gear-face-flip-y").checked = Boolean(face.flipY)
     document.getElementById("gear-rect-x").value = rect.x
     document.getElementById("gear-rect-y").value = rect.y
     document.getElementById("gear-rect-w").value = rect.w
     document.getElementById("gear-rect-h").value = rect.h
+    const opp = gearOppositeFacing(editor.direction)
+    const mirrorBtn = document.getElementById("btn-gear-mirror-opposite")
+    if (mirrorBtn) {
+        mirrorBtn.textContent = opp ? `Mirror from ${opp}` : "Mirror from opposite"
+        mirrorBtn.disabled = !opp
+    }
 }
 
 function readGearFaceInputsToState() {
     const editor = state.gearAttachEditor
     const face = currentGearFace()
     face.eligible = document.getElementById("gear-face-eligible").checked
+    face.flipX = document.getElementById("gear-face-flip-x").checked
+    face.flipY = document.getElementById("gear-face-flip-y").checked
     face.rect = {
         x: Number(document.getElementById("gear-rect-x").value || 0),
         y: Number(document.getElementById("gear-rect-y").value || 0),
@@ -2373,6 +2431,31 @@ function readGearFaceInputsToState() {
         h: Math.max(0.5, Number(document.getElementById("gear-rect-h").value || 1)),
     }
     editor.faces[editor.direction] = face
+}
+
+function mirrorGearFaceFromOpposite() {
+    const editor = state.gearAttachEditor
+    const direction = editor.direction
+    const opposite = gearOppositeFacing(direction)
+    if (!opposite) return
+
+    readGearFaceInputsToState()
+    const source = editor.faces[opposite]
+    if (!source?.rect) {
+        showToast(`No attach saved for ${opposite} view`, true)
+        return
+    }
+
+    const face = currentGearFace()
+    face.rect = mirrorGearRectForOpposite(source.rect, opposite, direction)
+    const isHorizontal = direction === "left" || direction === "right"
+    face.flipX = isHorizontal ? !Boolean(source.flipX) : Boolean(source.flipX)
+    face.flipY = isHorizontal ? Boolean(source.flipY) : !Boolean(source.flipY)
+    editor.faces[direction] = face
+    syncGearFaceInputsFromState()
+    renderGearAttachViewsGrid()
+    drawGearAttachCanvas()
+    showToast(`Mirrored attach from ${opposite}`)
 }
 
 function renderGearAttachCharSkinSelect() {
@@ -2504,6 +2587,30 @@ function gearToolDrawRect(layout, rect) {
     }
 }
 
+function drawGearItemOnCanvas(ctx, img, frame, toolBox, flipX, flipY) {
+    const dx = toolBox.x
+    const dy = toolBox.y
+    const dw = toolBox.w
+    const dh = toolBox.h
+    ctx.save()
+    let tx = dx
+    let ty = dy
+    let sx = 1
+    let sy = 1
+    if (flipX) {
+        tx = dx + dw
+        sx = -1
+    }
+    if (flipY) {
+        ty = dy + dh
+        sy = -1
+    }
+    ctx.translate(tx, ty)
+    ctx.scale(sx, sy)
+    ctx.drawImage(img, frame.x, frame.y, frame.w, frame.h, 0, 0, dw, dh)
+    ctx.restore()
+}
+
 function gearViewRodStyle(direction) {
     const editor = state.gearAttachEditor
     const item = editor.item
@@ -2519,12 +2626,19 @@ function gearViewRodStyle(direction) {
     const destW = rect.w * z
     const destH = rect.h * z
     const scale = destW / Math.max(1, sprite.w || 1)
+    const flipX = Boolean(face.flipX)
+    const flipY = Boolean(face.flipY)
+    const tx = rect.x * z + (flipX ? destW : 0)
+    const ty = rect.y * z + (flipY ? destH : 0)
+    const scaleX = flipX ? -1 : 1
+    const scaleY = flipY ? -1 : 1
 
     return [
         "display:block",
         `width:${destW}px`,
         `height:${destH}px`,
-        `transform:translate(${rect.x * z}px, ${rect.y * z}px)`,
+        `transform:translate(${tx}px, ${ty}px) scale(${scaleX}, ${scaleY})`,
+        `transform-origin:0 0`,
         `background-image:url(/sprites/spritesheets/items/${file})`,
         `background-size:${sheetW * scale}px ${sheetH * scale}px`,
         `background-position:-${(sprite.x || 0) * scale}px -${(sprite.y || 0) * scale}px`,
@@ -2570,11 +2684,7 @@ function drawGearAttachCanvas() {
     const toolBox = gearToolDrawRect(layout, rect)
     if (!toolBox) return
 
-    ctx.drawImage(
-        editor.itemImage,
-        frame.x, frame.y, frame.w, frame.h,
-        toolBox.x, toolBox.y, toolBox.w, toolBox.h
-    )
+    drawGearItemOnCanvas(ctx, editor.itemImage, frame, toolBox, attach.flipX, attach.flipY)
 
     ctx.strokeStyle = attach.eligible ? "#4ade80" : "#f87171"
     ctx.lineWidth = 2
@@ -2680,6 +2790,8 @@ async function saveGearAttachEditor() {
                 w: face.rect?.w ?? 1,
                 h: face.rect?.h ?? 1,
             },
+            flipX: Boolean(face.flipX),
+            flipY: Boolean(face.flipY),
         }
     }
 
@@ -2760,6 +2872,22 @@ function bindGearAttachEditor() {
         readGearFaceInputsToState()
         renderGearAttachViewsGrid()
         drawGearAttachCanvas()
+    })
+
+    document.getElementById("gear-face-flip-x")?.addEventListener("change", () => {
+        readGearFaceInputsToState()
+        renderGearAttachViewsGrid()
+        drawGearAttachCanvas()
+    })
+
+    document.getElementById("gear-face-flip-y")?.addEventListener("change", () => {
+        readGearFaceInputsToState()
+        renderGearAttachViewsGrid()
+        drawGearAttachCanvas()
+    })
+
+    document.getElementById("btn-gear-mirror-opposite")?.addEventListener("click", () => {
+        mirrorGearFaceFromOpposite()
     })
 
     for (const id of [

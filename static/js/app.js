@@ -43,8 +43,8 @@ const QUICKBAR_SLOT_COUNT = window.APP_CONFIG.gearSlotCount || 3
 let quickbarSelectedSlot = -1
 let quickbarHintTimer = null
 let activeFishingMode = localStorage.getItem("saipoke_fishing_mode") || "fish"
-let gearModeMenuSlot = -1
-let gearModeMenuPinned = false
+let gearPopupSlot = -1
+let gearPopupOpen = false
 let suppressQuickbarSlotUntil = 0
 let fishingCastActive = false
 let fishingCastAbort = null
@@ -616,7 +616,7 @@ function bindGameEvents() {
         if (fishingCastActive || gearMeta(item)?.default_fishing_quest) return
         const label = gearMeta(item)?.label || item || "Gear"
         showQuickbarHint(`${label} — splash!`)
-        keepGearModeMenuOpen()
+        keepGearPopupOpen()
         if (animId) {
             console.debug("gear used on animation", animId)
         }
@@ -2218,29 +2218,28 @@ async function useQuickbarGear(gearId) {
     return false
 }
 
-function isGearModeMenuOpen() {
-    const menu = document.getElementById("game-gear-mode-menu")
-    return Boolean(menu && !menu.classList.contains("hidden") && gearModeMenuPinned)
+function isGearPopupOpen() {
+    const popup = document.getElementById("game-gear-popup")
+    return Boolean(popup && !popup.classList.contains("hidden") && gearPopupOpen)
 }
 
-function markGearModeMenuInteraction() {
+function markGearPopupInteraction() {
     suppressQuickbarSlotUntil = performance.now() + 700
 }
 
-function keepGearModeMenuOpen() {
+function keepGearPopupOpen() {
     const gearId = quickbarSelectedSlot >= 0 ? getQuickbarSlotItems()[quickbarSelectedSlot] : null
-    if (gearId !== "fishing_rod" || !fishingModesForGear(gearId)) return
-    const menu = document.getElementById("game-gear-mode-menu")
-    if (!menu) return
-    gearModeMenuPinned = true
-    gearModeMenuSlot = quickbarSelectedSlot
-    menu.classList.remove("hidden")
-    if (!menu.querySelector("[data-fishing-cast]")) {
-        showGearModeMenu(quickbarSelectedSlot, gearId)
+    if (!gearId) return
+    const popup = document.getElementById("game-gear-popup")
+    if (!popup) return
+    gearPopupOpen = true
+    gearPopupSlot = quickbarSelectedSlot
+    popup.classList.remove("hidden")
+    if (!popup.querySelector("[data-gear-popup-action]")) {
+        showGearPopup(quickbarSelectedSlot, gearId)
         return
     }
-    positionGearModeMenu(quickbarSelectedSlot)
-    updateGearModeMenuActiveState()
+    updateGearPopupActiveState()
 }
 
 function syncEquippedGearVisual() {
@@ -2248,23 +2247,108 @@ function syncEquippedGearVisual() {
     const equipped = quickbarSelectedSlot >= 0 ? slots[quickbarSelectedSlot] : null
     window.TelegramGame?.setEquippedGear?.(equipped || null)
     if (!equipped) {
-        hideGearModeMenu()
+        hideGearPopup()
         return
     }
-    if (equipped === "fishing_rod" && fishingModesForGear(equipped)) {
-        if (isGearModeMenuOpen() && gearModeMenuSlot === quickbarSelectedSlot) {
-            updateGearModeMenuActiveState()
-            positionGearModeMenu(quickbarSelectedSlot)
-        }
-    } else if (isGearModeMenuOpen()) {
-        hideGearModeMenu()
+    if (isGearPopupOpen() && gearPopupSlot === quickbarSelectedSlot) {
+        updateGearPopupActiveState()
     }
 }
 
-function updateGearModeMenuActiveState() {
-    document.querySelectorAll(".game-gear-mode-btn[data-fishing-mode]").forEach((btn) => {
+function updateGearPopupActiveState() {
+    document.querySelectorAll(".game-gear-popup-btn[data-fishing-mode]").forEach((btn) => {
         btn.classList.toggle("is-active", btn.dataset.fishingMode === activeFishingMode)
     })
+}
+
+function gearCanUseInWorld(gearId) {
+    const meta = gearMeta(gearId)
+    if (!meta) return false
+    if (resolveFishingQuestForGear(gearId)) return true
+    if (Array.isArray(meta.useFacings) && meta.useFacings.length) return true
+    return false
+}
+
+function renderGearPopupActions(gearId) {
+    const modes = fishingModesForGear(gearId)
+    if (modes) {
+        return `
+            <p class="game-gear-popup-section">CATCH TYPE</p>
+            <div class="game-gear-popup-mode-grid">
+                ${modes.map((mode) => `
+                    <button type="button" class="game-gear-popup-btn ${mode.id === activeFishingMode ? "is-active" : ""}" data-gear-popup-action data-fishing-mode="${escapeHtml(mode.id)}">
+                        ${escapeHtml(mode.label || mode.id)}
+                        <small>${escapeHtml(mode.hint || "")}</small>
+                    </button>
+                `).join("")}
+            </div>
+            <button type="button" class="game-gear-popup-btn game-gear-popup-btn--cast" data-gear-popup-action data-fishing-cast="1">CAST</button>
+            <button type="button" class="game-gear-popup-btn game-gear-popup-btn--ghost" data-gear-popup-action data-gear-stow="1">STOW</button>
+        `
+    }
+
+    const canUse = gearCanUseInWorld(gearId)
+    return `
+        ${canUse ? `<button type="button" class="game-gear-popup-btn game-gear-popup-btn--primary" data-gear-popup-action data-gear-use="1">USE</button>` : ""}
+        <button type="button" class="game-gear-popup-btn game-gear-popup-btn--ghost" data-gear-popup-action data-gear-stow="1">STOW</button>
+    `
+}
+
+function hideGearPopup() {
+    gearPopupSlot = -1
+    gearPopupOpen = false
+    const popup = document.getElementById("game-gear-popup")
+    if (popup) {
+        popup.classList.add("hidden")
+        const actions = document.getElementById("game-gear-popup-actions")
+        if (actions) actions.innerHTML = ""
+    }
+}
+
+function showGearPopup(slotIndex, gearId) {
+    const meta = gearMeta(gearId)
+    if (!meta) {
+        hideGearPopup()
+        return
+    }
+
+    const popup = document.getElementById("game-gear-popup")
+    const iconEl = document.getElementById("game-gear-popup-icon")
+    const labelEl = document.getElementById("game-gear-popup-label")
+    const descEl = document.getElementById("game-gear-popup-desc")
+    const actionsEl = document.getElementById("game-gear-popup-actions")
+    if (!popup || !iconEl || !labelEl || !descEl || !actionsEl) return
+
+    const reopening = isGearPopupOpen() && gearPopupSlot === slotIndex
+    gearPopupSlot = slotIndex
+    gearPopupOpen = true
+
+    const icon = quickbarGearIcon(gearId)
+    if (icon) {
+        iconEl.src = icon
+        iconEl.alt = meta.label || gearId
+        iconEl.classList.remove("hidden")
+    } else {
+        iconEl.removeAttribute("src")
+        iconEl.alt = ""
+        iconEl.classList.add("hidden")
+    }
+
+    labelEl.textContent = meta.label || gearId
+    descEl.textContent = meta.description || ""
+    if (!reopening || !actionsEl.querySelector("[data-gear-popup-action]")) {
+        actionsEl.innerHTML = renderGearPopupActions(gearId)
+    } else {
+        updateGearPopupActiveState()
+    }
+
+    popup.classList.remove("hidden")
+    window.TelegramGame?.setFishingMode?.(activeFishingMode)
+}
+
+function closeGearPopupOnly() {
+    gearPopupOpen = false
+    document.getElementById("game-gear-popup")?.classList.add("hidden")
 }
 
 function syncQuickbar() {
@@ -2335,68 +2419,12 @@ function syncPlayerGearToGame() {
     window.TelegramGame?.setPlayerGear?.(ids)
 }
 
-function hideGearModeMenu() {
-    gearModeMenuSlot = -1
-    gearModeMenuPinned = false
-    const menu = document.getElementById("game-gear-mode-menu")
-    if (menu) {
-        menu.classList.add("hidden")
-        menu.innerHTML = ""
-    }
-}
-
-function positionGearModeMenu(slotIndex) {
-    const menu = document.getElementById("game-gear-mode-menu")
-    const anchor = document.querySelector(".game-quickbar-anchor")
-    const slotEl = document.querySelector(`.game-quickslot[data-slot="${slotIndex}"]`)
-    if (!menu || !anchor || !slotEl) return
-
-    const anchorRect = anchor.getBoundingClientRect()
-    const slotRect = slotEl.getBoundingClientRect()
-    const centerX = slotRect.left + slotRect.width / 2 - anchorRect.left
-    menu.style.left = `${centerX}px`
-    menu.style.transform = "translateX(-50%)"
-}
-
-function showGearModeMenu(slotIndex, gearId) {
-    const modes = fishingModesForGear(gearId)
-    if (!modes) {
-        hideGearModeMenu()
-        return
-    }
-
-    const menu = document.getElementById("game-gear-mode-menu")
-    if (!menu) return
-
-    const menuOpen = isGearModeMenuOpen() && gearModeMenuSlot === slotIndex
-    if (menuOpen && menu.querySelector("[data-fishing-cast]")) {
-        updateGearModeMenuActiveState()
-        return
-    }
-
-    gearModeMenuSlot = slotIndex
-    gearModeMenuPinned = true
-    menu.innerHTML = `
-        <p class="game-gear-mode-title">CATCH TYPE</p>
-        ${modes.map((mode) => `
-            <button type="button" class="game-gear-mode-btn ${mode.id === activeFishingMode ? "is-active" : ""}" data-fishing-mode="${mode.id}">
-                ${escapeHtml(mode.label || mode.id)}
-                <small>${escapeHtml(mode.hint || "")}</small>
-            </button>
-        `).join("")}
-        <button type="button" class="game-gear-mode-btn is-cast" data-fishing-cast="1">CAST</button>
-    `
-    menu.classList.remove("hidden")
-    positionGearModeMenu(slotIndex)
-    window.TelegramGame?.setFishingMode?.(activeFishingMode)
-}
-
 function selectFishingMode(modeId) {
     if (!modeId) return
     activeFishingMode = modeId
     localStorage.setItem("saipoke_fishing_mode", modeId)
     window.TelegramGame?.setFishingMode?.(modeId)
-    document.querySelectorAll(".game-gear-mode-btn[data-fishing-mode]").forEach((btn) => {
+    document.querySelectorAll(".game-gear-popup-btn[data-fishing-mode]").forEach((btn) => {
         btn.classList.toggle("is-active", btn.dataset.fishingMode === modeId)
     })
     const label = (fishingModesForGear("fishing_rod") || []).find((m) => m.id === modeId)?.label || modeId
@@ -2405,10 +2433,64 @@ function selectFishingMode(modeId) {
 
 function stowQuickbarGear(gearId) {
     quickbarSelectedSlot = -1
-    hideGearModeMenu()
+    hideGearPopup()
     syncQuickbar()
     const label = gearMeta(gearId)?.label || gearId
     showQuickbarHint(`${label} stowed`)
+}
+
+function handleGearPopupAction(event) {
+    markGearPopupInteraction()
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+
+    const modeBtn = event.target.closest("[data-fishing-mode]")
+    if (modeBtn) {
+        selectFishingMode(modeBtn.dataset.fishingMode)
+        keepGearPopupOpen()
+        return
+    }
+
+    if (event.target.closest("[data-fishing-cast]")) {
+        const gearId = getQuickbarSlotItems()[quickbarSelectedSlot]
+        window.TelegramGame?.setFishingMode?.(activeFishingMode)
+        closeGearPopupOnly()
+        if (gearId) {
+            void useQuickbarGear(gearId)
+        }
+        return
+    }
+
+    if (event.target.closest("[data-gear-use]")) {
+        const gearId = getQuickbarSlotItems()[quickbarSelectedSlot]
+        closeGearPopupOnly()
+        if (gearId) {
+            void useQuickbarGear(gearId)
+        }
+        return
+    }
+
+    if (event.target.closest("[data-gear-stow]")) {
+        const gearId = getQuickbarSlotItems()[quickbarSelectedSlot]
+        if (gearId) {
+            stowQuickbarGear(gearId)
+        }
+    }
+}
+
+function equipQuickbarSlot(index, gearId) {
+    quickbarSelectedSlot = index
+    syncQuickbar()
+    showGearPopup(index, gearId)
+    const label = gearMeta(gearId)?.label || gearId
+    if (fishingModesForGear(gearId)) {
+        showQuickbarHint(`Equip: ${label} · pick catch type · CAST by water`)
+    } else if (gearCanUseInWorld(gearId)) {
+        showQuickbarHint(`Equip: ${label} · USE or STOW`)
+    } else {
+        showQuickbarHint(`Equip: ${label}`)
+    }
 }
 
 function isTypingInField(target) {
@@ -2429,38 +2511,23 @@ function bindQuickbar() {
     if (!quickbar || quickbar.dataset.bound === "1") return
     quickbar.dataset.bound = "1"
 
-    const handleGearModeMenuPointer = (event) => {
-        markGearModeMenuInteraction()
-        event.preventDefault()
-        event.stopPropagation()
-        event.stopImmediatePropagation()
-
-        const modeBtn = event.target.closest("[data-fishing-mode]")
-        if (modeBtn) {
-            selectFishingMode(modeBtn.dataset.fishingMode)
-            keepGearModeMenuOpen()
-            return
-        }
-        if (event.target.closest("[data-fishing-cast]")) {
-            const gearId = getQuickbarSlotItems()[quickbarSelectedSlot]
-            window.TelegramGame?.setFishingMode?.(activeFishingMode)
-            hideGearModeMenu()
-            if (gearId) {
-                void useQuickbarGear(gearId)
-            }
-        }
-    }
-
-    const menu = document.getElementById("game-gear-mode-menu")
-    menu?.addEventListener("pointerdown", handleGearModeMenuPointer, true)
-    menu?.addEventListener("click", (event) => {
-        markGearModeMenuInteraction()
+    const actions = document.getElementById("game-gear-popup-actions")
+    actions?.addEventListener("pointerdown", handleGearPopupAction, true)
+    actions?.addEventListener("click", (event) => {
+        markGearPopupInteraction()
         event.stopPropagation()
         event.stopImmediatePropagation()
     }, true)
 
+    const dismissGearPopup = () => {
+        markGearPopupInteraction()
+        closeGearPopupOnly()
+    }
+    document.getElementById("game-gear-popup-scrim")?.addEventListener("click", dismissGearPopup)
+    document.getElementById("game-gear-popup-close")?.addEventListener("click", dismissGearPopup)
+
     quickbar.addEventListener("pointerdown", (event) => {
-        if (event.target.closest("#game-gear-mode-menu")) return
+        if (event.target.closest("#game-gear-popup")) return
         if (performance.now() < suppressQuickbarSlotUntil) return
 
         const slotEl = event.target.closest(".game-quickslot")
@@ -2477,19 +2544,15 @@ function bindQuickbar() {
         window.RetroAudio?.sfx?.("select")
 
         if (quickbarSelectedSlot === index) {
+            if (isGearPopupOpen()) {
+                closeGearPopupOnly()
+                return
+            }
             stowQuickbarGear(gearId)
             return
         }
 
-        quickbarSelectedSlot = index
-        syncQuickbar()
-        const label = gearMeta(gearId)?.label || gearId
-        if (fishingModesForGear(gearId)) {
-            showGearModeMenu(index, gearId)
-            showQuickbarHint(`Equip: ${label} · pick catch type · CAST by water`)
-        } else {
-            showQuickbarHint(`Equip: ${label} · tap again to stow`)
-        }
+        equipQuickbarSlot(index, gearId)
     })
 
     document.addEventListener("keydown", (event) => {
@@ -2505,17 +2568,13 @@ function bindQuickbar() {
 
         event.preventDefault()
         if (quickbarSelectedSlot === index) {
+            if (isGearPopupOpen()) {
+                closeGearPopupOnly()
+                return
+            }
             stowQuickbarGear(gearId)
         } else {
-            quickbarSelectedSlot = index
-            syncQuickbar()
-            const label = gearMeta(gearId)?.label || gearId
-            if (fishingModesForGear(gearId)) {
-                showGearModeMenu(index, gearId)
-                showQuickbarHint(`Equip: ${label} · pick catch type · CAST by water`)
-            } else {
-                showQuickbarHint(`Equip: ${label} · tap again to stow`)
-            }
+            equipQuickbarSlot(index, gearId)
         }
     })
 }
@@ -4620,7 +4679,7 @@ function leaveGame() {
     clearPadInput()
     closeGameDrawer()
     quickbarSelectedSlot = -1
-    hideGearModeMenu()
+    hideGearPopup()
     showQuickbarHint("")
     syncQuickbar()
     window.TelegramGame?.setEquippedGear?.(null)
@@ -4883,7 +4942,7 @@ function onWalletDisconnect() {
     clearPadInput()
     closeGameDrawer()
     quickbarSelectedSlot = -1
-    hideGearModeMenu()
+    hideGearPopup()
     showQuickbarHint("")
     syncQuickbar()
     window.TelegramGame?.setEquippedGear?.(null)

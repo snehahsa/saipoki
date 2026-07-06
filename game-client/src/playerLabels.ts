@@ -23,7 +23,7 @@ export function nameColorFromId(id: string): number {
     return NAME_COLORS[Math.abs(hash) % NAME_COLORS.length]
 }
 
-export const LEVEL_LABEL_Y = -42
-export const NAME_LABEL_Y = 10
+export const LEVEL_LABEL_Y = -60
+export const NAME_LABEL_Y = -50
 export const LABEL_SCALE_LEVEL = 0.068
 export const LABEL_SCALE_NAME = 0.09

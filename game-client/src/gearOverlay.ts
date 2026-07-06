@@ -8,6 +8,11 @@ export type GearAttachRect = {
     h: number
 }
 
+export type GearFlip = {
+    flipX?: boolean
+    flipY?: boolean
+}
+
 export type GearOverlayAttach = {
     rect?: GearAttachRect
     offsetX?: number
@@ -131,13 +136,19 @@ export function placeGearToolLocalOnCharacter(
     body: GearBodySprite,
     textureWidth: number,
     textureHeight: number,
-    rect: GearAttachRect
+    rect: GearAttachRect,
+    flip: GearFlip = {}
 ) {
     const origin = characterFrameOriginLocal(body)
+    const flipX = Boolean(flip.flipX)
+    const flipY = Boolean(flip.flipY)
     tool.anchor.set(0, 0)
-    tool.x = origin.x + rect.x
-    tool.y = origin.y + rect.y
-    tool.scale.set(rect.w / Math.max(1, textureWidth), rect.h / Math.max(1, textureHeight))
+    tool.x = origin.x + rect.x + (flipX ? rect.w : 0)
+    tool.y = origin.y + rect.y + (flipY ? rect.h : 0)
+    tool.scale.set(
+        (rect.w / Math.max(1, textureWidth)) * (flipX ? -1 : 1),
+        (rect.h / Math.max(1, textureHeight)) * (flipY ? -1 : 1)
+    )
 }
 
 /** @deprecated Use placeGearToolLocalOnCharacter with tool parented on animatedSprite. */
@@ -146,11 +157,17 @@ export function placeGearToolOnCharacter(
     body: GearBodySprite,
     textureWidth: number,
     textureHeight: number,
-    rect: GearAttachRect
+    rect: GearAttachRect,
+    flip: GearFlip = {}
 ) {
     const origin = characterFrameTopLeft(body)
+    const flipX = Boolean(flip.flipX)
+    const flipY = Boolean(flip.flipY)
     tool.anchor.set(0, 0)
-    tool.x = origin.x + rect.x
-    tool.y = origin.y + rect.y
-    tool.scale.set(rect.w / Math.max(1, textureWidth), rect.h / Math.max(1, textureHeight))
+    tool.x = origin.x + rect.x + (flipX ? rect.w : 0)
+    tool.y = origin.y + rect.y + (flipY ? rect.h : 0)
+    tool.scale.set(
+        (rect.w / Math.max(1, textureWidth)) * (flipX ? -1 : 1),
+        (rect.h / Math.max(1, textureHeight)) * (flipY ? -1 : 1)
+    )
 }
