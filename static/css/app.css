@@ -7404,6 +7404,142 @@ body.vending-open {
     flex-shrink: 0;
 }
 
+/* SLOT B — hand-drawn yellow-green status LCD (machine stock + wallet) */
+.vending-status-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(3px * var(--vm));
+    width: 100%;
+    margin-top: calc(4px * var(--vm));
+}
+
+.vending-status-bezel {
+    position: relative;
+    width: 100%;
+    padding: calc(5px * var(--vm));
+    /* asymmetric radii give it an organic, hand-drawn casing */
+    border-radius: calc(8px * var(--vm)) calc(6px * var(--vm)) calc(9px * var(--vm)) calc(5px * var(--vm));
+    background: linear-gradient(180deg, #3c3550 0%, #211a2c 100%);
+    border: calc(2px * var(--vm)) solid #0a0810;
+    box-shadow:
+        inset 0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.12),
+        inset 0 0 calc(10px * var(--vm)) rgba(0, 0, 0, 0.5),
+        0 calc(2px * var(--vm)) calc(4px * var(--vm)) rgba(0, 0, 0, 0.42);
+}
+
+/* tiny corner screws for a real-machine feel */
+.vending-status-bezel::before,
+.vending-status-bezel::after {
+    content: "";
+    position: absolute;
+    width: calc(3px * var(--vm));
+    height: calc(3px * var(--vm));
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 32%, #7b7490, #241d30);
+    box-shadow: 0 0 0 calc(1px * var(--vm)) #0a0810;
+}
+.vending-status-bezel::before { top: calc(3px * var(--vm)); left: calc(3px * var(--vm)); }
+.vending-status-bezel::after { bottom: calc(3px * var(--vm)); right: calc(3px * var(--vm)); }
+
+.vending-status-glass {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: calc(2px * var(--vm));
+    padding: calc(6px * var(--vm)) calc(6px * var(--vm)) calc(5px * var(--vm));
+    /* slightly wobbly inner corners = sketched glass */
+    border-radius: calc(4px * var(--vm)) calc(6px * var(--vm)) calc(3px * var(--vm)) calc(5px * var(--vm));
+    background: radial-gradient(125% 90% at 50% -10%, #ecf578 0%, #c9dd33 42%, #a3ba26 100%);
+    border: calc(1px * var(--vm)) solid #6f8016;
+    box-shadow:
+        inset 0 0 calc(9px * var(--vm)) rgba(74, 92, 8, 0.55),
+        inset 0 calc(1px * var(--vm)) calc(2px * var(--vm)) rgba(255, 255, 255, 0.6);
+}
+
+.vending-status-scan {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(40, 52, 6, 0.14) 0,
+        rgba(40, 52, 6, 0.14) calc(1px * var(--vm)),
+        transparent calc(1px * var(--vm)),
+        transparent calc(3px * var(--vm))
+    );
+    mix-blend-mode: multiply;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.vending-status-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(70% 55% at 50% 0%, rgba(255, 255, 255, 0.5), transparent 70%);
+    opacity: 0.7;
+    pointer-events: none;
+    animation: vending-status-flicker 3.4s ease-in-out infinite;
+}
+
+@keyframes vending-status-flicker {
+    0%, 100% { opacity: 0.62; }
+    45% { opacity: 0.78; }
+    50% { opacity: 0.5; }
+    55% { opacity: 0.74; }
+}
+
+.vending-status-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: baseline;
+    gap: calc(3px * var(--vm));
+}
+
+.vending-status-key {
+    font-family: silkscreen, monospace;
+    font-size: calc(4px * var(--vm));
+    letter-spacing: 0.14em;
+    color: #4a5a10;
+    text-shadow: 0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.35);
+}
+
+.vending-status-val {
+    margin-left: auto;
+    font-family: silkscreen, monospace;
+    font-size: calc(8px * var(--vm));
+    letter-spacing: 0.02em;
+    color: #232e08;
+    text-shadow:
+        0 calc(1px * var(--vm)) 0 rgba(255, 255, 255, 0.4),
+        0 0 calc(3px * var(--vm)) rgba(60, 80, 4, 0.35);
+}
+
+.vending-status-divider {
+    position: relative;
+    z-index: 1;
+    height: calc(1px * var(--vm));
+    margin: calc(1px * var(--vm)) 0;
+    background: repeating-linear-gradient(
+        90deg,
+        #6f8016 0,
+        #6f8016 calc(2px * var(--vm)),
+        transparent calc(2px * var(--vm)),
+        transparent calc(4px * var(--vm))
+    );
+    opacity: 0.7;
+}
+
+.vending-status-caption {
+    font-family: silkscreen, monospace;
+    font-size: calc(3.5px * var(--vm));
+    letter-spacing: 0.16em;
+    color: #7ae8ff;
+    text-shadow: 0 0 calc(3px * var(--vm)) rgba(122, 232, 255, 0.4);
+    opacity: 0.72;
+}
+
 .vending-center {
     display: flex;
     flex-direction: column;
@@ -8146,16 +8282,6 @@ body.vending-open {
 .vending-btn-draw:not(:disabled) .vending-btn-led {
     background: #4ae86a;
     box-shadow: 0 0 6px #4ae86a;
-}
-
-.vending-btn-sell:not(:disabled) .vending-btn-led {
-    background: #e8c84a;
-    box-shadow: 0 0 6px #e8c84a;
-}
-
-.vending-btn-buy:not(:disabled) .vending-btn-led {
-    background: #4a9ae8;
-    box-shadow: 0 0 6px #4a9ae8;
 }
 
 .vending-btn-used {

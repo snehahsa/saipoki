@@ -1014,8 +1014,7 @@
                                     <div class="vending-view vending-view-menu hidden" id="vending-view-menu">
                                         <p class="vending-menu-title">SELECT OPERATION</p>
                                         <p class="vending-menu-line" id="vending-menu-draw-line">&gt; DRAW  — SPIN 1,000 CHIPS</p>
-                                        <p class="vending-menu-line">&gt; SELL   — LIST IN VAULT</p>
-                                        <p class="vending-menu-line">&gt; BUY    — MARKETPLACE</p>
+                                        <p class="vending-menu-line">&gt; SLOT B — STOCK &amp; WALLET</p>
                                         <p class="vending-menu-cursor" aria-hidden="true">█</p>
                                     </div>
                                     <div class="vending-view vending-view-error hidden" id="vending-view-error">
@@ -1079,14 +1078,24 @@
                     </div>
                     <div class="vending-side-plate vending-side-plate-stack">
                         <span class="vending-side-label">SLOT B</span>
-                        <button type="button" class="vending-side-btn vending-btn vending-btn-sell" id="vending-btn-sell">
-                            <span class="vending-btn-led" aria-hidden="true"></span>
-                            <span class="vending-side-btn-text">SELL<br>POKÉCARD</span>
-                        </button>
-                        <button type="button" class="vending-side-btn vending-btn vending-btn-buy" id="vending-btn-buy">
-                            <span class="vending-btn-led" aria-hidden="true"></span>
-                            <span class="vending-side-btn-text">BUY<br>POKÉCARD</span>
-                        </button>
+                        <div class="vending-status-screen" id="vending-status-screen" role="status" aria-live="polite">
+                            <div class="vending-status-bezel">
+                                <div class="vending-status-glass">
+                                    <div class="vending-status-scan" aria-hidden="true"></div>
+                                    <div class="vending-status-glow" aria-hidden="true"></div>
+                                    <div class="vending-status-row">
+                                        <span class="vending-status-key">CARDS</span>
+                                        <span class="vending-status-val" id="vending-status-cards">--</span>
+                                    </div>
+                                    <div class="vending-status-divider" aria-hidden="true"></div>
+                                    <div class="vending-status-row">
+                                        <span class="vending-status-key">CHIPS</span>
+                                        <span class="vending-status-val" id="vending-status-chips">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="vending-status-caption" aria-hidden="true">STOCK · WALLET</span>
+                        </div>
                         <div class="vending-side-led-row" aria-hidden="true">
                             <span class="vending-side-led vending-side-led-amber"></span>
                             <span class="vending-side-led vending-side-led-cyan"></span>

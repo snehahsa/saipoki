@@ -1332,6 +1332,7 @@ function updateBalanceDisplays() {
     }
     if (document.getElementById("vending-screen") && !document.getElementById("vending-screen").classList.contains("hidden")) {
         vendingUpdateDrawButton()
+        vendingUpdateStatusScreen()
     }
 }
 
@@ -4594,9 +4595,23 @@ function vendingShowView(viewId) {
 }
 
 function vendingSetButtonsEnabled(enabled) {
-    for (const id of ["vending-btn-draw", "vending-btn-sell", "vending-btn-buy"]) {
+    for (const id of ["vending-btn-draw"]) {
         const btn = document.getElementById(id)
         if (btn) btn.disabled = !enabled
+    }
+}
+
+function vendingUpdateStatusScreen() {
+    const cardsEl = document.getElementById("vending-status-cards")
+    if (cardsEl) {
+        const pool = vendingDrawPool()
+        const unique = new Set(pool.map((card) => card?.id).filter(Boolean)).size
+        const count = unique || pool.length || 0
+        cardsEl.textContent = String(count).padStart(2, "0")
+    }
+    const chipsEl = document.getElementById("vending-status-chips")
+    if (chipsEl) {
+        chipsEl.textContent = formatChipsAmount(session?.balance ?? 0)
     }
 }
 
@@ -4931,6 +4946,7 @@ function openVendingScreen() {
     vendingBusy = false
     vendingSetButtonsEnabled(false)
     vendingUpdateDrawButton()
+    vendingUpdateStatusScreen()
 
     const access = vendingAccessCheck()
     vendingBeepSequence()
@@ -5087,14 +5103,6 @@ function bindVendingMachine() {
 
     document.getElementById("vending-btn-draw")?.addEventListener("click", () => {
         vendingPerformDraw()
-    })
-
-    document.getElementById("vending-btn-sell")?.addEventListener("click", () => {
-        vendingShowSoon("SELL MODULE", "Listing cards on the marketplace is not wired yet.\nCheck back soon, trainer!")
-    })
-
-    document.getElementById("vending-btn-buy")?.addEventListener("click", () => {
-        vendingShowSoon("BUY MODULE", "Marketplace purchases are not wired yet.\nBrowse the vault for now!")
     })
 }
 
