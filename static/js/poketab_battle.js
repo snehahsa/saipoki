@@ -44,6 +44,7 @@
     let pendingAutoSelect = null
     let bagMenuOpen = false
     let revivePickOptions = null
+    let lastBattleResultGameId = null
 
     async function apiPost(path, extra = {}) {
         let res
@@ -562,6 +563,11 @@
         monitorInner?.classList.add("poketab-monitor-inner--battle")
         document.getElementById("poketab-screen-label").textContent = "BATTLE MODE"
         setView("battle")
+        // Switch to battle music unless the arena is opening on an already-finished match.
+        if (battle.phase !== "ended") {
+            window.RetroAudio?.resume?.()
+            window.RetroAudio?.setScene?.("battle", { restart: true })
+        }
         renderArena(battle)
         startPoll()
     }
@@ -578,6 +584,8 @@
         battleLog = []
         bagMenuOpen = false
         revivePickOptions = null
+        // Leaving the arena — restore in-game background music.
+        window.RetroAudio?.setScene?.("overworld")
     }
 
     function renderArena(battle) {
@@ -612,6 +620,15 @@
                 </div>
             `
             stopPoll()
+            // Play victory music once per finished match (renderArena re-runs while ended).
+            if (battle.game_id !== lastBattleResultGameId) {
+                lastBattleResultGameId = battle.game_id
+                if (won) {
+                    window.RetroAudio?.setScene?.("victory", { restart: true })
+                } else {
+                    window.RetroAudio?.setScene?.("overworld")
+                }
+            }
             onBalanceUpdate()
             refreshSummary()
         } else if (battle.phase === "select_active") {

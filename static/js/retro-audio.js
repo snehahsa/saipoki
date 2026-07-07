@@ -49,6 +49,195 @@
             this._fadeInSec = 0
             this._mediaUnlockEl = null
             this._mediaSource = null
+            // File-based music tracks (looped) keyed by scene name.
+            this.trackUrls = {
+                overworld: "/static/music/background.ogg",
+                battle: "/static/music/battle.ogg",
+                victory: "/static/music/victory.ogg",
+            }
+            this.trackVolumes = { overworld: 0.5, battle: 0.55, victory: 0.62 }
+            this.tracks = {}
+            this.trackReady = {}
+            this._trackBlobUrls = {}
+            this.trackPreloadPromise = null
+            this.currentTrack = null
+        }
+
+        tracksReady() {
+            return Object.keys(this.trackUrls).every((name) => this.trackReady[name])
+        }
+
+        async _fetchTrack(name) {
+            if (this.trackReady[name]) return
+            const url = this.trackUrls[name]
+            if (!url) return
+
+            const res = await fetch(url, { cache: "force-cache" })
+            if (!res.ok) throw new Error(`Music fetch failed: ${name}`)
+
+            const blob = await res.blob()
+            const blobUrl = URL.createObjectURL(blob)
+            if (this._trackBlobUrls[name]) {
+                try { URL.revokeObjectURL(this._trackBlobUrls[name]) } catch { /* ignore */ }
+            }
+            this._trackBlobUrls[name] = blobUrl
+
+            const el = this._getTrack(name)
+            el.src = blobUrl
+
+            await new Promise((resolve, reject) => {
+                const onReady = () => { cleanup(); resolve() }
+                const onErr = () => { cleanup(); reject(new Error(`Music decode failed: ${name}`)) }
+                const cleanup = () => {
+                    el.removeEventListener("canplaythrough", onReady)
+                    el.removeEventListener("error", onErr)
+                }
+                if (el.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+                    resolve()
+                    return
+                }
+                el.addEventListener("canplaythrough", onReady, { once: true })
+                el.addEventListener("error", onErr, { once: true })
+                el.load()
+            })
+
+            this.trackReady[name] = true
+        }
+
+        preloadTracks(opts = {}) {
+            const names = Object.keys(this.trackUrls)
+            if (this.tracksReady()) {
+                opts.onProgress?.({ done: names.length, total: names.length, track: null, ready: true })
+                return Promise.resolve(true)
+            }
+            if (this.trackPreloadPromise) return this.trackPreloadPromise
+
+            const onProgress = opts.onProgress
+            let completed = 0
+
+            const report = (track) => {
+                onProgress?.({
+                    done: completed,
+                    total: names.length,
+                    track,
+                    ready: this.tracksReady(),
+                })
+            }
+
+            report(null)
+            this.trackPreloadPromise = (async () => {
+                await Promise.all(names.map(async (name) => {
+                    if (this.trackReady[name]) {
+                        completed += 1
+                        report(name)
+                        return
+                    }
+                    try {
+                        await this._fetchTrack(name)
+                    } catch (err) {
+                        console.warn("Music preload:", name, err)
+                    } finally {
+                        completed += 1
+                        report(name)
+                    }
+                }))
+                return this.tracksReady()
+            })()
+
+            return this.trackPreloadPromise
+        }
+
+        async waitForTracks(opts = {}) {
+            if (this.tracksReady()) return true
+
+            const timeout = Number(opts.timeout) || 120000
+            const deadline = Date.now() + timeout
+            const onProgress = opts.onProgress
+
+            while (Date.now() < deadline) {
+                if (!this.trackPreloadPromise) {
+                    this.preloadTracks({ onProgress })
+                }
+                try {
+                    await this.trackPreloadPromise
+                } catch {
+                    /* retry below */
+                }
+
+                if (this.tracksReady()) return true
+
+                this.trackPreloadPromise = null
+                await new Promise((r) => setTimeout(r, 400))
+            }
+
+            throw new Error("Music download timed out. Check your connection and try again.")
+        }
+
+        _getTrack(name) {
+            if (this.tracks[name]) return this.tracks[name]
+            const url = this.trackUrls[name]
+            if (!url) return null
+            const el = new Audio()
+            el.src = url
+            el.preload = "auto"
+            el.loop = name !== "victory"
+            this.tracks[name] = el
+            return el
+        }
+
+        _pauseAllTracks() {
+            for (const el of Object.values(this.tracks)) {
+                try { el.pause() } catch { /* ignore */ }
+            }
+        }
+
+        _stopAllTracks(except = null) {
+            for (const [n, el] of Object.entries(this.tracks)) {
+                if (n === except) continue
+                try {
+                    el.pause()
+                    el.currentTime = 0
+                } catch { /* ignore */ }
+            }
+        }
+
+        playTrack(name, { restart = false } = {}) {
+            const el = this._getTrack(name)
+            if (!el) return
+            const vol = this.trackVolumes[name] ?? 0.5
+
+            // Already the active track and running — just keep it (no restart jump).
+            if (this.currentTrack === name && !el.paused && !restart) {
+                el.volume = this.muted ? 0 : vol
+                return
+            }
+
+            this._stopAllTracks(name)
+            this.stopMusic()
+            this.currentTrack = name
+            this.scene = name
+            el.volume = this.muted ? 0 : vol
+
+            if (name === "victory") {
+                el.onended = () => {
+                    if (this.currentTrack === "victory") this.playTrack("overworld")
+                }
+            }
+
+            if (this.muted) {
+                el.pause()
+                return
+            }
+            if (restart) {
+                try { el.currentTime = 0 } catch { /* ignore */ }
+            }
+            const p = el.play()
+            if (p && typeof p.catch === "function") p.catch(() => { /* autoplay gate */ })
+        }
+
+        stopTrack() {
+            this._stopAllTracks()
+            this.currentTrack = null
         }
 
         ensureContext() {
@@ -88,6 +277,10 @@
         }
 
         isMusicPlaying() {
+            if (this.currentTrack) {
+                const el = this.tracks[this.currentTrack]
+                if (el && !el.paused) return true
+            }
             return !!(this.timer && !this.muted && this.pattern)
         }
 
@@ -104,6 +297,7 @@
             this._pendingScene = name
             this.ensureContext()
             this.stopMusic()
+            this.stopTrack()
             if (this.ctx && this.musicGain) {
                 const now = this.ctx.currentTime
                 this.musicGain.gain.cancelScheduledValues(now)
@@ -112,24 +306,36 @@
         }
 
         _applyScene(name, force = false) {
-            const fadeIn = this._fadeInSec || 0
             this._fadeInSec = 0
             switch (name) {
-                case "menu":
-                    this.startLoop("menu", MENU_PATTERN, 118, 0.38, force, fadeIn)
-                    break
                 case "overworld":
-                    this.startLoop("overworld", OVERWORLD_PATTERN, 132, 0.42, force, fadeIn)
+                    // In-game background music track.
+                    this.playTrack("overworld")
+                    break
+                case "battle":
+                    this.playTrack("battle", { restart: force })
+                    break
+                case "victory":
+                    this.playTrack("victory", { restart: true })
                     break
                 case "dialogue":
-                    this.startLoop("dialogue", DIALOGUE_PATTERN, 100, 0.28, force, fadeIn)
+                    // Keep the background track playing under NPC dialogue.
+                    this.playTrack("overworld")
+                    break
+                case "menu":
+                    // No music on landing/menu screens.
+                    this.stopTrack()
+                    this.stopMusic()
+                    this.scene = "menu"
                     break
                 case "vending":
                 case "machine":
+                    this.stopTrack()
                     this.stopMusic()
                     this.scene = "machine"
                     break
                 case "silent":
+                    this.stopTrack()
                     this.stopMusic()
                     this.scene = "silent"
                     break
@@ -418,6 +624,7 @@
             }
             if (this.muted) {
                 this.stopMusic()
+                this._pauseAllTracks()
                 if (this.master) this.master.gain.value = 0
                 return true
             }
@@ -427,7 +634,7 @@
                     ? this.scene
                     : this._pendingScene && this._pendingScene !== "silent"
                       ? this._pendingScene
-                      : "menu"
+                      : "silent"
             this._pendingScene = scene
             void this._tryStartPendingScene(true)
             return false
@@ -467,5 +674,8 @@
         isMuted: () => engine.isMuted(),
         sfx: (name) => engine.sfx(name),
         beep: (freq, dur, vol) => engine.beep(freq, dur, vol),
+        preloadTracks: (opts) => engine.preloadTracks(opts),
+        waitForTracks: (opts) => engine.waitForTracks(opts),
+        tracksReady: () => engine.tracksReady(),
     }
 })()

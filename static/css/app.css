@@ -3669,6 +3669,83 @@ body.kins-wallet-pending [data-kins-buy] {
     50% { transform: translateY(1px); }
 }
 
+/* ── In-game Pokédex (right edge, stacked above the bag) ── */
+.game-pokedex-btn {
+    position: absolute;
+    right: 12px;
+    bottom: 192px;
+    left: auto;
+    top: auto;
+    z-index: 12;
+    width: 72px;
+    height: 72px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    display: grid;
+    place-items: center;
+    animation: pokedex-idle-bob 2.5s steps(2, end) infinite;
+}
+
+.game-pokedex-btn[hidden] {
+    display: none !important;
+}
+
+.game-pokedex-btn-frame {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 3px solid #5c1414;
+    outline: 2px solid #ff8f8f;
+    outline-offset: -5px;
+    background:
+        repeating-conic-gradient(#ffecec 0% 25%, #f8c8c8 0% 50%) 50% / 4px 4px,
+        linear-gradient(180deg, #ff6a6a 0%, #d43030 100%);
+    box-shadow:
+        3px 3px 0 rgba(0, 0, 0, 0.45),
+        inset 2px 2px 0 rgba(255, 255, 255, 0.55);
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+
+.game-pokedex-btn-img {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 38px;
+    height: 38px;
+    margin: 0;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    filter: drop-shadow(1px 2px 0 rgba(92, 20, 20, 0.4));
+    pointer-events: none;
+}
+
+.game-pokedex-btn:active,
+.game-pokedex-btn.pressed,
+.game-pokedex-btn[aria-expanded="true"] {
+    animation: none;
+    transform: translateY(2px);
+}
+
+.game-pokedex-btn[aria-expanded="true"] .game-pokedex-btn-frame {
+    outline-color: #7ee8c8;
+    background:
+        repeating-conic-gradient(#e8fff4 0% 25%, #c8f0dc 0% 50%) 50% / 4px 4px,
+        linear-gradient(180deg, #7ee8c8 0%, #3cb890 100%);
+}
+
+@keyframes pokedex-idle-bob {
+    0%, 100% { transform: translateY(-2px); }
+    50% { transform: translateY(1px); }
+}
+
 /* ── In-game PokéTab (top, mirrors bag) ── */
 .game-poketab-btn {
     position: absolute;
@@ -6286,9 +6363,32 @@ body.poketab-open {
     flex-shrink: 0;
 }
 
+.game-drawer-hero-empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    margin: 0;
+    padding: 24px 20px;
+    background: none;
+    border: none;
+    box-shadow: none;
+    text-align: center;
+}
+
+.game-drawer-hero-empty .game-drawer-hero-icon {
+    width: 112px;
+    height: 112px;
+    filter: drop-shadow(2px 3px 0 rgba(45, 36, 24, 0.4));
+    animation: bag-idle-bob 2.4s steps(2, end) infinite;
+}
+
 .game-drawer-hero-empty .game-drawer-hero-text {
-    max-width: 220px;
-    line-height: 1.5;
+    max-width: 240px;
+    font-size: 9px;
+    line-height: 1.65;
 }
 
 .is-hold-locked {

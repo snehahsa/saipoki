@@ -739,6 +739,24 @@
         >
         <span id="poketab-badge" class="poketab-badge hidden" aria-hidden="true">0</span>
     </button>
+    <button
+        type="button"
+        class="game-pokedex-btn"
+        id="game-pokedex-btn"
+        aria-label="Open Pokédex"
+        aria-expanded="false"
+        aria-controls="game-drawer"
+        hidden
+    >
+        <span class="game-pokedex-btn-frame" aria-hidden="true"></span>
+        <img
+            class="game-pokedex-btn-img"
+            src="/static/menuitems/dex.png?v={{ asset_v.dex_icon }}"
+            alt=""
+            width="44"
+            height="44"
+        >
+    </button>
     <button type="button" class="game-bag-btn" id="game-bag-btn" aria-label="Open bag" aria-expanded="false" aria-controls="game-drawer">
         <span class="game-bag-btn-frame" aria-hidden="true"></span>
         <img
@@ -758,6 +776,7 @@
                     class="game-drawer-tab active"
                     data-tab="vault"
                     data-hold-ui="drawer:vault"
+                    data-drawer-mode="cards"
                     aria-selected="true"
                 >
                     <span class="game-drawer-tab-icon-wrap">
@@ -776,6 +795,7 @@
                     class="game-drawer-tab"
                     data-tab="poketab"
                     data-hold-ui="drawer:poketab"
+                    data-drawer-mode="items"
                     aria-selected="false"
                     hidden
                 >
@@ -793,23 +813,23 @@
             </nav>
             <div class="game-drawer-main">
                 <header class="game-drawer-header">
-                    <p class="game-drawer-title">POKÉ VAULT</p>
+                    <p class="game-drawer-title">BAG</p>
                     <button type="button" class="game-drawer-close" id="game-drawer-close" aria-label="Close">×</button>
                 </header>
                 <div class="game-drawer-panes">
                     <section class="game-drawer-pane active" data-pane="bag-empty" id="game-drawer-empty" aria-label="Empty bag">
-                        <div class="game-drawer-hero game-drawer-hero-empty">
+                        <div class="game-drawer-hero-empty">
                             <img
                                 class="game-drawer-hero-icon"
                                 src="/static/menuitems/bag.png?v={{ asset_v.bag_icon }}"
                                 alt=""
-                                width="48"
-                                height="48"
+                                width="112"
+                                height="112"
                             >
                             <p class="game-drawer-hero-text">Your bag is empty — explore the world to find gear and items.</p>
                         </div>
                     </section>
-                    <section class="game-drawer-pane" data-pane="poketab" data-hold-ui="drawer:poketab" aria-label="PokéTab">
+                    <section class="game-drawer-pane" data-pane="poketab" data-hold-ui="drawer:poketab" data-drawer-mode="items" aria-label="PokéTab">
                         <div class="game-drawer-hero">
                             <img
                                 class="game-drawer-hero-icon"
@@ -822,7 +842,7 @@
                         </div>
                         <p class="game-drawer-hint">PokéTab features coming soon</p>
                     </section>
-                    <section class="game-drawer-pane" data-pane="vault" data-hold-ui="drawer:vault" aria-label="Vault">
+                    <section class="game-drawer-pane" data-pane="vault" data-hold-ui="drawer:vault" data-drawer-mode="cards" aria-label="Vault">
                         <div class="game-drawer-hero game-drawer-hero--compact">
                             <img
                                 class="game-drawer-hero-icon"

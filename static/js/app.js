@@ -1636,12 +1636,32 @@ async function preloadEssentials() {
 
 async function preloadRemainingAssets() {
     try {
+        void window.RetroAudio?.preloadTracks?.()
         await Promise.all(BAG_ITEMS.map((item) => preloadImage(item.src)))
         await Promise.all(POOL_ITEMS.map((item) => preloadImage(item.src)))
         await preloadAllSkins()
+        await window.RetroAudio?.preloadTracks?.()
     } catch {
         /* background preload */
     }
+}
+
+function startBackgroundMusicPreload() {
+    window.RetroAudio?.preloadTracks?.()
+}
+
+function musicPreloadStatusText({ done, total } = {}) {
+    if (!total) return "DOWNLOADING MUSIC"
+    if (done >= total) return "MUSIC READY"
+    return `DOWNLOADING MUSIC ${done}/${total}`
+}
+
+async function ensureMusicTracksReady(onProgress) {
+    if (window.RetroAudio?.tracksReady?.()) return true
+    return window.RetroAudio?.waitForTracks?.({
+        timeout: 120000,
+        onProgress: (status) => onProgress?.(musicPreloadStatusText(status)),
+    })
 }
 
 function renderBagGrid() {
@@ -1724,6 +1744,9 @@ function renderGameVaultGrid() {
     }
 }
 
+// Which content family the shared drawer is showing: "cards" (Pokédex) or "items" (Bag).
+let gameDrawerMode = "cards"
+
 function switchGameDrawerTab(tabId) {
     if (!tabId) return
 
@@ -1745,32 +1768,36 @@ function switchGameDrawerTab(tabId) {
 function updateGameDrawerTitle(tabId) {
     const labels = { vault: "POKÉ VAULT", poketab: "POKÉTAB" }
     const titleEl = document.querySelector(".game-drawer-title")
-    if (titleEl && tabId && labels[tabId]) {
+    if (!titleEl) return
+    if (tabId && labels[tabId]) {
         titleEl.textContent = labels[tabId]
+    } else {
+        titleEl.textContent = gameDrawerMode === "items" ? "BAG" : "POKÉ VAULT"
     }
 }
 
 function setGameDrawerOpen(open) {
     const drawer = document.getElementById("game-drawer")
-    const bagBtn = document.getElementById("game-bag-btn")
-    const poketabBtn = document.getElementById("game-poketab-btn")
-    if (!drawer || !bagBtn) return
+    if (!drawer) return
 
     drawer.classList.toggle("hidden", !open)
     drawer.setAttribute("aria-hidden", open ? "false" : "true")
-    bagBtn.setAttribute("aria-expanded", open ? "true" : "false")
-    if (poketabBtn && !poketabBtn.hidden) {
-        poketabBtn.setAttribute("aria-expanded", open ? "true" : "false")
+
+    const dexBtn = document.getElementById("game-pokedex-btn")
+    const bagBtn = document.getElementById("game-bag-btn")
+    if (dexBtn) {
+        dexBtn.setAttribute("aria-expanded", open && gameDrawerMode === "cards" ? "true" : "false")
+    }
+    if (bagBtn) {
+        bagBtn.setAttribute("aria-expanded", open && gameDrawerMode === "items" ? "true" : "false")
     }
 }
 
-function openGameDrawer(tabId = null) {
+function openGameDrawer(mode = "cards") {
+    gameDrawerMode = mode === "items" ? "items" : "cards"
     syncHoldUi()
-    if (hasHoldContent("vault_cards")) {
+    if (gameDrawerMode === "cards" && hasHoldContent("vault_cards")) {
         renderGameVaultGrid()
-    }
-    if (tabId) {
-        switchGameDrawerTab(tabId)
     }
     setGameDrawerOpen(true)
 }
@@ -1779,14 +1806,22 @@ function closeGameDrawer() {
     setGameDrawerOpen(false)
 }
 
+function toggleGameDrawer(mode) {
+    const drawer = document.getElementById("game-drawer")
+    const isOpen = drawer && !drawer.classList.contains("hidden") && gameDrawerMode === mode
+    if (isOpen) closeGameDrawer()
+    else openGameDrawer(mode)
+}
+
 function bindGameDrawer() {
+    document.getElementById("game-pokedex-btn")?.addEventListener("click", () => {
+        if (!isUiUnlocked("pokedex_button")) return
+        toggleGameDrawer("cards")
+    })
+
     document.getElementById("game-bag-btn")?.addEventListener("click", () => {
         if (!isUiUnlocked("bag_button")) return
-
-        const drawer = document.getElementById("game-drawer")
-        const isOpen = drawer && !drawer.classList.contains("hidden")
-        if (isOpen) closeGameDrawer()
-        else openGameDrawer()
+        toggleGameDrawer("items")
     })
 
     document.getElementById("game-poketab-btn")?.addEventListener("click", () => {
@@ -2397,13 +2432,16 @@ function syncGameDrawerPanes() {
     const visibleTabs = tabs.filter((tab) => {
         const uiId = tab.dataset.holdUi
         const unlocked = uiId ? isUiUnlocked(uiId) : false
-        tab.hidden = !unlocked
-        return unlocked
+        const inMode = (tab.dataset.drawerMode || "cards") === gameDrawerMode
+        tab.hidden = !(unlocked && inMode)
+        return unlocked && inMode
     })
 
     panes.forEach((pane) => {
         const uiId = pane.dataset.holdUi
-        pane.hidden = !(uiId && isUiUnlocked(uiId))
+        const unlocked = uiId ? isUiUnlocked(uiId) : false
+        const inMode = (pane.dataset.drawerMode || "cards") === gameDrawerMode
+        pane.hidden = !(unlocked && inMode)
     })
 
     const anyUnlocked = visibleTabs.length > 0
@@ -2416,7 +2454,10 @@ function syncGameDrawerPanes() {
         tabsNav.hidden = !anyUnlocked
     }
 
-    if (!anyUnlocked) return
+    if (!anyUnlocked) {
+        updateGameDrawerTitle(null)
+        return
+    }
 
     const activeTab = visibleTabs.find((tab) => tab.classList.contains("active")) || visibleTabs[0]
     const activeId = activeTab?.dataset.tab
@@ -3209,6 +3250,16 @@ function syncHoldUi() {
             bagBtn.setAttribute("aria-disabled", unlocked ? "false" : "true")
             bagBtn.title = unlocked
                 ? (rule.title_unlocked || "Open bag")
+                : (rule.title_locked || "Locked")
+        }
+
+        if (uiId === "pokedex_button") {
+            const dexBtn = document.getElementById("game-pokedex-btn")
+            if (!dexBtn) continue
+            dexBtn.hidden = !unlocked
+            dexBtn.setAttribute("aria-disabled", unlocked ? "false" : "true")
+            dexBtn.title = unlocked
+                ? (rule.title_unlocked || "Open Pokédex")
                 : (rule.title_locked || "Locked")
         }
 
@@ -4337,8 +4388,10 @@ async function enterGame() {
     setGameLoading(playSpectatorMode ? "ENTERING REALM" : "OPENING REALM")
 
     try {
-        await loadGameClient()
-        bindGameEvents()
+        await Promise.all([
+            loadGameClient().then(() => bindGameEvents()),
+            ensureMusicTracksReady((msg) => setGameLoading(msg)),
+        ])
 
         if (!joinToastHandler) {
             joinToastHandler = bindJoinToasts()
@@ -5364,7 +5417,7 @@ function clearPadInput() {
 }
 
 function bindNoSelectOnButtons() {
-    const noSelectZones = "#game-screen, #game-screen *, .btn, .icon-btn, .btn-leave, .game-quests-btn, .game-joystick, .game-quickslot, .game-bag-btn, .game-poketab-btn, .game-drawer-tab, button"
+    const noSelectZones = "#game-screen, #game-screen *, .btn, .icon-btn, .btn-leave, .game-quests-btn, .game-joystick, .game-quickslot, .game-bag-btn, .game-pokedex-btn, .game-poketab-btn, .game-drawer-tab, button"
 
     const block = (e) => {
         if (e.target.closest(noSelectZones)) e.preventDefault()
@@ -5375,7 +5428,7 @@ function bindNoSelectOnButtons() {
 }
 
 function bindButtonPressAnimation() {
-    const pressables = ".btn, .icon-btn, .btn-leave, .game-quests-btn, .game-quickslot, .game-bag-btn, .game-poketab-btn, .game-drawer-tab, .game-drawer-close"
+    const pressables = ".btn, .icon-btn, .btn-leave, .game-quests-btn, .game-quickslot, .game-bag-btn, .game-pokedex-btn, .game-poketab-btn, .game-drawer-tab, .game-drawer-close"
 
     document.addEventListener("pointerdown", (e) => {
         const btn = e.target.closest(pressables)
@@ -5587,7 +5640,43 @@ function onWalletDisconnect() {
     showPlayLanding()
 }
 
+// Tear down all transient in-memory game/client state so switching guest
+// profiles never leaks the previous trainer's gear, quests, fishing state, or
+// game world into the next profile (which caused e.g. the fishing "key" 400s).
+function resetTransientGameState() {
+    fishingCastActive = false
+    if (fishingCastAbort) {
+        try { fishingCastAbort.abort() } catch { /* ignore */ }
+        fishingCastAbort = null
+    }
+    fishingRetryPromptPromise = null
+    hideFishingHud()
+
+    stopGameHud()
+    clearPadInput()
+    closeGameDrawer()
+    quickbarSelectedSlot = -1
+    hideGearPopup()
+    showQuickbarHint("")
+
+    window.TelegramGame?.setEquippedGear?.(null)
+    window.TelegramGame?.setFishingMode?.(activeFishingMode)
+    if (joinToastHandler) {
+        window.TelegramGame?.offGameEvent?.("playerJoined", joinToastHandler)
+        joinToastHandler = null
+    }
+    document.getElementById("join-toast-stack")?.replaceChildren()
+    window.TelegramGame?.stopGame?.()
+
+    window.PoketabSocial?.close?.()
+    window.PoketabSocial?.stopBadgePolling?.()
+    hideSignModal()
+    setGameLoading("", false)
+}
+
 async function completeSessionBootstrap() {
+    resetTransientGameState()
+
     let data = await authenticate()
     if (!data) return false
 
@@ -5649,6 +5738,8 @@ async function completeSessionBootstrap() {
 }
 
 async function init() {
+    startBackgroundMusicPreload()
+
     if (PLAY_MODE) {
         dismissBootSplash()
         syncWelcomeCopy()

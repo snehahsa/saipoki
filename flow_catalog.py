@@ -33,7 +33,7 @@ HOLD_ITEMS = {
     "card_vault": {
         "label": "PokéCard Vault",
         "description": "Storage vault for discovered PokéCards.",
-        "unlocks_ui": ["drawer:vault"],
+        "unlocks_ui": ["drawer:vault", "pokedex_button"],
         "content": "vault_cards",
         "quest_step": "collect_card_vault",
         "quest_id": "week1_vault_trail",
@@ -73,6 +73,12 @@ UI_UNLOCKS = {
         "selector": "#game-bag-btn",
         "title_unlocked": "Open bag",
         "title_locked": "Find your trainer bag on the map first",
+    },
+    "pokedex_button": {
+        "requires_hold": "card_vault",
+        "selector": "#game-pokedex-btn",
+        "title_unlocked": "Open Pokédex",
+        "title_locked": "Find the PokéCard Vault on the map first",
     },
     "drawer:vault": {
         "requires_hold": "card_vault",
