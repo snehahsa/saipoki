@@ -136,6 +136,7 @@
         if (!data || typeof data !== "object") return null
         const name = String(data.display_name || "").trim()
         const skin = String(data.skin || "").trim()
+        const stats = data.trainer_stats || {}
         const backup = {
             savedAt: Date.now(),
             display_name: name && !isPlaceholderGuestName(name) ? name : "",
@@ -148,7 +149,13 @@
             vault_detail: Array.isArray(data.vault_detail) ? data.vault_detail : [],
             owned_skins: Array.isArray(data.owned_skins) ? data.owned_skins : [],
             vending_spins: Number(data.vending_spins) || 0,
-            level: Number(data.level ?? data.trainer_stats?.level) || 0,
+            level: Number(data.level ?? stats.level) || 0,
+            // Battle record + XP so trainer level survives a server DB wipe.
+            stats_xp: Number(stats.stats_xp) || 0,
+            stats_wins: Number(stats.stats_wins) || 0,
+            stats_battles: Number(stats.stats_battles) || 0,
+            stats_losses: Number(stats.stats_losses) || 0,
+            stats_wagered: Number(stats.stats_wagered) || 0,
         }
         if (!backup.display_name && !backup.skin && !backup.holds.length
             && !backup.quest_progress?.completed_steps?.length
@@ -210,6 +217,24 @@
         if (!guestId) return
         const backup = sessionBackupFromAuth(data)
         if (!backup) return
+        // The auth response never carries the PIN value, so carry it over from the
+        // previously-saved backup (set explicitly via setGuestBackupPin) — otherwise
+        // every save would drop the PIN and it'd be lost after a server wipe.
+        const prevPin = readStandaloneGuestBackup(guestId)?.pin
+        if (prevPin && !backup.pin) backup.pin = prevPin
+        writeStandaloneGuestBackup(guestId, backup)
+        upsertProfileMeta(guestId, { serverBackup: backup })
+    }
+
+    function setGuestBackupPin(pin) {
+        if (!guestProfilesEnabled()) return
+        const clean = String(pin || "").trim()
+        if (!/^\d{3}$/.test(clean)) return
+        const guestId = localStorage.getItem(GUEST_ID_KEY)
+        if (!guestId) return
+        const backup = readStandaloneGuestBackup(guestId)
+        if (!backup) return
+        backup.pin = clean
         writeStandaloneGuestBackup(guestId, backup)
         upsertProfileMeta(guestId, { serverBackup: backup })
     }
@@ -763,6 +788,7 @@
     window.SaiPokePlay.getCachedGuestProfileName = getCachedProfileName
     window.SaiPokePlay.getCachedGuestProfileMeta = getCachedGuestProfileMeta
     window.SaiPokePlay.saveGuestServerBackup = saveGuestServerBackup
+    window.SaiPokePlay.setGuestBackupPin = setGuestBackupPin
     window.SaiPokePlay.restoreGuestProfileFromVault = restoreGuestProfileFromVault
     window.SaiPokePlay.syncGuestProfileToServer = syncGuestProfileToServer
     window.SaiPokePlay.getGuestServerBackup = getGuestServerBackup

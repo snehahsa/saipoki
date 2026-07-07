@@ -1851,25 +1851,6 @@ def _guest_backup_has_progress(backup: dict) -> bool:
     return False
 
 
-def _guest_row_needs_restore(row) -> bool:
-    """Allow vault restore when the server row has no saved game progress."""
-    if row is None:
-        return True
-    qp = parse_quest_progress(
-        row["quest_progress"] if "quest_progress" in row.keys() else None
-    )
-    if qp.get("completed_steps"):
-        return False
-    if parse_holds(row["holds"] if "holds" in row.keys() else None):
-        return False
-    if vault_for_user(row["vault"] if "vault" in row.keys() else None):
-        return False
-    gear = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
-    if any(gear):
-        return False
-    return True
-
-
 def _guest_progress_score_row(row) -> int:
     if row is None:
         return 0
@@ -1960,12 +1941,44 @@ def _merge_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> bool:
     if backup_skin and not row_skin:
         fields["skin"] = backup_skin
 
-    merged_balance = max(
-        int(row["balance"] if "balance" in row.keys() else 0),
-        int(backup.get("balance") or 0),
-    )
-    if merged_balance != int(row["balance"] if "balance" in row.keys() else 0):
-        fields["balance"] = merged_balance
+    # Restore trainer PIN so guests aren't locked out / re-prompted after a wipe.
+    # Safe in every case: only fills in when the server row has no PIN yet.
+    row_pin = row["pin"] if "pin" in row.keys() else None
+    backup_pin = normalize_pin(backup.get("pin"))
+    if backup_pin and not row_pin:
+        fields["pin"] = backup_pin
+
+    # Decide whether the server row is authoritative. During normal play every action
+    # is written straight to the DB, so a live row already holds the latest progress —
+    # merging a (possibly stale) browser backup back in would resurrect spent CHIPS,
+    # consumed items or undo a fuse. Only when the row is empty (fresh install or a
+    # deploy DB wipe — note the first /api/auth recreates the row, so we can't rely on
+    # an "inserted" flag) do we rebuild gameplay state from the backup.
+    row_is_empty = _guest_row_needs_restore(row)
+    if not row_is_empty:
+        if not fields:
+            return False
+        fields["updated_at"] = now
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        conn.execute(
+            f"UPDATE users SET {assignments} WHERE telegram_id = ?",
+            (*fields.values(), telegram_id),
+        )
+        return True
+
+    row_balance = int(row["balance"] if "balance" in row.keys() else 0)
+    backup_balance = int(backup.get("balance") or 0)
+    # Empty row → the browser backup is the only source of truth for the balance.
+    if backup_balance and backup_balance != row_balance:
+        fields["balance"] = backup_balance
+
+    # Battle record + XP (drives trainer level) — never in the old backup, so level
+    # silently reset to 1 after every deploy. Rebuild it from the backup.
+    for stat_key in ("stats_xp", "stats_wins", "stats_battles", "stats_losses", "stats_wagered"):
+        row_val = int(row[stat_key] if stat_key in row.keys() else 0)
+        backup_val = int(backup.get(stat_key) or 0)
+        if backup_val and backup_val != row_val:
+            fields[stat_key] = backup_val
 
     server_holds = parse_holds(row["holds"] if "holds" in row.keys() else None)
     backup_holds = holds_for_user(backup.get("holds") or [])
@@ -2011,12 +2024,9 @@ def _merge_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> bool:
     if merged_owned != server_owned:
         fields["owned_skins"] = owned_skins_json(merged_owned)
 
-    merged_spins = max(
-        int(row["vending_spins"] if "vending_spins" in row.keys() else 0),
-        int(backup.get("vending_spins") or 0),
-    )
-    if merged_spins != int(row["vending_spins"] if "vending_spins" in row.keys() else 0):
-        fields["vending_spins"] = merged_spins
+    backup_spins = int(backup.get("vending_spins") or 0)
+    if backup_spins and backup_spins != int(row["vending_spins"] if "vending_spins" in row.keys() else 0):
+        fields["vending_spins"] = backup_spins
 
     if not fields:
         return False

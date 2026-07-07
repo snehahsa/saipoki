@@ -3776,6 +3776,8 @@ async function savePin(pin) {
     if (!response.ok || !data.success) {
         throw new Error(data.error || "Could not save PIN")
     }
+    if (session) session.has_pin = true
+    window.SaiPokePlay?.setGuestBackupPin?.(pin)
     return data
 }
 
