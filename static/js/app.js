@@ -2117,6 +2117,15 @@ function buildVaultSlotElement(stack, { slotClass, filledClass, emptyText }) {
         multBadge.textContent = formatVaultMultiplierSimple(stack.multiplier)
         multBadge.title = "Battle multiplier"
         slot.appendChild(multBadge)
+
+        if (isCardListed(stack.card_id)) {
+            slot.classList.add("vault-slot--listed")
+            const listedBadge = document.createElement("span")
+            listedBadge.className = "vault-slot-listed"
+            listedBadge.textContent = "◈ LISTED"
+            listedBadge.title = "Listed on the Market"
+            slot.appendChild(listedBadge)
+        }
     } else {
         slot.disabled = true
         slot.textContent = emptyText
@@ -2165,6 +2174,26 @@ function vaultGradeHint(stack) {
     }
     const need = Math.max(0, (prog.next_cost || 0) - prog.copies)
     return `Bank ${need} more duplicate${need === 1 ? "" : "s"} to upgrade to ${vaultGradeLabel(prog.grade + 1)} (×${vaultGradeMultiplier(prog.grade + 1).toFixed(2)}). Fuse costs ${formatChipsAmount(fuseFee)}.`
+}
+
+function marketLockedIds() {
+    return Array.isArray(session?.market_locked) ? session.market_locked : []
+}
+
+function isCardListed(cardId) {
+    return marketLockedIds().includes(cardId)
+}
+
+function applyMarketLocked(ids) {
+    if (!session) return
+    session.market_locked = Array.isArray(ids) ? ids.slice() : []
+    renderBagGrid()
+    renderGameVaultGrid()
+    if (vaultCardPopupOpenId) {
+        const stack = getVaultStack(vaultCardPopupOpenId)
+        if (stack) renderVaultCardPopup(stack)
+    }
+    touchGuestServerBackup()
 }
 
 function renderVaultCardPopup(stack) {
@@ -2282,6 +2311,18 @@ function renderVaultCardPopup(stack) {
                 ? `NEED ${formatChipsAmount(fuseFee)} TO FUSE`
                 : "▲ UPGRADE GRADE"
     }
+
+    const listed = isCardListed(stack.card_id)
+    const listedNote = document.getElementById("vault-card-popup-listed")
+    if (listedNote) listedNote.classList.toggle("hidden", !listed)
+    if (listed && upgradeBtn) upgradeBtn.classList.add("hidden")
+
+    const sellBtn = document.getElementById("vault-card-popup-sell")
+    if (sellBtn) {
+        sellBtn.textContent = listed ? "◈ CANCEL LISTING" : "◈ SELL ON MARKET"
+        sellBtn.classList.toggle("vault-card-popup-btn--cancel", listed)
+        sellBtn.classList.toggle("vault-card-popup-btn--sell", !listed)
+    }
 }
 
 function openVaultCardPopup(cardId) {
@@ -2343,6 +2384,17 @@ function bindVaultCardPopup() {
     document.getElementById("vault-card-popup-close")?.addEventListener("click", close)
     document.getElementById("vault-card-popup-upgrade")?.addEventListener("click", () => {
         void vaultCardUpgrade()
+    })
+    document.getElementById("vault-card-popup-sell")?.addEventListener("click", () => {
+        if (!vaultCardPopupOpenId) return
+        const cardId = vaultCardPopupOpenId
+        if (isCardListed(cardId)) {
+            window.PoketabMarket?.cancelForCard?.(cardId)
+        } else {
+            closeVaultCardPopup()
+            closeGameDrawer()
+            window.PoketabMarket?.openSellModal?.(cardId)
+        }
     })
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && vaultCardPopupOpenId) closeVaultCardPopup()
@@ -5571,6 +5623,7 @@ function applySessionFromAuth(data) {
         data.vault_detail || data.vault?.map?.((id) => ({ card_id: id, grade: 1, copies: 0, total_minted: 1 })) || []
     )
     session.vault = vaultCardIdsFromDetail(session.vault_detail)
+    session.market_locked = Array.isArray(data.market_locked) ? data.market_locked : []
     session.balance = Number(session.balance) || 0
     session.vending_spins = Number(session.vending_spins) || 0
     session.level = Number(session.level ?? session.trainer_stats?.level) || 0
@@ -5797,6 +5850,10 @@ async function init() {
         },
         getVault: () => getVaultStacks(),
         getBalance: () => Number(session?.balance) || 0,
+        getCard: (cardId) => catalogCard(cardId),
+        getGrading: () => session?.vault_grading || null,
+        getMarketLocked: () => marketLockedIds(),
+        setMarketLocked: (ids) => applyMarketLocked(ids),
         onBalanceUpdate: () =>
             fetch("/api/auth", {
                 method: "POST",
@@ -5812,6 +5869,9 @@ async function init() {
                         }
                         if (Array.isArray(data.vault)) {
                             applyVaultFromServer(data.vault, data.vault_detail)
+                        }
+                        if (Array.isArray(data.market_locked)) {
+                            session.market_locked = data.market_locked.slice()
                         }
                         if (data.trainer_stats) {
                             applyTrainerStats(data.trainer_stats)

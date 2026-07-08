@@ -976,6 +976,10 @@
                     <button type="button" class="vault-card-popup-btn vault-card-popup-btn--upgrade hidden" id="vault-card-popup-upgrade">
                         ▲ UPGRADE GRADE
                     </button>
+                    <p class="vault-card-popup-listed hidden" id="vault-card-popup-listed">◈ LISTED ON MARKET — locked from fuse &amp; battle</p>
+                    <button type="button" class="vault-card-popup-btn vault-card-popup-btn--sell" id="vault-card-popup-sell">
+                        ◈ SELL ON MARKET
+                    </button>
                 </div>
             </div>
         </div>
@@ -1158,6 +1162,10 @@
                         <span class="poketab-tab-led" aria-hidden="true"></span>
                         <span class="poketab-tab-label">HOME</span>
                     </button>
+                    <button type="button" class="poketab-tab poketab-left-btn poketab-tab-market" data-go="market">
+                        <span class="poketab-tab-led" aria-hidden="true"></span>
+                        <span class="poketab-tab-label">MARKET</span>
+                    </button>
                     <button type="button" class="poketab-tab poketab-left-btn poketab-tab-online" data-go="online">
                         <span class="poketab-tab-led" aria-hidden="true"></span>
                         <span class="poketab-tab-label">ONLINE</span>
@@ -1244,6 +1252,47 @@
                                         <div class="poketab-list" id="poketab-battle-opponents"></div>
                                     </div>
                                 </div>
+                                <div class="poketab-view poketab-market" data-poketab-view="market">
+                                    <div class="market-topbar">
+                                        <p class="poketab-crt-title market-title">◈ CARD MARKET</p>
+                                        <span class="market-wallet" id="market-wallet" title="Your CHIPS">◈ 0</span>
+                                    </div>
+                                    <div class="market-subtabs" role="tablist" aria-label="Market sections">
+                                        <button type="button" class="market-subtab active" data-market-sub="browse" role="tab">BROWSE</button>
+                                        <button type="button" class="market-subtab" data-market-sub="mine" role="tab">MY CARDS</button>
+                                        <button type="button" class="market-subtab" data-market-sub="history" role="tab">SOLD</button>
+                                    </div>
+                                    <div class="market-filters" id="market-filters">
+                                        <input type="search" id="market-search" class="market-input" placeholder="SEARCH NAME..." autocomplete="off" aria-label="Search cards by name">
+                                        <select id="market-filter-type" class="market-select" aria-label="Filter by type">
+                                            <option value="all">ALL TYPES</option>
+                                        </select>
+                                        <select id="market-filter-grade" class="market-select" aria-label="Filter by grade">
+                                            <option value="all">ALL GRADES</option>
+                                            <option value="1">G1 · STANDARD</option>
+                                            <option value="2">G2 · SILVER</option>
+                                            <option value="3">G3 · GOLD</option>
+                                            <option value="4">G4 · PLATINUM</option>
+                                            <option value="5">G5 · MYTHIC</option>
+                                        </select>
+                                        <select id="market-sort" class="market-select" aria-label="Sort listings">
+                                            <option value="newest">NEWEST</option>
+                                            <option value="price_asc">PRICE ▲ LOW</option>
+                                            <option value="price_desc">PRICE ▼ HIGH</option>
+                                            <option value="power_desc">POWER ▼</option>
+                                        </select>
+                                    </div>
+                                    <div class="market-panel" id="market-browse-panel">
+                                        <div class="market-grid" id="market-listings"></div>
+                                    </div>
+                                    <div class="market-panel hidden" id="market-mine-panel">
+                                        <button type="button" class="market-sell-cta" id="market-sell-cta">＋ SELL A CARD</button>
+                                        <div class="market-grid" id="market-mine-listings"></div>
+                                    </div>
+                                    <div class="market-panel hidden" id="market-history-panel">
+                                        <div class="market-history" id="market-history"></div>
+                                    </div>
+                                </div>
                                 <div id="poketab-battle-overlay" class="poketab-battle-overlay hidden" aria-hidden="true">
                                     <div class="poketab-gb-arena" id="poketab-gb-arena"></div>
                                 </div>
@@ -1279,6 +1328,106 @@
                 </div>
                 <div class="poketab-rail-bolt poketab-rail-bolt-b"></div>
             </aside>
+
+            <div id="market-pick-modal" class="market-modal hidden" role="dialog" aria-modal="true" aria-labelledby="market-pick-title">
+    <button type="button" class="market-modal-scrim" id="market-pick-scrim" aria-label="Close"></button>
+    <div class="market-modal-panel market-pick-panel">
+        <header class="market-modal-head">
+            <span class="market-modal-title" id="market-pick-title">CHOOSE A CARD TO SELL</span>
+            <button type="button" class="market-modal-close" id="market-pick-close" aria-label="Close">×</button>
+        </header>
+        <p class="market-modal-sub">Pick a card from your Vault. Listed cards are locked from fusing &amp; battle until sold or cancelled.</p>
+        <div class="market-pick-grid" id="market-pick-grid"></div>
+    </div>
+</div>
+
+<div id="market-sell-modal" class="market-modal hidden" role="dialog" aria-modal="true" aria-labelledby="market-sell-title">
+    <button type="button" class="market-modal-scrim" id="market-sell-scrim" aria-label="Close"></button>
+    <div class="market-modal-panel market-sell-panel" data-grade="1">
+        <div class="market-sell-glow" aria-hidden="true"></div>
+        <header class="market-modal-head">
+            <span class="market-modal-title" id="market-sell-title">LIST CARD FOR SALE</span>
+            <button type="button" class="market-modal-close" id="market-sell-close" aria-label="Close">×</button>
+        </header>
+        <div class="market-sell-body">
+            <div class="market-sell-card">
+                <div class="vault-slot-visual market-sell-visual" id="market-sell-visual" data-grade="1">
+                    <div class="vault-slot-frame market-sell-frame" id="market-sell-frame" data-grade="1">
+                        <img class="bag-card-img" id="market-sell-art" alt="" decoding="async">
+                    </div>
+                    <span class="vault-slot-grade vault-grade-tag" id="market-sell-grade" data-grade="1">G1</span>
+                </div>
+                <div class="market-sell-meta">
+                    <p class="market-sell-name" id="market-sell-name">Pokémon</p>
+                    <p class="market-sell-tag vault-grade-tag" id="market-sell-tag" data-grade="1">STANDARD</p>
+                    <p class="market-sell-stat" id="market-sell-stat"></p>
+                </div>
+            </div>
+            <label class="market-sell-label" for="market-sell-price">SET PRICE (CHIPS)</label>
+            <div class="market-sell-price-row">
+                <span class="market-sell-chip">◈</span>
+                <input type="number" id="market-sell-price" class="market-sell-input" min="1" step="1" inputmode="numeric" placeholder="0">
+            </div>
+            <div class="market-sell-breakdown">
+                <div class="market-sell-brk-row">
+                    <span>MARKET FEE (<span id="market-sell-fee-pct">5%</span>)</span>
+                    <span class="market-sell-brk-val market-sell-brk-fee" id="market-sell-fee">◈ 0</span>
+                </div>
+                <div class="market-sell-brk-row market-sell-brk-net">
+                    <span>YOU RECEIVE</span>
+                    <span class="market-sell-brk-val" id="market-sell-net">◈ 0</span>
+                </div>
+            </div>
+            <p class="market-sell-error" id="market-sell-error"></p>
+        </div>
+        <div class="market-modal-actions">
+            <button type="button" class="market-btn market-btn--primary" id="market-sell-confirm">LIST FOR SALE</button>
+            <button type="button" class="market-btn market-btn--ghost" id="market-sell-cancel">CANCEL</button>
+        </div>
+    </div>
+</div>
+
+<div id="market-buy-modal" class="market-modal hidden" role="dialog" aria-modal="true" aria-labelledby="market-buy-title">
+    <button type="button" class="market-modal-scrim" id="market-buy-scrim" aria-label="Close"></button>
+    <div class="market-modal-panel market-buy-panel" data-grade="1">
+        <div class="market-sell-glow" aria-hidden="true"></div>
+        <header class="market-modal-head">
+            <span class="market-modal-title" id="market-buy-title">CONFIRM PURCHASE</span>
+            <button type="button" class="market-modal-close" id="market-buy-close" aria-label="Close">×</button>
+        </header>
+        <div class="market-sell-body">
+            <div class="market-sell-card">
+                <div class="vault-slot-visual market-sell-visual" id="market-buy-visual" data-grade="1">
+                    <div class="vault-slot-frame market-sell-frame" id="market-buy-frame" data-grade="1">
+                        <img class="bag-card-img" id="market-buy-art" alt="" decoding="async">
+                    </div>
+                    <span class="vault-slot-grade vault-grade-tag" id="market-buy-grade" data-grade="1">G1</span>
+                </div>
+                <div class="market-sell-meta">
+                    <p class="market-sell-name" id="market-buy-name">Pokémon</p>
+                    <p class="market-sell-tag vault-grade-tag" id="market-buy-tag" data-grade="1">STANDARD</p>
+                    <p class="market-sell-stat" id="market-buy-stat"></p>
+                    <p class="market-sell-seller" id="market-buy-seller"></p>
+                </div>
+            </div>
+            <div class="market-sell-breakdown market-buy-breakdown">
+                <div class="market-sell-brk-row market-sell-brk-net">
+                    <span>PRICE</span>
+                    <span class="market-sell-brk-val" id="market-buy-price">◈ 0</span>
+                </div>
+                <div class="market-sell-brk-row">
+                    <span>YOUR BALANCE</span>
+                    <span class="market-sell-brk-val" id="market-buy-balance">◈ 0</span>
+                </div>
+            </div>
+            <p class="market-sell-error" id="market-buy-error"></p>
+        </div>
+        <div class="market-modal-actions">
+            <button type="button" class="market-btn market-btn--primary" id="market-buy-confirm">BUY NOW</button>
+            <button type="button" class="market-btn market-btn--ghost" id="market-buy-cancel">CANCEL</button>
+        </div>
+    </div>
+</div>
         </div>
     </div>
 </div>
@@ -1330,6 +1479,7 @@
 {% endif %}
 <script src="/static/js/poketab.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/poketab_battle.js?v={{ asset_v.app_js }}"></script>
+<script src="/static/js/poketab_market.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/app.js?v={{ asset_v.app_js }}"></script>
 </body>
 </html>

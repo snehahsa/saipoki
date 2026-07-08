@@ -45,6 +45,7 @@
     let bagMenuOpen = false
     let revivePickOptions = null
     let lastBattleResultGameId = null
+    let battleMusicGameId = null
 
     async function apiPost(path, extra = {}) {
         let res
@@ -211,7 +212,8 @@
                 battleLog = [...battleLog, ...battle.log].slice(-20)
             }
             if (autoOpen || isInArena()) {
-                openArena(battle)
+                if (isInArena()) renderArena(battle)
+                else openArena(battle)
             }
             return
         }
@@ -219,7 +221,12 @@
         if (battle && battle.phase !== "ended") {
             dismissedEndedGameId = null
             if (autoOpen || isInArena()) {
-                openArena(battle)
+                if (isInArena()) {
+                    renderArena(battle)
+                    startPoll()
+                } else {
+                    openArena(battle)
+                }
             }
             return
         }
@@ -554,6 +561,7 @@
 
     function openArena(battle) {
         if (!battle) return
+        const enteringArena = !isInArena()
         ensurePoketabOpen()
         document.getElementById("poketab-battle-lobby")?.classList.add("hidden")
         const overlay = document.getElementById("poketab-battle-overlay")
@@ -563,10 +571,17 @@
         monitorInner?.classList.add("poketab-monitor-inner--battle")
         document.getElementById("poketab-screen-label").textContent = "BATTLE MODE"
         setView("battle")
-        // Switch to battle music unless the arena is opening on an already-finished match.
+        // Start battle music only when entering a fight — not on every status poll.
         if (battle.phase !== "ended") {
             window.RetroAudio?.resume?.()
-            window.RetroAudio?.setScene?.("battle", { restart: true })
+            const gid = battle.game_id || null
+            const newFight = enteringArena || (gid && gid !== battleMusicGameId)
+            if (newFight) {
+                battleMusicGameId = gid
+                window.RetroAudio?.setScene?.("battle", { restart: true })
+            } else if (!window.RetroAudio?.isMusicPlaying?.()) {
+                window.RetroAudio?.setScene?.("battle", { restart: false })
+            }
         }
         renderArena(battle)
         startPoll()
@@ -574,6 +589,7 @@
 
     function closeArena() {
         stopPoll()
+        battleMusicGameId = null
         const overlay = document.getElementById("poketab-battle-overlay")
         if (statusCache?.battle?.phase === "ended" && statusCache.battle.game_id) {
             dismissedEndedGameId = statusCache.battle.game_id

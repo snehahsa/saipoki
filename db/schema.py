@@ -231,3 +231,7 @@ def init_postgres_schema(conn: Any) -> None:
     from wallet_auth import ensure_wallet_auth_schema
 
     ensure_wallet_auth_schema(conn)
+
+    from market_engine import ensure_market_schema
+
+    ensure_market_schema(conn)

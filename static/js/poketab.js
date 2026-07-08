@@ -12,6 +12,7 @@
         messages: "MESSAGES",
         chat: "LIVE CHAT",
         battle: "BATTLE ARENA",
+        market: "CARD MARKET",
     }
 
     let apiAuthBody = () => ({})
@@ -446,6 +447,7 @@
         else if (view === "messages") await loadConversations()
         else if (view === "menu") await refreshSummary()
         else if (view === "battle") window.PoketabBattle?.openBattleLobby?.()
+        else if (view === "market") await window.PoketabMarket?.load?.()
     }
 
     function open() {
@@ -609,6 +611,17 @@
             setLedState,
             setView,
             refreshSummary,
+        })
+        window.PoketabMarket?.init?.({
+            apiAuthBody,
+            showToast,
+            getVault: deps.getVault,
+            getBalance: deps.getBalance,
+            onBalanceUpdate: deps.onBalanceUpdate,
+            getCard: deps.getCard,
+            getGrading: deps.getGrading,
+            getMarketLocked: deps.getMarketLocked,
+            setMarketLocked: deps.setMarketLocked,
         })
     }
 

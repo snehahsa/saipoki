@@ -143,6 +143,7 @@ VAULT_SOURCES = frozenset(
         "vending",
         "quest",
         "trade",
+        "marketplace",
         "gift",
         "admin",
         "test_starter",

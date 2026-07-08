@@ -43,6 +43,7 @@ from poke_registry import (
     vault_detail_for_client,
 )
 from vault_grading import FUSE_FEE_CHIPS, grading_config_for_client, merge_vaults, stack_progress
+import market_engine
 from quests_catalog import QUEST_CATALOG, QUEST_IDS, QUEST_STEP_IDS, STEP_TO_QUEST
 from quest_engine import (
     backfill_quest_triggers,
@@ -1647,6 +1648,7 @@ def auth():
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
 
     trainer_stats = None
+    market_locked = []
     with get_db() as conn:
         row = conn.execute(
             """
@@ -1662,6 +1664,10 @@ def auth():
                 trainer_stats["balance"] = balance
             except Exception as err:
                 app.logger.exception("trainer_stats_row failed for %s: %s", telegram_id, err)
+        try:
+            market_locked = market_engine.active_listing_card_ids(conn, telegram_id)
+        except Exception as err:
+            app.logger.exception("market_locked lookup failed for %s: %s", telegram_id, err)
 
     wallet_address = (
         user.get("wallet")
@@ -1688,6 +1694,8 @@ def auth():
             "vault": vault_card_ids(vault),
             "vault_detail": vault_detail_for_client(vault),
             "vault_grading": grading_config_for_client(),
+            "market_locked": market_locked,
+            "market_config": market_engine.market_config(),
             "quest_progress": quest_progress,
             "balance": balance,
             "owned_skins": owned_skins,
@@ -3220,6 +3228,155 @@ def vault_upgrade_card():
             "fuse_fee_chips": FUSE_FEE_CHIPS,
             "vault": vault_card_ids(vault),
             "vault_detail": vault_detail_for_client(vault),
+        }
+    )
+
+
+_MARKET_ERROR_MESSAGES = {
+    "unknown_card": "That card isn't in the catalog.",
+    "invalid_price": "Enter a valid CHIPS price.",
+    "price_too_low": "Price must be at least 1 CHIPS.",
+    "price_too_high": "That price is too high.",
+    "user_not_found": "Trainer profile not found.",
+    "card_not_owned": "You don't own that card.",
+    "already_listed": "That card is already on the Market.",
+    "invalid_listing": "That listing is invalid.",
+    "listing_not_active": "That listing is no longer available.",
+    "listing_not_found": "That listing no longer exists.",
+    "cannot_buy_own": "You can't buy your own listing.",
+    "seller_not_found": "The seller is no longer available.",
+    "insufficient_balance": "Not enough CHIPS for this purchase.",
+    "already_owned": "You already own this card.",
+    "seller_no_longer_owns": "The seller no longer owns that card.",
+}
+
+
+def _market_error(result: dict, status: int = 400):
+    code = str(result.get("error") or "market_error")
+    payload = {
+        "success": False,
+        "error": code,
+        "message": _MARKET_ERROR_MESSAGES.get(code, "Marketplace action failed."),
+    }
+    for key in ("balance", "price"):
+        if key in result:
+            payload[key] = result[key]
+    return jsonify(payload), status
+
+
+@app.route("/api/market/browse", methods=["POST"])
+def market_browse():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    grade_raw = data.get("grade")
+    try:
+        grade = int(grade_raw) if grade_raw not in (None, "", "all", 0, "0") else None
+    except (TypeError, ValueError):
+        grade = None
+    with get_db() as conn:
+        listings = market_engine.browse_listings(
+            conn,
+            viewer_id=telegram_id,
+            query=str(data.get("query") or ""),
+            card_type=str(data.get("type") or ""),
+            grade=grade,
+            sort=str(data.get("sort") or "newest"),
+        )
+        history = market_engine.market_history(conn)
+    return jsonify(
+        {
+            "success": True,
+            "listings": listings,
+            "history": history,
+            "config": market_engine.market_config(),
+        }
+    )
+
+
+@app.route("/api/market/mine", methods=["POST"])
+def market_mine():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+    with get_db() as conn:
+        listings = market_engine.my_listings(conn, telegram_id)
+        locked = market_engine.active_listing_card_ids(conn, telegram_id)
+    return jsonify(
+        {
+            "success": True,
+            "listings": listings,
+            "locked_card_ids": locked,
+            "config": market_engine.market_config(),
+        }
+    )
+
+
+@app.route("/api/market/sell", methods=["POST"])
+def market_sell():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    card_id = str(data.get("card_id") or "").strip()
+    price = data.get("price", data.get("price_chips"))
+    with get_db() as conn:
+        result = market_engine.create_listing(conn, telegram_id, card_id=card_id, price=price)
+    if not result.get("ok"):
+        return _market_error(result)
+    return jsonify(
+        {
+            "success": True,
+            "listing": result["listing"],
+            "locked_card_ids": result["locked_card_ids"],
+        }
+    )
+
+
+@app.route("/api/market/cancel", methods=["POST"])
+def market_cancel():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    with get_db() as conn:
+        result = market_engine.cancel_listing(conn, telegram_id, listing_id=data.get("listing_id"))
+    if not result.get("ok"):
+        return _market_error(result)
+    return jsonify(
+        {
+            "success": True,
+            "listing_id": result["listing_id"],
+            "locked_card_ids": result["locked_card_ids"],
+        }
+    )
+
+
+@app.route("/api/market/buy", methods=["POST"])
+def market_buy():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    with get_db() as conn:
+        result = market_engine.buy_listing(conn, telegram_id, listing_id=data.get("listing_id"))
+    if not result.get("ok"):
+        status = 409 if result.get("error") in {"listing_not_active", "seller_no_longer_owns"} else 400
+        return _market_error(result, status=status)
+    return jsonify(
+        {
+            "success": True,
+            "listing_id": result["listing_id"],
+            "card_id": result["card_id"],
+            "card_name": result["card_name"],
+            "grade": result["grade"],
+            "price_chips": result["price_chips"],
+            "market_fee": result["market_fee"],
+            "seller_received": result["seller_received"],
+            "balance": result["buyer_balance"],
+            "vault": result["buyer_vault"],
+            "vault_detail": result["buyer_vault_detail"],
         }
     )
 

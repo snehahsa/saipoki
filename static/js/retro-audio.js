@@ -83,6 +83,9 @@
             this._trackBlobUrls[name] = blobUrl
 
             const el = this._getTrack(name)
+            const wasPlaying = this.currentTrack === name && !el.paused
+            const resumeAt = wasPlaying ? el.currentTime : 0
+
             el.src = blobUrl
 
             await new Promise((resolve, reject) => {
@@ -100,6 +103,14 @@
                 el.addEventListener("error", onErr, { once: true })
                 el.load()
             })
+
+            if (wasPlaying) {
+                try { el.currentTime = resumeAt } catch { /* ignore */ }
+                if (!this.muted) {
+                    const p = el.play()
+                    if (p && typeof p.catch === "function") p.catch(() => {})
+                }
+            }
 
             this.trackReady[name] = true
         }
@@ -180,9 +191,28 @@
             const el = new Audio()
             el.src = url
             el.preload = "auto"
-            el.loop = name !== "victory"
+            this._bindTrackPlayback(el, name)
             this.tracks[name] = el
             return el
+        }
+
+        _bindTrackPlayback(el, name) {
+            if (name === "victory") {
+                el.loop = false
+                el.onended = () => {
+                    if (this.currentTrack === "victory") this.playTrack("overworld")
+                }
+                return
+            }
+            // loop=false + onended restart: Chrome can loop OGG early when loop=true
+            // if duration metadata is off — this plays the full decode before repeating.
+            el.loop = false
+            el.onended = () => {
+                if (this.currentTrack !== name) return
+                try { el.currentTime = 0 } catch { return }
+                const p = el.play()
+                if (p && typeof p.catch === "function") p.catch(() => {})
+            }
         }
 
         _pauseAllTracks() {
@@ -217,12 +247,7 @@
             this.currentTrack = name
             this.scene = name
             el.volume = this.muted ? 0 : vol
-
-            if (name === "victory") {
-                el.onended = () => {
-                    if (this.currentTrack === "victory") this.playTrack("overworld")
-                }
-            }
+            this._bindTrackPlayback(el, name)
 
             if (this.muted) {
                 el.pause()
@@ -443,7 +468,18 @@
             document.addEventListener("keydown", unlock, { once: false, passive: true })
             document.addEventListener("touchstart", unlock, { once: false, passive: true })
             document.addEventListener("visibilitychange", () => {
-                if (!document.hidden) void this.resume()
+                if (document.hidden) return
+                void (async () => {
+                    await this.resume()
+                    // Resume the current file track without restarting from 0.
+                    if (this.currentTrack && !this.muted) {
+                        const el = this.tracks[this.currentTrack]
+                        if (el && el.paused) {
+                            const p = el.play()
+                            if (p && typeof p.catch === "function") p.catch(() => {})
+                        }
+                    }
+                })()
             })
         }
 

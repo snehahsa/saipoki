@@ -15,7 +15,7 @@ FISHING_QUESTS: dict[str, dict[str, Any]] = {
         "reward_gear": "hub_key",
         "win_mode": "salvage",
         "trials_min": 1,
-        "trials_max": 3,
+        "trials_max": 2,
         "cast_duration_sec": FISHING_CAST_DURATION_SEC,
         "mode_status": {
             "fish": "Scanning for river fish…",
