@@ -3507,6 +3507,11 @@ async function grantHold(item, source = "") {
         }
 
         session.holds = normalizeHolds(data.holds)
+        if (Array.isArray(data.gear_slots)) {
+            session.gear_slots = normalizeGearSlots(data.gear_slots)
+            syncQuickbar()
+            syncPlayerGearToGame()
+        }
         syncHoldUi()
         window.TelegramGame.setPlayerHolds?.(session.holds)
 

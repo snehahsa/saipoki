@@ -26,6 +26,7 @@ from fishing_catalog import fishing_catalog_for_client
 from fishing_engine import complete_fishing_cast, fishing_progress_public, fishing_state_for_user, start_fishing_cast
 from gear_catalog import (
     GEAR_ITEM_IDS,
+    GEAR_ITEMS,
     GEAR_SLOT_COUNT,
     gear_catalog_for_client,
     gear_item_client_meta,
@@ -2821,37 +2822,46 @@ def grant_hold():
     if item not in HOLD_ITEM_IDS:
         return jsonify({"success": False, "error": "Unknown hold item"}), 400
 
+    consume_gear = str(HOLD_ITEMS.get(item, {}).get("grant_consumes_gear") or "").strip()
     now = int(time.time())
     with get_db() as conn:
         ensure_user_row(conn, telegram_id, user=user, is_test=request_is_test_mode(data), now=now)
         row = conn.execute(
-            "SELECT holds FROM users WHERE telegram_id = ?", (telegram_id,)
+            "SELECT holds, gear_slots FROM users WHERE telegram_id = ?", (telegram_id,)
         ).fetchone()
         if row is None:
             return jsonify({"success": False, "error": "User not found"}), 404
 
         holds = parse_holds(row["holds"] if "holds" in row.keys() else None)
+        slots = parse_gear_slots(row["gear_slots"] if "gear_slots" in row.keys() else None)
         newly_granted = item not in holds
         if newly_granted:
             allowed, reason = hold_grant_allowed(item, holds)
             if not allowed:
                 return jsonify({"success": False, "error": reason or "Grant requirements not met"}), 403
+            if consume_gear and consume_gear not in slots:
+                label = GEAR_ITEMS.get(consume_gear, {}).get("label", consume_gear)
+                return jsonify({"success": False, "error": f"Requires {label}"}), 403
             holds.append(item)
+            if consume_gear:
+                slots, _ = remove_gear_from_slots(slots, consume_gear)
 
         conn.execute(
-            "UPDATE users SET holds = ?, updated_at = ? WHERE telegram_id = ?",
-            (json.dumps(holds), now, telegram_id),
+            "UPDATE users SET holds = ?, gear_slots = ?, updated_at = ? WHERE telegram_id = ?",
+            (json.dumps(holds), json.dumps(slots), now, telegram_id),
         )
 
-    return jsonify(
-        {
-            "success": True,
-            "item": item,
-            "holds": holds,
-            "newly_granted": newly_granted,
-            "meta": hold_item_client_meta(item),
-        }
-    )
+    payload = {
+        "success": True,
+        "item": item,
+        "holds": holds,
+        "gear_slots": slots,
+        "newly_granted": newly_granted,
+        "meta": hold_item_client_meta(item),
+    }
+    if consume_gear and newly_granted:
+        payload["consumed_gear"] = consume_gear
+    return jsonify(payload)
 
 
 @app.route("/api/gear/grant", methods=["POST"])

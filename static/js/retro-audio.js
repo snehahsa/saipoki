@@ -56,63 +56,64 @@
                 victory: "/static/music/victory.ogg",
             }
             this.trackVolumes = { overworld: 0.5, battle: 0.55, victory: 0.62 }
-            this.tracks = {}
+            this.trackBuffers = {}
+            this.trackDecodePromises = {}
             this.trackReady = {}
-            this._trackBlobUrls = {}
             this.trackPreloadPromise = null
             this.currentTrack = null
+            this.musicFileGain = null
+            this.activeMusicSource = null
         }
 
         tracksReady() {
             return Object.keys(this.trackUrls).every((name) => this.trackReady[name])
         }
 
-        async _fetchTrack(name) {
-            if (this.trackReady[name]) return
+        _stopMusicBuffer() {
+            if (!this.activeMusicSource) return
+            try {
+                this.activeMusicSource.onended = null
+                this.activeMusicSource.stop()
+            } catch {
+                /* already stopped */
+            }
+            try {
+                this.activeMusicSource.disconnect()
+            } catch {
+                /* ignore */
+            }
+            this.activeMusicSource = null
+        }
+
+        async _decodeTrack(name) {
+            if (this.trackBuffers[name]) return this.trackBuffers[name]
+            if (this.trackDecodePromises[name]) return this.trackDecodePromises[name]
+
             const url = this.trackUrls[name]
-            if (!url) return
+            if (!url) throw new Error(`Unknown track: ${name}`)
 
-            const res = await fetch(url, { cache: "force-cache" })
-            if (!res.ok) throw new Error(`Music fetch failed: ${name}`)
+            this.trackDecodePromises[name] = (async () => {
+                const res = await fetch(url, { cache: "force-cache" })
+                if (!res.ok) throw new Error(`Music fetch failed: ${name}`)
+                const arrayBuffer = await res.arrayBuffer()
+                this.ensureContext()
+                if (!this.ctx) throw new Error("AudioContext unavailable")
+                const buffer = await this.ctx.decodeAudioData(arrayBuffer.slice(0))
+                this.trackBuffers[name] = buffer
+                this.trackReady[name] = true
+                return buffer
+            })()
 
-            const blob = await res.blob()
-            const blobUrl = URL.createObjectURL(blob)
-            if (this._trackBlobUrls[name]) {
-                try { URL.revokeObjectURL(this._trackBlobUrls[name]) } catch { /* ignore */ }
+            try {
+                return await this.trackDecodePromises[name]
+            } catch (err) {
+                delete this.trackDecodePromises[name]
+                throw err
             }
-            this._trackBlobUrls[name] = blobUrl
+        }
 
-            const el = this._getTrack(name)
-            const wasPlaying = this.currentTrack === name && !el.paused
-            const resumeAt = wasPlaying ? el.currentTime : 0
-
-            el.src = blobUrl
-
-            await new Promise((resolve, reject) => {
-                const onReady = () => { cleanup(); resolve() }
-                const onErr = () => { cleanup(); reject(new Error(`Music decode failed: ${name}`)) }
-                const cleanup = () => {
-                    el.removeEventListener("canplaythrough", onReady)
-                    el.removeEventListener("error", onErr)
-                }
-                if (el.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
-                    resolve()
-                    return
-                }
-                el.addEventListener("canplaythrough", onReady, { once: true })
-                el.addEventListener("error", onErr, { once: true })
-                el.load()
-            })
-
-            if (wasPlaying) {
-                try { el.currentTime = resumeAt } catch { /* ignore */ }
-                if (!this.muted) {
-                    const p = el.play()
-                    if (p && typeof p.catch === "function") p.catch(() => {})
-                }
-            }
-
-            this.trackReady[name] = true
+        async _fetchTrack(name) {
+            await this._decodeTrack(name)
         }
 
         preloadTracks(opts = {}) {
@@ -184,84 +185,75 @@
             throw new Error("Music download timed out. Check your connection and try again.")
         }
 
-        _getTrack(name) {
-            if (this.tracks[name]) return this.tracks[name]
-            const url = this.trackUrls[name]
-            if (!url) return null
-            const el = new Audio()
-            el.src = url
-            el.preload = "auto"
-            this._bindTrackPlayback(el, name)
-            this.tracks[name] = el
-            return el
+        _pauseAllTracks() {
+            /* legacy HTML audio elements — file music uses Web Audio buffers */
         }
 
-        _bindTrackPlayback(el, name) {
-            if (name === "victory") {
-                el.loop = false
-                el.onended = () => {
-                    if (this.currentTrack === "victory") this.playTrack("overworld")
+        _stopAllTracks() {
+            /* legacy HTML audio elements — file music uses Web Audio buffers */
+        }
+
+        async _playTrackAsync(name, { restart = false } = {}) {
+            if (!this.trackUrls[name]) return
+
+            const vol = this.trackVolumes[name] ?? 0.5
+
+            if (!restart && this.currentTrack === name && this.activeMusicSource) {
+                if (this.musicFileGain) {
+                    this.musicFileGain.gain.value = this.muted ? 0 : vol
                 }
                 return
             }
-            // loop=false + onended restart: Chrome can loop OGG early when loop=true
-            // if duration metadata is off — this plays the full decode before repeating.
-            el.loop = false
-            el.onended = () => {
-                if (this.currentTrack !== name) return
-                try { el.currentTime = 0 } catch { return }
-                const p = el.play()
-                if (p && typeof p.catch === "function") p.catch(() => {})
-            }
-        }
 
-        _pauseAllTracks() {
-            for (const el of Object.values(this.tracks)) {
-                try { el.pause() } catch { /* ignore */ }
-            }
-        }
+            this._stopMusicBuffer()
+            this.stopMusic()
 
-        _stopAllTracks(except = null) {
-            for (const [n, el] of Object.entries(this.tracks)) {
-                if (n === except) continue
-                try {
-                    el.pause()
-                    el.currentTime = 0
-                } catch { /* ignore */ }
+            this.currentTrack = name
+            this.scene = name
+
+            if (this.muted) return
+
+            this.ensureContext()
+            if (!this.ctx) return
+            await this.resume()
+
+            let buffer
+            try {
+                buffer = await this._decodeTrack(name)
+            } catch (err) {
+                console.warn("Music decode:", name, err)
+                return
             }
+
+            if (!this.musicFileGain) {
+                this.musicFileGain = this.ctx.createGain()
+                this.musicFileGain.connect(this.musicGain)
+            }
+            this.musicFileGain.gain.value = vol
+
+            const source = this.ctx.createBufferSource()
+            source.buffer = buffer
+            source.loop = name !== "victory"
+
+            if (name === "victory") {
+                source.onended = () => {
+                    if (this.currentTrack === "victory") {
+                        void this._playTrackAsync("overworld")
+                    }
+                }
+            }
+
+            source.connect(this.musicFileGain)
+            source.start(0)
+            this.activeMusicSource = source
         }
 
         playTrack(name, { restart = false } = {}) {
-            const el = this._getTrack(name)
-            if (!el) return
-            const vol = this.trackVolumes[name] ?? 0.5
-
-            // Already the active track and running — just keep it (no restart jump).
-            if (this.currentTrack === name && !el.paused && !restart) {
-                el.volume = this.muted ? 0 : vol
-                return
-            }
-
-            this._stopAllTracks(name)
-            this.stopMusic()
-            this.currentTrack = name
-            this.scene = name
-            el.volume = this.muted ? 0 : vol
-            this._bindTrackPlayback(el, name)
-
-            if (this.muted) {
-                el.pause()
-                return
-            }
-            if (restart) {
-                try { el.currentTime = 0 } catch { /* ignore */ }
-            }
-            const p = el.play()
-            if (p && typeof p.catch === "function") p.catch(() => { /* autoplay gate */ })
+            void this._playTrackAsync(name, { restart })
         }
 
         stopTrack() {
-            this._stopAllTracks()
+            this._stopMusicBuffer()
             this.currentTrack = null
         }
 
@@ -302,10 +294,7 @@
         }
 
         isMusicPlaying() {
-            if (this.currentTrack) {
-                const el = this.tracks[this.currentTrack]
-                if (el && !el.paused) return true
-            }
+            if (this.activeMusicSource && this.currentTrack) return true
             return !!(this.timer && !this.muted && this.pattern)
         }
 
@@ -468,18 +457,12 @@
             document.addEventListener("keydown", unlock, { once: false, passive: true })
             document.addEventListener("touchstart", unlock, { once: false, passive: true })
             document.addEventListener("visibilitychange", () => {
-                if (document.hidden) return
-                void (async () => {
-                    await this.resume()
-                    // Resume the current file track without restarting from 0.
-                    if (this.currentTrack && !this.muted) {
-                        const el = this.tracks[this.currentTrack]
-                        if (el && el.paused) {
-                            const p = el.play()
-                            if (p && typeof p.catch === "function") p.catch(() => {})
-                        }
-                    }
-                })()
+                if (!this.ctx) return
+                if (document.hidden) {
+                    void this.ctx.suspend()
+                    return
+                }
+                void this.resume()
             })
         }
 
@@ -660,7 +643,7 @@
             }
             if (this.muted) {
                 this.stopMusic()
-                this._pauseAllTracks()
+                this._stopMusicBuffer()
                 if (this.master) this.master.gain.value = 0
                 return true
             }

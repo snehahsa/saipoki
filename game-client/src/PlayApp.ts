@@ -247,14 +247,14 @@ export class PlayApp extends App {
         const flow = npc.getActiveFlow()
         const holds = this.getPlayerHolds()
         if (flow) {
+            if (flow.takeGear) {
+                signal.emit('takeGear', { item: flow.takeGear, source: `npc:${npc.id}` })
+            }
             if (flow.grantHold && canGrantFlowHold(flow, holds, this.holdGrantRules)) {
                 signal.emit('grantHold', { item: flow.grantHold, source: `npc:${npc.id}` })
             }
             if (flow.grantGear) {
                 signal.emit('grantGear', { item: flow.grantGear, source: `npc:${npc.id}` })
-            }
-            if (flow.takeGear) {
-                signal.emit('takeGear', { item: flow.takeGear, source: `npc:${npc.id}` })
             }
             if (flow.questStep && (!flow.grantHold || canGrantFlowHold(flow, holds, this.holdGrantRules))) {
                 signal.emit('questStep', {

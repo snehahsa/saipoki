@@ -1264,23 +1264,27 @@
                                     </div>
                                     <div class="market-filters" id="market-filters">
                                         <input type="search" id="market-search" class="market-input" placeholder="SEARCH NAME..." autocomplete="off" aria-label="Search cards by name">
-                                        <select id="market-filter-type" class="market-select" aria-label="Filter by type">
-                                            <option value="all">ALL TYPES</option>
-                                        </select>
-                                        <select id="market-filter-grade" class="market-select" aria-label="Filter by grade">
-                                            <option value="all">ALL GRADES</option>
-                                            <option value="1">G1 · STANDARD</option>
-                                            <option value="2">G2 · SILVER</option>
-                                            <option value="3">G3 · GOLD</option>
-                                            <option value="4">G4 · PLATINUM</option>
-                                            <option value="5">G5 · MYTHIC</option>
-                                        </select>
-                                        <select id="market-sort" class="market-select" aria-label="Sort listings">
-                                            <option value="newest">NEWEST</option>
-                                            <option value="price_asc">PRICE ▲ LOW</option>
-                                            <option value="price_desc">PRICE ▼ HIGH</option>
-                                            <option value="power_desc">POWER ▼</option>
-                                        </select>
+                                        <div class="market-pixel-select" id="market-filter-type" data-value="all" aria-label="Filter by type">
+                                            <button type="button" class="market-pixel-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                                <span class="market-pixel-select-text">ALL TYPES</span>
+                                                <span class="market-pixel-select-arrow" aria-hidden="true">▼</span>
+                                            </button>
+                                            <ul class="market-pixel-select-menu hidden" role="listbox"></ul>
+                                        </div>
+                                        <div class="market-pixel-select" id="market-filter-grade" data-value="all" aria-label="Filter by grade">
+                                            <button type="button" class="market-pixel-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                                <span class="market-pixel-select-text">ALL GRADES</span>
+                                                <span class="market-pixel-select-arrow" aria-hidden="true">▼</span>
+                                            </button>
+                                            <ul class="market-pixel-select-menu hidden" role="listbox"></ul>
+                                        </div>
+                                        <div class="market-pixel-select" id="market-sort" data-value="newest" aria-label="Sort listings">
+                                            <button type="button" class="market-pixel-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                                                <span class="market-pixel-select-text">NEWEST</span>
+                                                <span class="market-pixel-select-arrow" aria-hidden="true">▼</span>
+                                            </button>
+                                            <ul class="market-pixel-select-menu hidden" role="listbox"></ul>
+                                        </div>
                                     </div>
                                     <div class="market-panel" id="market-browse-panel">
                                         <div class="market-grid" id="market-listings"></div>

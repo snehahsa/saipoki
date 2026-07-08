@@ -208,9 +208,6 @@
                 if (isInArena()) closeArena()
                 return
             }
-            if (battle.log?.length) {
-                battleLog = [...battleLog, ...battle.log].slice(-20)
-            }
             if (autoOpen || isInArena()) {
                 if (isInArena()) renderArena(battle)
                 else openArena(battle)
@@ -239,9 +236,6 @@
     function applyRealtimeBattle(data) {
         if (!data?.battle) return false
         statusCache = { ...(statusCache || {}), battle: data.battle }
-        if (data.battle.log?.length) {
-            battleLog = [...battleLog, ...data.battle.log].slice(-20)
-        }
         syncBattleFromStatus(statusCache, { forceOpen: true })
         return true
     }
@@ -613,6 +607,7 @@
         }
         if (battle.log?.length) {
             battleLog = [...battleLog, ...battle.log].slice(-20)
+            battle.log = []
         }
         const arena = document.getElementById("poketab-gb-arena")
         if (!arena) return
@@ -724,7 +719,7 @@
                     </div>
                 </div>
                 <div class="poketab-gb-textbox">
-                    ${logLines.slice(-3).map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+                    ${logLines.slice(-1).map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
                 </div>
                 ${menuHtml}
             </div>
@@ -776,7 +771,6 @@
                 revivePickOptions = data.revive_options
                 bagMenuOpen = true
                 if (data.battle) {
-                    if (data.battle.log?.length) battleLog.push(...data.battle.log)
                     renderArena(data.battle)
                 } else if (statusCache?.battle) {
                     renderArena(statusCache.battle)
@@ -787,7 +781,6 @@
             bagMenuOpen = false
             revivePickOptions = null
             if (data.battle) {
-                if (data.battle.log?.length) battleLog.push(...data.battle.log)
                 openArena(data.battle)
             }
             if (data.ended) {

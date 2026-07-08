@@ -28,6 +28,109 @@
     let sellCardId = null
     let buyListingId = null
 
+    const GRADE_FILTER_OPTIONS = [
+        { value: "all", label: "ALL GRADES" },
+        { value: "1", label: "G1 · STANDARD" },
+        { value: "2", label: "G2 · SILVER" },
+        { value: "3", label: "G3 · GOLD" },
+        { value: "4", label: "G4 · PLATINUM" },
+        { value: "5", label: "G5 · MYTHIC" },
+    ]
+
+    const SORT_OPTIONS = [
+        { value: "newest", label: "NEWEST" },
+        { value: "price_asc", label: "PRICE ▲ LOW" },
+        { value: "price_desc", label: "PRICE ▼ HIGH" },
+        { value: "power_desc", label: "POWER ▼" },
+    ]
+
+    function pixelSelectValue(root) {
+        return String(root?.dataset?.value || "all")
+    }
+
+    function pixelSelectLabelFor(root, value) {
+        const menu = root?.querySelector(".market-pixel-select-menu")
+        const match = menu?.querySelector(`.market-pixel-select-option[data-value="${CSS.escape(value)}"]`)
+        return match?.textContent?.trim() || value
+    }
+
+    function closePixelSelect(root) {
+        if (!root) return
+        root.classList.remove("is-open")
+        root.querySelector(".market-pixel-select-menu")?.classList.add("hidden")
+        root.querySelector(".market-pixel-select-trigger")?.setAttribute("aria-expanded", "false")
+    }
+
+    function closeAllPixelSelects() {
+        document.querySelectorAll(".market-pixel-select.is-open").forEach((root) => closePixelSelect(root))
+    }
+
+    function openPixelSelect(root) {
+        if (!root) return
+        closeAllPixelSelects()
+        root.classList.add("is-open")
+        root.querySelector(".market-pixel-select-menu")?.classList.remove("hidden")
+        root.querySelector(".market-pixel-select-trigger")?.setAttribute("aria-expanded", "true")
+    }
+
+    function pixelSelectSetValue(root, value, options = []) {
+        if (!root) return
+        const next = String(value || options[0]?.value || "all")
+        root.dataset.value = next
+        const text = root.querySelector(".market-pixel-select-text")
+        if (text) text.textContent = pixelSelectLabelFor(root, next) || options.find((o) => o.value === next)?.label || next
+        root.querySelectorAll(".market-pixel-select-option").forEach((btn) => {
+            const active = btn.dataset.value === next
+            btn.classList.toggle("is-active", active)
+            btn.setAttribute("aria-selected", active ? "true" : "false")
+        })
+    }
+
+    function pixelSelectBuildMenu(root, options, onChange) {
+        const menu = root?.querySelector(".market-pixel-select-menu")
+        if (!menu) return
+        menu.innerHTML = options.map((opt) => `
+            <li>
+                <button type="button" class="market-pixel-select-option" role="option" data-value="${escapeHtml(opt.value)}">
+                    ${escapeHtml(opt.label)}
+                </button>
+            </li>`).join("")
+        menu.querySelectorAll(".market-pixel-select-option").forEach((btn) => {
+            btn.addEventListener("click", (event) => {
+                event.stopPropagation()
+                pixelSelectSetValue(root, btn.dataset.value, options)
+                closePixelSelect(root)
+                onChange?.()
+            })
+        })
+    }
+
+    function initPixelSelect(root, options, onChange) {
+        if (!root || root.dataset.pixelSelectReady === "1") return
+        root.dataset.pixelSelectReady = "1"
+        pixelSelectBuildMenu(root, options, onChange)
+        pixelSelectSetValue(root, root.dataset.value || options[0]?.value || "all", options)
+        root.querySelector(".market-pixel-select-trigger")?.addEventListener("click", (event) => {
+            event.stopPropagation()
+            if (root.classList.contains("is-open")) closePixelSelect(root)
+            else openPixelSelect(root)
+        })
+    }
+
+    function rebuildPixelSelect(root, options, onChange) {
+        if (!root) return
+        const current = pixelSelectValue(root)
+        pixelSelectBuildMenu(root, options, onChange)
+        const valid = options.some((opt) => opt.value === current)
+        pixelSelectSetValue(root, valid ? current : (options[0]?.value || "all"), options)
+    }
+
+    function initMarketPixelSelects() {
+        initPixelSelect(el("market-filter-type"), [{ value: "all", label: "ALL TYPES" }], loadBrowse)
+        initPixelSelect(el("market-filter-grade"), GRADE_FILTER_OPTIONS, loadBrowse)
+        initPixelSelect(el("market-sort"), SORT_OPTIONS, loadBrowse)
+    }
+
     function el(id) {
         return document.getElementById(id)
     }
@@ -207,13 +310,15 @@
     }
 
     function populateTypeFilter() {
-        const select = el("market-filter-type")
-        if (!select) return
-        const current = select.value
+        const root = el("market-filter-type")
+        if (!root) return
+        const current = pixelSelectValue(root)
         const types = Array.from(new Set(lastBrowse.map((it) => it.type).filter(Boolean))).sort()
-        select.innerHTML = `<option value="all">ALL TYPES</option>` +
-            types.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(String(t).toUpperCase())}</option>`).join("")
-        if (current && (current === "all" || types.includes(current))) select.value = current
+        const options = [{ value: "all", label: "ALL TYPES" }]
+            .concat(types.map((t) => ({ value: t, label: String(t).toUpperCase() })))
+        rebuildPixelSelect(root, options, loadBrowse)
+        const next = current === "all" || types.includes(current) ? current : "all"
+        pixelSelectSetValue(root, next, options)
     }
 
     // --- Loaders ----------------------------------------------------------
@@ -221,9 +326,9 @@
     function browseFilters() {
         return {
             query: el("market-search")?.value || "",
-            type: el("market-filter-type")?.value || "all",
-            grade: el("market-filter-grade")?.value || "all",
-            sort: el("market-sort")?.value || "newest",
+            type: pixelSelectValue(el("market-filter-type")),
+            grade: pixelSelectValue(el("market-filter-grade")),
+            sort: pixelSelectValue(el("market-sort")),
         }
     }
 
@@ -524,9 +629,8 @@
             clearTimeout(searchTimer)
             searchTimer = setTimeout(loadBrowse, 260)
         })
-        ;["market-filter-type", "market-filter-grade", "market-sort"].forEach((id) => {
-            el(id)?.addEventListener("change", loadBrowse)
-        })
+        initMarketPixelSelects()
+        document.addEventListener("click", () => closeAllPixelSelects())
 
         el("market-listings")?.addEventListener("click", (e) => {
             const buyBtn = e.target.closest("[data-buy]")
@@ -559,6 +663,7 @@
 
         document.addEventListener("keydown", (e) => {
             if (e.key !== "Escape") return
+            closeAllPixelSelects()
             if (!el("market-buy-modal")?.classList.contains("hidden")) closeBuyModal()
             else if (!el("market-sell-modal")?.classList.contains("hidden")) closeSellModal()
             else if (!el("market-pick-modal")?.classList.contains("hidden")) closePickModal()

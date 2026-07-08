@@ -51,6 +51,7 @@ HOLD_ITEMS = {
         "description": "Connect with trainers worldwide.",
         "unlocks_ui": ["drawer:poketab"],
         "grant_requires": {"holds": ["bag"]},
+        "grant_consumes_gear": "hub_key",
         "quest_step": "collect_poketab",
         "quest_id": "week1_vault_trail",
         "pickup_popup": {
