@@ -52,7 +52,6 @@ from quest_engine import (
     parse_quest_progress,
 )
 from wallet_auth import (
-    GUEST_STARTING_BALANCE,
     KINS_TOKEN_MINT,
     MIN_TOKEN_UI_AMOUNT,
     SOLANA_RPC_URL,
