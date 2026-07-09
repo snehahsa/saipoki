@@ -9,17 +9,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from kins_payments import (
-    KINS_TOKEN_MINT,
-    KINS_TREASURY_WALLET,
-    TOKEN_2022_PROGRAM_ID,
-    treasury_kins_ata_exists,
-)
+from game_wallet_config import KINS_TREASURY_WALLET, POKEQUEST_MINT, treasury_signer_path
+from kins_payments import TOKEN_2022_PROGRAM_ID, treasury_kins_ata_exists
 
 
 def main() -> int:
     print(f"Treasury wallet: {KINS_TREASURY_WALLET}")
-    print(f"KINS mint:       {KINS_TOKEN_MINT}")
+    print(f"KINS mint:       {POKEQUEST_MINT}")
+    print(f"Signer file:     {treasury_signer_path()}")
     print(f"Token program:   {TOKEN_2022_PROGRAM_ID}")
 
     if treasury_kins_ata_exists():
@@ -32,10 +29,10 @@ def main() -> int:
     print("\nOptional — create it yourself from the treasury wallet so players never pay rent:")
     print(
         "\n  spl-token create-account "
-        f"{KINS_TOKEN_MINT} "
+        f"{POKEQUEST_MINT} "
         f"--owner {KINS_TREASURY_WALLET} "
         f"--program-id {TOKEN_2022_PROGRAM_ID} "
-        "--fee-payer <treasury-keypair.json>"
+        f"--fee-payer {treasury_signer_path()}"
     )
     print(
         "\nOr in Phantom/Solflare: connect the treasury wallet, add $KINS, "

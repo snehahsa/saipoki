@@ -1326,7 +1326,7 @@ async function saveSkinOrPay(skin, displayName) {
 
 function updateBalanceDisplays() {
     const balance = session?.balance ?? 0
-    for (const id of ["skin-balance", "profile-balance", "menu-balance", "stat-balance"]) {
+    for (const id of ["skin-balance", "profile-balance", "menu-balance", "wallet-chips-balance"]) {
         const el = document.getElementById(id)
         if (el) el.textContent = formatChipsAmount(balance)
     }
@@ -1334,6 +1334,7 @@ function updateBalanceDisplays() {
         vendingUpdateDrawButton()
         vendingUpdateStatusScreen()
     }
+    window.SaiPokeWallet?.sync?.()
 }
 
 function updateAvatarPriceTag(skin, prefix = "skin") {
@@ -5888,6 +5889,31 @@ async function init() {
                     return data
                 })
                 .catch(() => {}),
+    })
+
+    window.SaiPokeWallet?.init?.({
+        apiAuthBody,
+        getBalance: () => Number(session?.balance) || 0,
+        onBalanceUpdate: async () => {
+            const data = await fetch("/api/auth", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(apiAuthBody()),
+            }).then((r) => r.json()).catch(() => ({}))
+            if (data.success && Number.isFinite(data.balance)) {
+                session.balance = data.balance
+                updateBalanceDisplays()
+            }
+        },
+        showToast: (message, isError = false) => {
+            const stack = document.getElementById("join-toast-stack")
+            if (!stack || !message) return
+            const toast = document.createElement("div")
+            toast.className = `join-toast${isError ? " join-toast-error" : ""}`
+            toast.textContent = message
+            stack.appendChild(toast)
+            setTimeout(() => toast.remove(), 2800)
+        },
     })
 
     preloadRemainingAssets()

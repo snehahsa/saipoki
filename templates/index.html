@@ -474,6 +474,7 @@
             <button class="btn btn-settings btn-profile" id="profile-btn" type="button">Profile</button>
             <button class="btn btn-exit" id="exit-btn" type="button">Exit</button>
         </div>
+
         <p class="status" id="menu-status"></p>
     </div>
 </div>
@@ -675,9 +676,19 @@
             <div class="hud-line hud-line--xp">xp: <span id="stat-xp" class="hud-v">0</span></div>
             <div class="hud-line">live trainers: <span id="stat-players" class="hud-v">0</span></div>
             <div class="hud-line">zone: <span id="stat-zone" class="hud-v">—</span></div>
-            <div class="hud-line hud-line--balance">balance: <span class="hud-balance-wrap"><span class="poke-chips poke-chips--sm hud-chips" aria-hidden="true"></span><span id="stat-balance" class="hud-v">0</span></span></div>
             <div class="hud-line">coord: <span id="stat-coord" class="hud-v">—, —</span></div>
         </div>
+        <section class="game-hud-wallet" id="game-hud-wallet-section" aria-label="Wallet">
+            <div class="game-hud-wallet-balance-row">
+                <span class="poke-chips poke-chips--sm hud-chips" aria-hidden="true"></span>
+                <span class="game-hud-wallet-label">CHIPS</span>
+                <span class="game-hud-wallet-value" id="wallet-chips-balance">0</span>
+            </div>
+            <div class="game-hud-wallet-actions">
+                <button type="button" class="game-hud-wallet-btn game-hud-wallet-btn--deposit" id="wallet-deposit-btn">Deposit</button>
+                <button type="button" class="game-hud-wallet-btn game-hud-wallet-btn--withdraw" id="wallet-withdraw-btn">Withdraw</button>
+            </div>
+        </section>
         <div class="game-hud-deposit hidden" id="game-hud-deposit" aria-label="Buy and sell CHIPS">
             <div class="game-hud-chips-actions">
                 <button type="button" class="game-hud-chips-btn game-hud-chips-btn--buy" id="game-hud-buy-toggle" data-kins-buy>Buy CHIPS</button>
@@ -1436,6 +1447,66 @@
     </div>
 </div>
 
+<div id="wallet-deposit-modal" class="wallet-modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-deposit-title">
+    <button type="button" class="wallet-modal-scrim" id="wallet-deposit-scrim" aria-label="Close"></button>
+    <div class="wallet-modal-panel wallet-deposit-panel">
+        <header class="wallet-modal-head">
+            <span class="wallet-modal-title" id="wallet-deposit-title">Deposit $POKEQUEST</span>
+            <button type="button" class="wallet-modal-close" id="wallet-deposit-close" aria-label="Close">×</button>
+        </header>
+        <div class="wallet-modal-body">
+            <p class="wallet-modal-label">Deposit address</p>
+            <div class="wallet-address-row">
+                <code class="wallet-address" id="wallet-deposit-address">—</code>
+                <button type="button" class="wallet-mini-btn" id="wallet-deposit-copy">Copy</button>
+            </div>
+            <img class="wallet-qr hidden" id="wallet-deposit-qr" alt="" width="140" height="140">
+            <p class="wallet-modal-note">Every 1 $POKEQUEST deposited is credited as 1 CHIPS in-game. Only send the official $POKEQUEST token.</p>
+            <p class="wallet-modal-label">Transaction signature or Solscan link</p>
+            <div class="wallet-sig-row">
+                <input type="text" class="wallet-input" id="wallet-deposit-signature" placeholder="5N… or https://solscan.io/tx/…" autocomplete="off" spellcheck="false">
+                <button type="button" class="wallet-mini-btn" id="wallet-deposit-paste">Paste</button>
+            </div>
+            <p class="wallet-modal-hint">Verification may take a few seconds after the transaction is finalized.</p>
+            <div class="wallet-verify-steps hidden" id="wallet-deposit-steps"></div>
+            <p class="wallet-success hidden" id="wallet-deposit-success"></p>
+            <p class="wallet-error" id="wallet-deposit-error"></p>
+            <button type="button" class="wallet-action-btn wallet-action-btn--deposit" id="wallet-deposit-verify">Verify deposit</button>
+            <p class="wallet-modal-subtitle">Recent deposits</p>
+            <div class="wallet-history-list" id="wallet-deposit-history"></div>
+        </div>
+    </div>
+</div>
+
+<div id="wallet-withdraw-modal" class="wallet-modal hidden" role="dialog" aria-modal="true" aria-labelledby="wallet-withdraw-title">
+    <button type="button" class="wallet-modal-scrim" id="wallet-withdraw-scrim" aria-label="Close"></button>
+    <div class="wallet-modal-panel wallet-withdraw-panel">
+        <header class="wallet-modal-head">
+            <span class="wallet-modal-title" id="wallet-withdraw-title">Withdraw $POKEQUEST</span>
+            <button type="button" class="wallet-modal-close" id="wallet-withdraw-close" aria-label="Close">×</button>
+        </header>
+        <div class="wallet-modal-body">
+            <p class="wallet-modal-label">Current CHIPS</p>
+            <p class="wallet-withdraw-chips" id="wallet-withdraw-chips">0</p>
+            <p class="wallet-modal-label" for="wallet-withdraw-amount">Amount</p>
+            <div class="wallet-amount-row">
+                <input type="number" class="wallet-input" id="wallet-withdraw-amount" min="1" step="1" inputmode="numeric" placeholder="0">
+                <button type="button" class="wallet-mini-btn" id="wallet-withdraw-max">MAX</button>
+            </div>
+            <p class="wallet-modal-label" for="wallet-withdraw-dest">Destination wallet</p>
+            <input type="text" class="wallet-input" id="wallet-withdraw-dest" placeholder="Solana address" autocomplete="off" spellcheck="false">
+            <p class="wallet-modal-label">You will receive</p>
+            <p class="wallet-withdraw-receive" id="wallet-withdraw-receive">0 POKEQUEST</p>
+            <p class="wallet-modal-note">Network fee paid by platform.</p>
+            <p class="wallet-withdraw-progress hidden" id="wallet-withdraw-progress"></p>
+            <p class="wallet-error" id="wallet-withdraw-error"></p>
+            <button type="button" class="wallet-action-btn wallet-action-btn--withdraw" id="wallet-withdraw-submit">Withdraw</button>
+            <p class="wallet-modal-subtitle">Recent withdrawals</p>
+            <div class="wallet-history-list" id="wallet-withdraw-history"></div>
+        </div>
+    </div>
+</div>
+
 <script>
     window.APP_CONFIG = {
         gameServerUrl: {{ game_server_url|tojson }},
@@ -1484,6 +1555,7 @@
 <script src="/static/js/poketab.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/poketab_battle.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/poketab_market.js?v={{ asset_v.app_js }}"></script>
+<script src="/static/js/wallet-panel.js?v={{ asset_v.app_js }}"></script>
 <script src="/static/js/app.js?v={{ asset_v.app_js }}"></script>
 </body>
 </html>

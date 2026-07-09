@@ -163,3 +163,7 @@ def init_sqlite_schema(conn: Any) -> None:
     from market_engine import ensure_market_schema
 
     ensure_market_schema(conn)
+
+    from wallet_ledger import ensure_wallet_ledger_schema
+
+    ensure_wallet_ledger_schema(conn)

@@ -11,11 +11,7 @@ import urllib.request
 from typing import Any, Optional
 
 from wallet_auth import KINS_TOKEN_MINT, SOLANA_RPC_URL, solana_rpc_urls
-
-KINS_TREASURY_WALLET = os.getenv(
-    "KINS_TREASURY_WALLET",
-    "6b2RVgU36yVdGQmAEswVyBxNeWZ6MBPH1WxrfMwHAWZA",
-).strip()
+from game_wallet_config import KINS_TREASURY_WALLET
 
 # $POKEQUEST is a pump.fun Token-2022 mint — not the legacy SPL Token program.
 TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"

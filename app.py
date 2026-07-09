@@ -83,6 +83,12 @@ from kins_payments import (
     is_wallet_user_id,
     treasury_kins_ata_exists,
 )
+from wallet_ledger import (
+    create_withdrawal_request,
+    verify_and_credit_deposit,
+    wallet_config_for_client,
+    wallet_history,
+)
 from avatar_economy import (
     DEFAULT_SKIN as AVATAR_DEFAULT_SKIN,
     STARTING_BALANCE,
@@ -1363,6 +1369,104 @@ def kins_withdraw_api():
     return jsonify({"success": True, **result})
 
 
+@app.route("/api/wallet/config", methods=["GET"])
+def wallet_config_api():
+    return jsonify({"success": True, **wallet_config_for_client()})
+
+
+@app.route("/api/wallet/deposit/verify", methods=["POST"])
+def wallet_deposit_verify_api():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    signature = str(data.get("signature") or data.get("tx_signature") or "").strip()
+    if not signature:
+        return jsonify({"success": False, "error": "Transaction signature required."}), 400
+
+    with get_db() as conn:
+        result = verify_and_credit_deposit(
+            conn,
+            user_id=telegram_id,
+            signature_input=signature,
+        )
+    if not result.get("ok"):
+        code = 409 if result.get("code") == "duplicate" else 400
+        return jsonify({"success": False, "error": result.get("error", "Verification failed.")}), code
+    return jsonify(
+        {
+            "success": True,
+            "credited_amount": result.get("credited_amount"),
+            "new_balance": result.get("new_balance"),
+            "tx_signature": result.get("tx_signature"),
+        }
+    )
+
+
+@app.route("/api/wallet/withdraw", methods=["POST"])
+def wallet_withdraw_api():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    destination = str(data.get("destination_wallet") or data.get("destination") or "").strip()
+    try:
+        amount = int(data.get("amount") or data.get("amount_chips") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+
+    with get_db() as conn:
+        try:
+            result = create_withdrawal_request(
+                conn,
+                user_id=telegram_id,
+                destination_wallet=destination,
+                amount_chips=amount,
+            )
+        except RuntimeError as exc:
+            if str(exc) == "concurrent_withdrawal":
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "You already have a withdrawal in progress.",
+                        }
+                    ),
+                    409,
+                )
+            raise
+    if not result.get("ok"):
+        return jsonify({"success": False, "error": result.get("error", "Withdrawal failed.")}), 400
+    return jsonify(
+        {
+            "success": True,
+            "withdrawal_id": result.get("withdrawal_id"),
+            "status": result.get("status"),
+            "new_balance": result.get("new_balance"),
+            "amount_chips": result.get("amount_chips"),
+        }
+    )
+
+
+@app.route("/api/wallet/history", methods=["GET"])
+def wallet_history_api():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    limit = request.args.get("limit", 30)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 30
+
+    with get_db() as conn:
+        history = wallet_history(conn, telegram_id, limit=limit)
+    return jsonify({"success": True, **history})
+
+
 @app.route("/api/economy/npc-grant", methods=["POST"])
 def npc_balance_grant_api():
     telegram_id, err = _auth_user_from_request()
@@ -2227,6 +2331,10 @@ def save_skin():
 
 def _request_auth_user():
     data = request.get_json(silent=True) or {}
+    if request.method == "GET":
+        for key in ("walletSession", "guestId", "initData", "testMode", "spectator"):
+            if key in request.args and key not in data:
+                data[key] = request.args.get(key)
     user = resolve_auth_user(data)
     if not user:
         return None, data, (jsonify({"success": False, "error": auth_session_error_message()}), 401)

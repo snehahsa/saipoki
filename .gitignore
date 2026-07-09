@@ -5,6 +5,8 @@ users.db
 users.db-wal
 users.db-shm
 users.db-journal
+data/treasury_signer.json
+data/game_wallet.json
 *.db-wal
 *.db-shm
 .env

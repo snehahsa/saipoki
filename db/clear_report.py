@@ -532,6 +532,23 @@ def render_clear_report_html(
       }});
     }});
     renderPlayers();
+    try {{
+      const profileKeys = [
+        "pokequest_profile_vault",
+        "pokequest_guest_id",
+        "pokequest_vault_unlocked",
+      ];
+      for (const key of profileKeys) {{
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      }}
+      for (let i = localStorage.length - 1; i >= 0; i--) {{
+        const k = localStorage.key(i);
+        if (k && k.startsWith("pokequest_guest_server_backup:")) {{
+          localStorage.removeItem(k);
+        }}
+      }}
+    }} catch (_) {{}}
   </script>
 </body>
 </html>"""

@@ -83,6 +83,10 @@ def _adapt_sql(sql: str) -> str:
         adapted = adapted.rstrip().rstrip(";") + " RETURNING id"
     if upper.startswith("INSERT INTO POKETAB_MESSAGES") and "RETURNING" not in upper:
         adapted = adapted.rstrip().rstrip(";") + " RETURNING id"
+    if upper.startswith("INSERT INTO DEPOSITS") and "RETURNING" not in upper:
+        adapted = adapted.rstrip().rstrip(";") + " RETURNING id"
+    if upper.startswith("INSERT INTO WITHDRAWALS") and "RETURNING" not in upper:
+        adapted = adapted.rstrip().rstrip(";") + " RETURNING id"
 
     if "CREATE TABLE" in upper or "CREATE INDEX" in upper:
         adapted = _adapt_ddl(adapted)

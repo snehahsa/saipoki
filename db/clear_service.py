@@ -8,7 +8,12 @@ from db.connection import is_postgres
 
 # Child tables first, then users and meta.
 _CLEAR_TABLES = (
+    "market_listings",
+    "deposits",
+    "withdrawals",
+    "kins_withdrawals",
     "kins_payments",
+    "wallet_challenges",
     "poketab_messages",
     "poketab_user_state",
     "friend_requests",
