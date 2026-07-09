@@ -1956,8 +1956,6 @@ def _guest_backup_has_progress(backup: dict) -> bool:
     gear = gear_slots_for_user(backup.get("gear_slots"))
     if any(gear):
         return True
-    if int(backup.get("balance") or 0) > 0:
-        return True
     if int(backup.get("level") or 0) > 1:
         return True
     return False
@@ -2078,11 +2076,7 @@ def _merge_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> bool:
         )
         return True
 
-    row_balance = int(row["balance"] if "balance" in row.keys() else 0)
-    backup_balance = int(backup.get("balance") or 0)
-    # Empty row → the browser backup is the only source of truth for the balance.
-    if backup_balance and backup_balance != row_balance:
-        fields["balance"] = backup_balance
+    # CHIPS balance is never restored from browser backup — only on-chain deposits credit balance.
 
     # Battle record + XP (drives trainer level) — never in the old backup, so level
     # silently reset to 1 after every deploy. Rebuild it from the backup.

@@ -141,7 +141,7 @@
             savedAt: Date.now(),
             display_name: name && !isPlaceholderGuestName(name) ? name : "",
             skin: skin || "",
-            balance: Number(data.balance) || 0,
+            balance: 0,
             holds: Array.isArray(data.holds) ? data.holds : [],
             gear_slots: Array.isArray(data.gear_slots) ? data.gear_slots : [],
             quest_progress: data.quest_progress || { completed_steps: [], removed_quests: [] },
@@ -207,7 +207,6 @@
         if (Array.isArray(backup.vault_detail) && backup.vault_detail.length) return true
         if (Array.isArray(backup.vault) && backup.vault.length) return true
         if (Array.isArray(backup.gear_slots) && backup.gear_slots.some(Boolean)) return true
-        if (Number(backup.balance) > 0) return true
         return false
     }
 

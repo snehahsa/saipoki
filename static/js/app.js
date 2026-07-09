@@ -134,7 +134,6 @@ function guestAuthHasProgress(data) {
     if (Array.isArray(data.vault) && data.vault.length) return true
     if (Array.isArray(data.vault_detail) && data.vault_detail.length) return true
     if (Array.isArray(data.gear_slots) && data.gear_slots.some(Boolean)) return true
-    if (Number(data.balance) > 0) return true
     const name = String(data.display_name || "").trim()
     const skin = String(data.skin || "").trim()
     return Boolean(guestHasRealName(name) && SKINS.includes(skin))
@@ -163,9 +162,6 @@ function mergeGuestBackupIntoAuth(data, backup) {
     }
     if (!(out.gear_slots?.some?.(Boolean)) && backup.gear_slots?.some?.(Boolean)) {
         out.gear_slots = backup.gear_slots
-    }
-    if (!(Number(out.balance)) && Number(backup.balance) > 0) {
-        out.balance = backup.balance
     }
     if (Array.isArray(backup.owned_skins) && backup.owned_skins.length) {
         out.owned_skins = backup.owned_skins
