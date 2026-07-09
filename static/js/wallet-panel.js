@@ -324,17 +324,15 @@
         el("wallet-deposit-copy")?.addEventListener("click", async () => {
             const addr = el("wallet-deposit-address")?.textContent?.trim()
             const copyBtn = el("wallet-deposit-copy")
-            if (!addr) return
+            if (!addr || !copyBtn) return
+            const original = copyBtn.textContent || "Copy"
             try {
                 await navigator.clipboard.writeText(addr)
-                if (copyBtn) {
-                    const prev = copyBtn.textContent || "Copy"
-                    copyBtn.textContent = "Copied"
-                    setTimeout(() => {
-                        copyBtn.textContent = prev
-                    }, 1600)
-                }
+                copyBtn.textContent = "Copied!"
                 showToast("Copied!")
+                window.setTimeout(() => {
+                    copyBtn.textContent = original
+                }, 2000)
             } catch {
                 showToast("Could not copy.", true)
             }

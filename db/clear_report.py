@@ -537,6 +537,8 @@ def render_clear_report_html(
         "pokequest_profile_vault",
         "pokequest_guest_id",
         "pokequest_vault_unlocked",
+        "pokequest_wallet_session",
+        "pokequest_wallet_address",
       ];
       for (const key of profileKeys) {{
         localStorage.removeItem(key);
