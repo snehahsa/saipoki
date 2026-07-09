@@ -639,8 +639,8 @@ def ensure_user_row(
 
     username = str(user.get("username") or "")
 
-    if is_guest:
-        starting_balance = GUEST_STARTING_BALANCE
+    if is_guest or is_wallet:
+        starting_balance = 0
     elif is_test:
         starting_balance = TEST_STARTING_BALANCE
     else:
@@ -1036,7 +1036,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         gear_slot_count=GEAR_SLOT_COUNT,
         ui_unlocks=ui_unlocks_for_client(),
         avatar_costs=load_avatar_costs_from_map(WORLD_MAP_PATH),
-        starting_balance=GUEST_STARTING_BALANCE if WALLET_CHECK == 0 else STARTING_BALANCE,
+        starting_balance=0 if WALLET_CHECK == 0 else STARTING_BALANCE,
         min_withdraw_kins=MIN_WITHDRAW_KINS,
         vending_spin_first_cost=VENDING_SPIN_FIRST_COST,
         vending_spin_repeat_cost=VENDING_SPIN_REPEAT_COST,
@@ -1670,8 +1670,8 @@ def auth():
             holds = TEST_PLAYER_HOLDS if is_test else []
             gear_slots = list(TEST_PLAYER_GEAR_SLOTS if is_test else [None, None, None])
             vault = test_starter_vault_entries() if is_test else []
-            if is_guest:
-                balance = GUEST_STARTING_BALANCE
+            if is_guest or is_wallet:
+                balance = 0
             elif is_test:
                 balance = TEST_STARTING_BALANCE
             else:

@@ -54,7 +54,7 @@ MIN_TOKEN_UI_AMOUNT = float(os.getenv("WALLET_MIN_TOKEN_UI_AMOUNT", "1000"))
 
 # 0 = no wallet connect / token gating (guest play with free Chips); 1 = require wallet
 WALLET_CHECK = int(os.getenv("WALLET_CHECK", "0"))
-GUEST_STARTING_BALANCE = int(os.getenv("GUEST_STARTING_BALANCE", "50000"))
+GUEST_STARTING_BALANCE = int(os.getenv("GUEST_STARTING_BALANCE", "0"))
 
 _GUEST_ID_RE = re.compile(r"^guest:[a-f0-9\-]{8,}$", re.IGNORECASE)
 
