@@ -1122,21 +1122,17 @@ def favicon():
 
 @app.route("/api/wallet/challenge", methods=["GET", "POST"])
 def wallet_challenge_api():
-    if not wallet_payments_enabled():
-        return jsonify({"ok": False, "error": "Wallet sign-in is disabled."}), 403
     return jsonify(create_wallet_challenge())
 
 
 @app.route("/api/wallet/verify", methods=["POST"])
 def wallet_verify_api():
-    if not wallet_payments_enabled():
-        return jsonify({"success": False, "error": "Wallet sign-in is disabled."}), 403
     data = request.get_json(silent=True) or {}
     ok, error, session_token = verify_wallet_login(
         str(data.get("walletAddress") or ""),
         str(data.get("challengeId") or ""),
         str(data.get("signature") or ""),
-        require_token=True,
+        require_token=False,
     )
     if not ok:
         return jsonify({"success": False, "error": error}), 400
@@ -1167,6 +1163,41 @@ def _auth_wallet_context(data: Optional[dict] = None):
             401,
         )
     return str(user["id"]), wallet, None
+
+
+def _auth_payment_wallet_context(data: Optional[dict] = None):
+    """Auth for Buy/Sell: guest or wallet login + a connected Solana payment wallet."""
+    from wallet_ledger import is_valid_solana_address
+
+    payload = data if data is not None else (request.get_json(silent=True) or {})
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return None, None, err
+
+    wallet = ""
+    user = resolve_auth_user(payload) or {}
+    if user.get("wallet"):
+        wallet = str(user.get("wallet") or "").strip()
+    if not wallet:
+        wallet = str(payload.get("walletAddress") or payload.get("wallet") or "").strip()
+    if not wallet:
+        session_wallet = verify_wallet_session(
+            str(payload.get("walletSession") or "").strip()
+        )
+        if session_wallet:
+            wallet = session_wallet
+    if not is_valid_solana_address(wallet):
+        return None, None, (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Connect Phantom or Solflare first.",
+                    "requires_wallet_connect": True,
+                }
+            ),
+            401,
+        )
+    return telegram_id, wallet, None
 
 
 def _apply_skin_to_user(
@@ -1234,8 +1265,6 @@ def _apply_skin_to_user(
 
 @app.route("/api/kins/config", methods=["GET"])
 def kins_config_api():
-    if not wallet_payments_enabled():
-        return wallet_payments_disabled_response()
     try:
         decimals = get_mint_decimals()
     except (RuntimeError, OSError, ValueError, TypeError):
@@ -1260,8 +1289,6 @@ def kins_config_api():
 
 @app.route("/api/kins/blockhash", methods=["GET"])
 def kins_blockhash_api():
-    if not wallet_payments_enabled():
-        return wallet_payments_disabled_response()
     try:
         block = get_latest_blockhash()
     except (RuntimeError, OSError, TimeoutError, ValueError, TypeError) as exc:
@@ -1330,13 +1357,11 @@ def clear_saved_data():
 
 @app.route("/api/kins/deposit-intent", methods=["POST"])
 def kins_deposit_intent_api():
-    if not wallet_payments_enabled():
-        return wallet_payments_disabled_response()
-    telegram_id, wallet, err = _auth_wallet_context()
+    data = request.get_json(silent=True) or {}
+    telegram_id, wallet, err = _auth_payment_wallet_context(data)
     if err:
         return err
 
-    data = request.get_json(silent=True) or {}
     try:
         amount_kins = int(data.get("amountKins"))
     except (TypeError, ValueError):
@@ -1363,13 +1388,11 @@ def kins_deposit_intent_api():
 
 @app.route("/api/kins/withdraw", methods=["POST"])
 def kins_withdraw_api():
-    if not wallet_payments_enabled():
-        return wallet_payments_disabled_response()
-    telegram_id, wallet, err = _auth_wallet_context()
+    data = request.get_json(silent=True) or {}
+    telegram_id, wallet, err = _auth_payment_wallet_context(data)
     if err:
         return err
 
-    data = request.get_json(silent=True) or {}
     try:
         amount_kins = int(data.get("amountKins"))
     except (TypeError, ValueError):
@@ -1564,13 +1587,11 @@ def kins_skin_intent_api():
 
 @app.route("/api/kins/confirm", methods=["POST"])
 def kins_confirm_api():
-    if not wallet_payments_enabled():
-        return wallet_payments_disabled_response()
-    telegram_id, wallet, err = _auth_wallet_context()
+    data = request.get_json(silent=True) or {}
+    telegram_id, wallet, err = _auth_payment_wallet_context(data)
     if err:
         return err
 
-    data = request.get_json(silent=True) or {}
     payment_id = str(data.get("paymentId") or "").strip()
     tx_signature = str(data.get("signature") or "").strip()
     if not payment_id or not tx_signature:

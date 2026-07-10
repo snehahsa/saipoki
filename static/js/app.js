@@ -1047,8 +1047,59 @@ function formatChipsAmount(n) {
 }
 
 function requiresKinsPayments() {
+    // Avatar shop: on-chain only in wallet-login mode.
     if (!walletRequired()) return false
     return Boolean(session?.requires_kins_payments || session?.wallet_address)
+}
+
+function chipsExchangeAvailable() {
+    return Boolean(window.KinsWallet?.payKinsIntent)
+}
+
+function getPaymentWalletAddress() {
+    return (
+        window.KinsWallet?.getSavedPaymentWallet?.()
+        || sessionStorage.getItem("pokequest_wallet_address")
+        || session?.wallet_address
+        || ""
+    )
+}
+
+function syncPaymentWalletUi() {
+    const address = getPaymentWalletAddress()
+    const short = window.KinsWallet?.shortWallet?.(address) || address
+    const connected = Boolean(address)
+
+    const hudLabel = document.getElementById("game-hud-wallet-link-label")
+    const hudBtn = document.getElementById("game-hud-wallet-connect")
+    if (hudLabel) {
+        hudLabel.textContent = connected ? `Wallet ${short}` : "Wallet not connected"
+    }
+    if (hudBtn) {
+        hudBtn.textContent = connected ? "Change" : "Connect"
+    }
+
+    const profileLabel = document.getElementById("profile-wallet-label")
+    const profileBtn = document.getElementById("profile-wallet-connect-btn")
+    if (profileLabel) {
+        profileLabel.textContent = connected ? `Connected: ${short}` : "Wallet not connected"
+    }
+    if (profileBtn) {
+        profileBtn.textContent = connected ? "Change Wallet" : "Connect Wallet"
+    }
+}
+
+async function connectPaymentWalletFromUi() {
+    try {
+        if (window.SaiPokePlay?.connectPaymentWallet) {
+            window.SaiPokePlay.connectPaymentWallet()
+            return
+        }
+        const addr = await window.KinsWallet?.ensureWalletConnected?.()
+        if (addr) syncPaymentWalletUi()
+    } catch (error) {
+        showGameHudChipsToast(error.message || "Could not connect wallet.", "error")
+    }
 }
 
 function syncWalletEconomyLabels() {
@@ -1070,12 +1121,16 @@ let gameHudChipsToastTimer = null
 function syncGameHudDepositUi() {
     const wrap = document.getElementById("game-hud-deposit")
     if (!wrap) return
-    const show = requiresKinsPayments()
-    wrap.classList.toggle("hidden", !show)
-    if (!show) {
-        closeGameHudDepositPop()
-        hideGameHudChipsToast()
-    }
+    wrap.classList.remove("hidden")
+    syncPaymentWalletUi()
+}
+
+function syncProfileKinsDepositUi() {
+    const section = document.getElementById("profile-kins-deposit")
+    if (!section) return
+    section.classList.remove("hidden")
+    syncWalletEconomyLabels()
+    syncPaymentWalletUi()
 }
 
 function hideGameHudChipsToast() {
@@ -1179,13 +1234,21 @@ function closeProfileChipsForm() {
 }
 
 async function withdrawKinsBalance(amountKins) {
+    const walletAddress = getPaymentWalletAddress()
+        || (await window.KinsWallet?.ensureWalletConnected?.())
+    if (!walletAddress) {
+        throw new Error("Connect Phantom or Solflare first.")
+    }
     const response = await fetch("/api/kins/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiAuthBody({ amountKins })),
+        body: JSON.stringify(apiAuthBody({ amountKins, walletAddress })),
     })
     const data = await response.json()
     if (!response.ok || !data.success) {
+        if (data.requires_wallet_connect) {
+            connectPaymentWalletFromUi()
+        }
         throw new Error(data.error || "Could not sell CHIPS.")
     }
     return data
@@ -1196,6 +1259,12 @@ async function handleGameHudChipsSubmit() {
     const amount = Math.trunc(Number(input?.value || 0))
     if (!Number.isFinite(amount) || amount < 1) {
         showGameHudChipsToast("Enter a valid amount.", "error")
+        return
+    }
+
+    if (!getPaymentWalletAddress()) {
+        showGameHudChipsToast("Connect your wallet first.", "info", 0)
+        connectPaymentWalletFromUi()
         return
     }
 
@@ -1235,13 +1304,6 @@ async function handleGameHudChipsSubmit() {
     } finally {
         if (submitBtn) submitBtn.disabled = false
     }
-}
-
-function syncProfileKinsDepositUi() {
-    const section = document.getElementById("profile-kins-deposit")
-    if (!section) return
-    section.classList.toggle("hidden", !requiresKinsPayments())
-    syncWalletEconomyLabels()
 }
 
 async function purchaseSkinWithKins(skin, displayName) {
@@ -1310,6 +1372,7 @@ window.SaiPokeKins = {
         if (skin) updateProfileActionButton(skin)
         if (sortedSkins[skinIndex]) updateAvatarPriceTag(sortedSkins[skinIndex], "skin")
     },
+    syncPaymentWalletUi,
 }
 
 async function saveSkinOrPay(skin, displayName) {
@@ -6089,10 +6152,31 @@ async function init() {
     })
 
     document.getElementById("game-hud-buy-toggle")?.addEventListener("click", () => {
+        if (!getPaymentWalletAddress()) {
+            openGameHudChipsPop("buy")
+            connectPaymentWalletFromUi()
+            return
+        }
         openGameHudChipsPop("buy")
     })
     document.getElementById("game-hud-sell-toggle")?.addEventListener("click", () => {
+        if (!getPaymentWalletAddress()) {
+            openGameHudChipsPop("sell")
+            connectPaymentWalletFromUi()
+            return
+        }
         openGameHudChipsPop("sell")
+    })
+    document.getElementById("game-hud-wallet-connect")?.addEventListener("click", () => {
+        connectPaymentWalletFromUi()
+    })
+    document.getElementById("profile-wallet-connect-btn")?.addEventListener("click", () => {
+        connectPaymentWalletFromUi()
+    })
+    window.addEventListener("pokequest:payment-wallet", () => syncPaymentWalletUi())
+    window.addEventListener("pokequest:wallet-connected", () => {
+        syncPaymentWalletUi()
+        showGameHudChipsToast("Wallet connected!", "success")
     })
     document.getElementById("game-hud-chips-submit")?.addEventListener("click", () => {
         handleGameHudChipsSubmit()
@@ -6102,9 +6186,19 @@ async function init() {
     })
 
     document.getElementById("profile-deposit-btn")?.addEventListener("click", () => {
+        if (!getPaymentWalletAddress()) {
+            openProfileChipsForm("buy")
+            connectPaymentWalletFromUi()
+            return
+        }
         openProfileChipsForm("buy")
     })
     document.getElementById("profile-withdraw-btn")?.addEventListener("click", () => {
+        if (!getPaymentWalletAddress()) {
+            openProfileChipsForm("sell")
+            connectPaymentWalletFromUi()
+            return
+        }
         openProfileChipsForm("sell")
     })
     document.getElementById("profile-chips-submit")?.addEventListener("click", () => {

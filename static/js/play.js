@@ -73,8 +73,11 @@
 
     function syncWalletConnectedUi() {
         const token = sessionStorage.getItem(STORAGE_KEY)
-        const address = sessionStorage.getItem(WALLET_ADDRESS_KEY) || ""
-        const showBar = Boolean(token) && shouldShowWalletDisconnect()
+        const address =
+            sessionStorage.getItem(WALLET_ADDRESS_KEY)
+            || window.KinsWallet?.getSavedPaymentWallet?.()
+            || ""
+        const showBar = Boolean(token || address) && shouldShowWalletDisconnect()
         if (walletBar) {
             walletBar.classList.toggle("hidden", !showBar)
         }
@@ -85,8 +88,36 @@
             walletBarLabel.classList.toggle("hidden", !address)
         }
         if (walletDisconnectBtn) {
-            walletDisconnectBtn.disabled = !token
+            walletDisconnectBtn.disabled = !(token || address)
+            walletDisconnectBtn.textContent = token ? "Disconnect" : "Forget wallet"
         }
+        window.SaiPokeKins?.syncPaymentWalletUi?.()
+    }
+
+    function openWalletModal(opts = {}) {
+        pendingChallenge = null
+        clearModalStatus()
+        walletModal?.classList.remove("hidden")
+        walletModal?.setAttribute("data-payment-only", opts.paymentOnly ? "1" : "0")
+        syncWalletOptionDetection()
+        void waitForWalletInject().then(() => syncWalletOptionDetection())
+        prefetchChallenge()
+        if (!isPhantomSupportedHost()) {
+            setModalStatus(
+                `Phantom requires localhost. Open ${phantomLocalhostUrl()} instead of this address.`,
+                "error",
+            )
+        }
+    }
+
+    function closeWalletModal() {
+        walletModal?.classList.add("hidden")
+        walletModal?.removeAttribute("data-payment-only")
+        clearModalStatus()
+    }
+
+    function isPaymentOnlyConnect() {
+        return walletModal?.getAttribute("data-payment-only") === "1" || !walletRequired()
     }
 
     async function disconnectWallet() {
@@ -94,6 +125,7 @@
         setBusy(true)
         try {
             clearWalletSession()
+            window.KinsWallet?.clearPaymentWallet?.()
             for (const name of ["phantom", "solflare"]) {
                 const provider = getWalletProvider(name)
                 if (!provider?.disconnect) continue
@@ -265,26 +297,6 @@
         })
     }
 
-    function openWalletModal() {
-        walletModal?.classList.remove("hidden")
-        clearModalStatus()
-        syncWalletOptionDetection()
-        void waitForWalletInject().then(() => syncWalletOptionDetection())
-        prefetchChallenge()
-
-        if (!isPhantomSupportedHost()) {
-            setModalStatus(
-                `Phantom requires localhost. Open ${phantomLocalhostUrl()} instead of this address.`,
-                "error",
-            )
-        }
-    }
-
-    function closeWalletModal() {
-        walletModal?.classList.add("hidden")
-        clearModalStatus()
-    }
-
     function resetChallengePrefetch() {
         pendingChallenge = null
         challengeFetchPromise = null
@@ -413,8 +425,26 @@
             sessionStorage.setItem(STORAGE_KEY, verifyData.walletSession)
             if (verifyData.walletAddress) {
                 sessionStorage.setItem(WALLET_ADDRESS_KEY, verifyData.walletAddress)
+                window.KinsWallet?.savePaymentWallet?.(verifyData.walletAddress)
+            } else {
+                window.KinsWallet?.savePaymentWallet?.(walletAddress)
             }
             syncWalletConnectedUi()
+
+            // Guest play / in-game buy-sell: keep current profile, just save the wallet.
+            if (isPaymentOnlyConnect()) {
+                setLandingStatus("")
+                setModalStatus("Wallet connected.", "success")
+                closeWalletModal()
+                window.SaiPokeKins?.syncPaymentWalletUi?.()
+                window.dispatchEvent(
+                    new CustomEvent("pokequest:wallet-connected", {
+                        detail: { address: verifyData.walletAddress || walletAddress },
+                    }),
+                )
+                return
+            }
+
             setLandingStatus("Wallet verified. Setting up trainer…", "success")
 
             const ok = await window.SaiPokePlay?.bootAfterWallet?.()
@@ -571,6 +601,19 @@
 
             void waitForWalletInject().then(() => syncWalletOptionDetection())
             prefetchChallenge()
+        } else {
+            // Guest play: still allow Connect Wallet from Buy/Sell.
+            document.getElementById("play-wallet-close")?.addEventListener("click", closeWalletModal)
+            walletModal?.addEventListener("click", (event) => {
+                if (event.target === walletModal) closeWalletModal()
+            })
+            document.querySelectorAll("[data-wallet]").forEach((btn) => {
+                btn.addEventListener("click", (event) => {
+                    event.preventDefault()
+                    onWalletButtonClick(btn.getAttribute("data-wallet"))
+                })
+            })
+            void waitForWalletInject().then(() => syncWalletOptionDetection())
         }
 
         syncWalletConnectedUi()
@@ -581,6 +624,8 @@
     window.SaiPokePlay.warmWallet = waitForWalletInject
     window.SaiPokePlay.syncWalletConnectedUi = syncWalletConnectedUi
     window.SaiPokePlay.disconnectWallet = disconnectWallet
+    window.SaiPokePlay.openWalletModal = openWalletModal
+    window.SaiPokePlay.connectPaymentWallet = () => openWalletModal({ paymentOnly: true })
 
     bindLanding()
 })()

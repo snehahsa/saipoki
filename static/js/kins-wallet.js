@@ -1,9 +1,47 @@
 (function () {
     let solanaModulesPromise = null
     let kinsWalletPending = false
+    const PAYMENT_WALLET_KEY = "pokequest_payment_wallet"
 
     function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms))
+    }
+
+    function shortWallet(address) {
+        const a = String(address || "")
+        if (a.length < 10) return a || ""
+        return `${a.slice(0, 4)}…${a.slice(-4)}`
+    }
+
+    function getSavedPaymentWallet() {
+        try {
+            return localStorage.getItem(PAYMENT_WALLET_KEY) || sessionStorage.getItem(PAYMENT_WALLET_KEY) || ""
+        } catch {
+            return ""
+        }
+    }
+
+    function savePaymentWallet(address) {
+        const addr = String(address || "").trim()
+        if (!addr) return
+        try {
+            localStorage.setItem(PAYMENT_WALLET_KEY, addr)
+            sessionStorage.setItem(PAYMENT_WALLET_KEY, addr)
+            sessionStorage.setItem("pokequest_wallet_address", addr)
+        } catch {
+            /* ignore */
+        }
+        window.dispatchEvent(new CustomEvent("pokequest:payment-wallet", { detail: { address: addr } }))
+    }
+
+    function clearPaymentWallet() {
+        try {
+            localStorage.removeItem(PAYMENT_WALLET_KEY)
+            sessionStorage.removeItem(PAYMENT_WALLET_KEY)
+        } catch {
+            /* ignore */
+        }
+        window.dispatchEvent(new CustomEvent("pokequest:payment-wallet", { detail: { address: "" } }))
     }
 
     function setKinsWalletPending(active, message) {
@@ -57,6 +95,23 @@
         if (window.phantom?.solana?.isPhantom) return window.phantom.solana
         if (window.solflare?.isSolflare || window.solflare?.publicKey) return window.solflare
         return null
+    }
+
+    async function ensureWalletConnected() {
+        let provider = getWalletProvider()
+        if (!provider) {
+            throw new Error("Install Phantom or Solflare, then refresh this page.")
+        }
+        if (!provider.publicKey) {
+            const result = await provider.connect()
+            const addr = String(result?.publicKey || provider.publicKey || "")
+            if (!addr) throw new Error("Wallet did not return an address.")
+            savePaymentWallet(addr)
+            return addr
+        }
+        const addr = String(provider.publicKey.toString())
+        savePaymentWallet(addr)
+        return addr
     }
 
     async function fetchKinsConfig() {
@@ -136,6 +191,7 @@
     }
 
     async function sendKinsTransfer(transfer) {
+        await ensureWalletConnected()
         const provider = getWalletProvider()
         if (!provider?.publicKey) {
             throw new Error("Connect Phantom or Solflare first.")
@@ -262,12 +318,14 @@
             throw new Error("A wallet payment is already in progress.")
         }
 
-        setKinsWalletPending(true, "Preparing payment…")
+        setKinsWalletPending(true, "Connecting wallet…")
         try {
+            const walletAddress = await ensureWalletConnected()
+            setKinsWalletPending(true, "Preparing payment…")
             const intentResponse = await fetch(intentPath, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(authBody(intentBody)),
+                body: JSON.stringify(authBody({ ...intentBody, walletAddress })),
             })
             const intent = await intentResponse.json()
             if (!intentResponse.ok || !intent.success) {
@@ -277,7 +335,9 @@
             const transfer = intent.transfer || { amountKins: intent.amountKins }
             setKinsWalletPending(true, "Approve in your wallet…")
             const signature = await sendKinsTransfer(transfer)
-            return await confirmKinsPayment(intent.paymentId, signature, authBody)
+            return await confirmKinsPayment(intent.paymentId, signature, (extra) =>
+                authBody({ ...extra, walletAddress }),
+            )
         } finally {
             setKinsWalletPending(false)
         }
@@ -289,6 +349,11 @@
         confirmKinsPayment,
         payKinsIntent,
         getWalletProvider,
+        ensureWalletConnected,
+        getSavedPaymentWallet,
+        savePaymentWallet,
+        clearPaymentWallet,
+        shortWallet,
         isPaymentPending: () => kinsWalletPending,
         setPaymentPending: setKinsWalletPending,
     }
