@@ -10,6 +10,7 @@
     let busy = false
     let bound = false
     let activeTab = "deposit"
+    let depositMethod = "manual" // manual | wallet
     let balances = {
         chips_balance: 0,
         wallet_token_balance: 0,
@@ -23,6 +24,15 @@
         "Waiting for on-chain confirmation…",
         "Verifying mint, sender, treasury & amount…",
         "Crediting CHIPS…",
+    ]
+
+    const MANUAL_VERIFY_STEPS = [
+        "Checking transaction…",
+        "✓ Signature valid",
+        "✓ Transaction finalized",
+        "✓ Token verified",
+        "✓ Deposit verified",
+        "✓ CHIPS credited",
     ]
 
     function el(id) {
@@ -83,6 +93,7 @@
     function setBusy(state) {
         busy = state
         el("wallet-deposit-submit")?.toggleAttribute("disabled", state)
+        el("wallet-deposit-verify")?.toggleAttribute("disabled", state)
         el("wallet-withdraw-submit")?.toggleAttribute("disabled", state)
         el("wallet-connect-btn")?.toggleAttribute("disabled", state)
         el("wallet-deposit-btn")?.toggleAttribute("disabled", state)
@@ -100,6 +111,17 @@
             walletConfig = await fetch("/api/wallet/config").then((r) => r.json())
         } catch {
             walletConfig = window.APP_CONFIG?.wallet || {}
+        }
+        const addr = walletConfig.gameWallet || walletConfig.game_wallet || ""
+        const addrEl = el("wallet-deposit-address")
+        if (addrEl) addrEl.textContent = addr || "—"
+        const qr = el("wallet-deposit-qr")
+        if (qr && addr) {
+            qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(addr)}`
+            qr.alt = "Deposit QR"
+            qr.classList.remove("hidden")
+        } else if (qr) {
+            qr.classList.add("hidden")
         }
     }
 
@@ -224,10 +246,10 @@
         el("wallet-modal")?.classList.remove("hidden")
         syncConnectUi()
         setTab(tab)
-        if (connectedWallet()) {
-            refreshBalances()
-            loadHistory()
-        }
+        setDepositMethod(depositMethod)
+        refreshBalances()
+        loadHistory()
+        loadConfig()
     }
 
     function closeModal() {
@@ -249,13 +271,31 @@
         depositPanel?.classList.toggle("hidden", !isDeposit)
         withdrawPanel?.classList.toggle("hidden", isDeposit)
         if (isDeposit) {
-            el("wallet-deposit-error").textContent = ""
+            if (el("wallet-deposit-error")) el("wallet-deposit-error").textContent = ""
             el("wallet-deposit-success")?.classList.add("hidden")
         } else {
-            el("wallet-withdraw-error").textContent = ""
+            if (el("wallet-withdraw-error")) el("wallet-withdraw-error").textContent = ""
             el("wallet-withdraw-success")?.classList.add("hidden")
             updateWithdrawPreview()
         }
+        syncConnectUi()
+    }
+
+    function setDepositMethod(method) {
+        depositMethod = method === "wallet" ? "wallet" : "manual"
+        const manualTab = el("wallet-method-manual")
+        const walletTab = el("wallet-method-wallet")
+        const manualPanel = el("wallet-deposit-manual")
+        const walletPanel = el("wallet-deposit-wallet-flow")
+        const isManual = depositMethod === "manual"
+        manualTab?.classList.toggle("is-active", isManual)
+        walletTab?.classList.toggle("is-active", !isManual)
+        manualPanel?.classList.toggle("hidden", !isManual)
+        walletPanel?.classList.toggle("hidden", isManual)
+        if (el("wallet-deposit-error")) el("wallet-deposit-error").textContent = ""
+        el("wallet-deposit-success")?.classList.add("hidden")
+        el("wallet-deposit-steps")?.classList.add("hidden")
+        syncConnectUi()
     }
 
     function syncConnectUi() {
@@ -263,16 +303,23 @@
         const short = window.KinsWallet?.shortWallet?.(wallet) || wallet
         const status = el("wallet-connect-status")
         const btn = el("wallet-connect-btn")
-        const gate = el("wallet-connect-gate")
-        const flow = el("wallet-connected-flow")
         if (status) {
             status.textContent = wallet ? `Connected: ${short}` : "Wallet not connected"
         }
         if (btn) {
             btn.textContent = wallet ? "Change Wallet" : "Connect Wallet"
         }
-        gate?.classList.toggle("hidden", Boolean(wallet))
-        flow?.classList.toggle("hidden", !wallet)
+
+        const walletGate = el("wallet-deposit-wallet-gate")
+        const walletBody = el("wallet-deposit-wallet-body")
+        walletGate?.classList.toggle("hidden", Boolean(wallet))
+        walletBody?.classList.toggle("hidden", !wallet)
+
+        const withdrawGate = el("wallet-withdraw-gate")
+        const withdrawBody = el("wallet-withdraw-body")
+        withdrawGate?.classList.toggle("hidden", Boolean(wallet))
+        withdrawBody?.classList.toggle("hidden", !wallet)
+
         renderBalances()
     }
 
@@ -357,15 +404,14 @@
         }
     }
 
-    async function verifyDepositWithRetry(signature, wallet, amount) {
+    async function verifyDepositWithRetry(signature, wallet = "", amount = null) {
         let lastError = null
         for (let attempt = 0; attempt < 18; attempt += 1) {
             try {
-                return await apiPost("/api/wallet/deposit/verify", {
-                    signature,
-                    sender_wallet: wallet,
-                    amount,
-                })
+                const body = { signature }
+                if (wallet) body.sender_wallet = wallet
+                if (amount != null) body.amount = amount
+                return await apiPost("/api/wallet/deposit/verify", body)
             } catch (err) {
                 lastError = err
                 if (err.code === "pending_credit") {
@@ -381,6 +427,50 @@
             }
         }
         throw lastError || new Error("Deposit verification timed out.")
+    }
+
+    async function applyDepositSuccess(data, creditedFallback = 0) {
+        const credited = data.credited_amount || creditedFallback
+        const successEl = el("wallet-deposit-success")
+        if (successEl) {
+            successEl.textContent = `Deposit successful! +${fmt(credited)} CHIPS`
+            successEl.classList.remove("hidden")
+        }
+        if (data.new_balance != null && window.session) {
+            window.session.balance = data.new_balance
+        }
+        refreshWalletDisplay(data.new_balance)
+        await onBalanceUpdate()
+        await refreshBalances()
+        await loadHistory()
+        showToast(`+${fmt(credited)} CHIPS credited!`)
+    }
+
+    async function verifyManualDeposit() {
+        if (busy) return
+        const input = el("wallet-deposit-signature")
+        const errEl = el("wallet-deposit-error")
+        const sig = input?.value?.trim()
+        if (!sig) {
+            if (errEl) errEl.textContent = "Paste your transaction signature or Solscan link."
+            return
+        }
+        if (errEl) errEl.textContent = ""
+        el("wallet-deposit-success")?.classList.add("hidden")
+        setBusy(true)
+        try {
+            await showDepositSteps(MANUAL_VERIFY_STEPS.slice(0, 1))
+            const data = await verifyDepositWithRetry(sig)
+            await showDepositSteps(MANUAL_VERIFY_STEPS)
+            await applyDepositSuccess(data)
+            if (input) input.value = ""
+        } catch (err) {
+            if (errEl) errEl.textContent = err.message || "Verification failed."
+            el("wallet-deposit-steps")?.classList.add("hidden")
+            showToast(err.message || "Verification failed.", true)
+        } finally {
+            setBusy(false)
+        }
     }
 
     async function submitDeposit() {
@@ -421,19 +511,7 @@
             await showDepositSteps(DEPOSIT_STEPS.slice(0, 4))
             const data = await verifyDepositWithRetry(signature, wallet, amount)
             await showDepositSteps(DEPOSIT_STEPS)
-            const credited = data.credited_amount || amount
-            if (successEl) {
-                successEl.textContent = `Deposit successful! +${fmt(credited)} CHIPS`
-                successEl.classList.remove("hidden")
-            }
-            if (data.new_balance != null && window.session) {
-                window.session.balance = data.new_balance
-            }
-            refreshWalletDisplay(data.new_balance)
-            await onBalanceUpdate()
-            await refreshBalances()
-            await loadHistory()
-            showToast(`+${fmt(credited)} CHIPS credited!`)
+            await applyDepositSuccess(data, amount)
             const input = el("wallet-deposit-amount")
             if (input) input.value = ""
         } catch (err) {
@@ -576,7 +654,10 @@
         el("wallet-connect-btn")?.addEventListener("click", connectWallet)
         el("wallet-tab-deposit")?.addEventListener("click", () => setTab("deposit"))
         el("wallet-tab-withdraw")?.addEventListener("click", () => setTab("withdraw"))
+        el("wallet-method-manual")?.addEventListener("click", () => setDepositMethod("manual"))
+        el("wallet-method-wallet")?.addEventListener("click", () => setDepositMethod("wallet"))
         el("wallet-deposit-submit")?.addEventListener("click", submitDeposit)
+        el("wallet-deposit-verify")?.addEventListener("click", verifyManualDeposit)
         el("wallet-withdraw-submit")?.addEventListener("click", submitWithdraw)
         el("wallet-withdraw-amount")?.addEventListener("input", updateWithdrawPreview)
         el("wallet-deposit-max")?.addEventListener("click", () => {
@@ -590,6 +671,31 @@
             const maxW = walletConfig?.maxWithdraw || chips
             if (input) input.value = String(Math.max(0, Math.min(chips, treasury, maxW)))
             updateWithdrawPreview()
+        })
+        el("wallet-deposit-copy")?.addEventListener("click", async () => {
+            const addr = el("wallet-deposit-address")?.textContent?.trim()
+            const copyBtn = el("wallet-deposit-copy")
+            if (!addr || addr === "—" || !copyBtn) return
+            const original = copyBtn.textContent || "Copy"
+            try {
+                await navigator.clipboard.writeText(addr)
+                copyBtn.textContent = "Copied!"
+                showToast("Copied!")
+                window.setTimeout(() => {
+                    copyBtn.textContent = original
+                }, 2000)
+            } catch {
+                showToast("Could not copy.", true)
+            }
+        })
+        el("wallet-deposit-paste")?.addEventListener("click", async () => {
+            try {
+                const text = await navigator.clipboard.readText()
+                const input = el("wallet-deposit-signature")
+                if (input) input.value = text.trim()
+            } catch {
+                showToast("Paste manually.", true)
+            }
         })
 
         window.addEventListener("pokequest:payment-wallet", async () => {

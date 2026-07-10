@@ -480,11 +480,10 @@ def verify_and_credit_deposit(
         return {"ok": False, "error": "Deposit already claimed.", "code": "duplicate"}
 
     expected_sender = str(expected_sender or "").strip()
-    if not expected_sender or not is_valid_solana_address(expected_sender):
-        return {
-            "ok": False,
-            "error": "Connect your wallet before verifying a deposit.",
-        }
+    # Wallet-transfer deposits bind sender. Manual (paste-sig) deposits omit it and
+    # still require on-chain mint + treasury receiver + amount checks.
+    if expected_sender and not is_valid_solana_address(expected_sender):
+        return {"ok": False, "error": "Invalid connected wallet address."}
 
     ok, err, details = _verify_on_chain_transfer(
         tx_signature,

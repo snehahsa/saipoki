@@ -10393,6 +10393,46 @@ body.vending-open {
     margin-top: 4px;
 }
 
+.wallet-inline-gate {
+    padding: 8px 10px;
+    background: rgba(245, 230, 200, 0.7);
+    border: 2px dashed #c4a574;
+}
+
+.wallet-method-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.wallet-method-tab {
+    font-family: silkscreen, monospace;
+    font-size: 8px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 8px 6px;
+    border: 2px solid #c4a574;
+    background: #fff8ea;
+    color: #5c4a3a;
+    cursor: pointer;
+}
+
+.wallet-method-tab.is-active {
+    border-color: #2a1f14;
+    background: #f5e6c8;
+    color: #2a1f14;
+}
+
+.wallet-method-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wallet-method-panel.hidden {
+    display: none;
+}
+
 .wallet-connected-flow {
     display: flex;
     flex-direction: column;
