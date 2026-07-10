@@ -1,5 +1,5 @@
 /**
- * $POKEQUEST deposit / withdraw wallet panel (Rollbit-style signature verify).
+ * Connected-wallet $POKEQUEST ↔ CHIPS deposit / withdraw panel (1:1).
  */
 (function () {
     let apiAuthBody = () => ({})
@@ -9,14 +9,20 @@
     let walletConfig = null
     let busy = false
     let bound = false
+    let activeTab = "deposit"
+    let balances = {
+        chips_balance: 0,
+        wallet_token_balance: 0,
+        treasury_token_balance: 0,
+    }
+    let withdrawPollTimer = null
 
-    const VERIFY_STEPS = [
-        "Checking transaction…",
-        "✓ Signature valid",
-        "✓ Transaction finalized",
-        "✓ Token verified",
-        "✓ Deposit verified",
-        "✓ CHIPS credited",
+    const DEPOSIT_STEPS = [
+        "Preparing transfer…",
+        "Approve in your wallet…",
+        "Waiting for on-chain confirmation…",
+        "Verifying mint, sender, treasury & amount…",
+        "Crediting CHIPS…",
     ]
 
     function el(id) {
@@ -35,6 +41,18 @@
             .replace(/"/g, "&quot;")
     }
 
+    function sleep(ms) {
+        return new Promise((resolve) => window.setTimeout(resolve, ms))
+    }
+
+    function connectedWallet() {
+        return (
+            window.KinsWallet?.getSavedPaymentWallet?.()
+            || sessionStorage.getItem("pokequest_wallet_address")
+            || ""
+        ).trim()
+    }
+
     async function apiPost(path, body = {}) {
         const res = await fetch(path, {
             method: "POST",
@@ -43,7 +61,11 @@
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok || data.success === false) {
-            throw new Error(data.error || `Request failed (${res.status})`)
+            const err = new Error(data.error || `Request failed (${res.status})`)
+            err.code = data.code
+            err.tx_signature = data.tx_signature
+            err.status = res.status
+            throw err
         }
         return data
     }
@@ -60,10 +82,11 @@
 
     function setBusy(state) {
         busy = state
+        el("wallet-deposit-submit")?.toggleAttribute("disabled", state)
+        el("wallet-withdraw-submit")?.toggleAttribute("disabled", state)
+        el("wallet-connect-btn")?.toggleAttribute("disabled", state)
         el("wallet-deposit-btn")?.toggleAttribute("disabled", state)
         el("wallet-withdraw-btn")?.toggleAttribute("disabled", state)
-        el("wallet-deposit-verify")?.toggleAttribute("disabled", state)
-        el("wallet-withdraw-submit")?.toggleAttribute("disabled", state)
     }
 
     function refreshWalletDisplay(balance) {
@@ -78,15 +101,52 @@
         } catch {
             walletConfig = window.APP_CONFIG?.wallet || {}
         }
-        const addr = walletConfig.gameWallet || walletConfig.game_wallet || ""
-        const addrEl = el("wallet-deposit-address")
-        if (addrEl) addrEl.textContent = addr || "—"
-        const qr = el("wallet-deposit-qr")
-        if (qr && addr) {
-            qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(addr)}`
-            qr.alt = "Deposit QR"
-            qr.classList.remove("hidden")
+    }
+
+    async function refreshBalances() {
+        const wallet = connectedWallet()
+        try {
+            const data = await apiPost("/api/wallet/balances", { wallet })
+            balances = {
+                chips_balance: Number(data.chips_balance) || 0,
+                wallet_token_balance: Number(data.wallet_token_balance) || 0,
+                treasury_token_balance: Number(data.treasury_token_balance) || 0,
+            }
+            if (Number.isFinite(data.chips_balance) && window.session) {
+                window.session.balance = balances.chips_balance
+            }
+            refreshWalletDisplay(balances.chips_balance)
+        } catch {
+            balances.chips_balance = getBalance()
+            if (wallet && window.KinsWallet?.getTokenUiBalance) {
+                try {
+                    balances.wallet_token_balance = await window.KinsWallet.getTokenUiBalance(wallet)
+                } catch {
+                    /* ignore */
+                }
+            }
         }
+        renderBalances()
+    }
+
+    function renderBalances() {
+        const wallet = connectedWallet()
+        const short = window.KinsWallet?.shortWallet?.(wallet) || wallet || "—"
+        const chips = balances.chips_balance || getBalance()
+        const tokenBal = balances.wallet_token_balance || 0
+        const treasury = balances.treasury_token_balance || 0
+
+        const setText = (id, text) => {
+            const node = el(id)
+            if (node) node.textContent = text
+        }
+        setText("wallet-deposit-wallet", short)
+        setText("wallet-withdraw-wallet", short)
+        setText("wallet-deposit-token-bal", fmt(tokenBal))
+        setText("wallet-deposit-chips-bal", fmt(chips))
+        setText("wallet-withdraw-chips", fmt(chips))
+        setText("wallet-withdraw-treasury", fmt(treasury))
+        updateWithdrawPreview()
     }
 
     async function loadHistory() {
@@ -105,6 +165,17 @@
         return s.charAt(0).toUpperCase() + s.slice(1)
     }
 
+    function formatWhen(ts) {
+        const n = Number(ts) || 0
+        if (!n) return ""
+        const diff = Math.floor(Date.now() / 1000) - n
+        if (diff < 60) return "just now"
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+        if (diff < 172800) return "yesterday"
+        return new Date(n * 1000).toLocaleDateString()
+    }
+
     function renderDepositHistory(rows) {
         const box = el("wallet-deposit-history")
         if (!box) return
@@ -114,11 +185,15 @@
         }
         box.innerHTML = rows.slice(0, 8).map((row) => {
             const when = formatWhen(row.verified_at || row.created_at)
+            const sig = row.tx_signature
+            const solscan = sig
+                ? `<a class="wallet-solscan" href="https://solscan.io/tx/${escapeHtml(sig)}" target="_blank" rel="noopener">Solscan</a>`
+                : ""
             return `
                 <div class="wallet-history-row wallet-history-row--in">
                     <span class="wallet-history-amt">+${fmt(row.amount_chips)} CHIPS</span>
                     <span class="wallet-history-status">${escapeHtml(formatStatus(row.status || "confirmed"))}</span>
-                    <span class="wallet-history-when">${escapeHtml(when)}</span>
+                    <span class="wallet-history-when">${escapeHtml(when)} ${solscan}</span>
                 </div>`
         }).join("")
     }
@@ -145,174 +220,63 @@
         }).join("")
     }
 
-    function formatWhen(ts) {
-        const n = Number(ts) || 0
-        if (!n) return ""
-        const diff = Math.floor(Date.now() / 1000) - n
-        if (diff < 60) return "just now"
-        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-        if (diff < 172800) return "yesterday"
-        return new Date(n * 1000).toLocaleDateString()
-    }
-
-    function openModal(id) {
-        el(id)?.classList.remove("hidden")
-    }
-
-    function closeModal(id) {
-        el(id)?.classList.add("hidden")
-    }
-
-    function spawnConfetti(root) {
-        if (!root) return
-        const colors = ["#8bffcf", "#ffd700", "#ff6b9d", "#46d9a0", "#fff"]
-        for (let i = 0; i < 28; i++) {
-            const p = document.createElement("span")
-            p.className = "wallet-confetti"
-            p.style.left = `${10 + Math.random() * 80}%`
-            p.style.background = colors[i % colors.length]
-            p.style.animationDelay = `${Math.random() * 0.35}s`
-            p.style.setProperty("--wallet-drift", `${(Math.random() - 0.5) * 80}px`)
-            root.appendChild(p)
-            window.setTimeout(() => p.remove(), 1600)
+    function openModal(tab = "deposit") {
+        el("wallet-modal")?.classList.remove("hidden")
+        syncConnectUi()
+        setTab(tab)
+        if (connectedWallet()) {
+            refreshBalances()
+            loadHistory()
         }
     }
 
-    async function animateVerifySteps(verifyPromise) {
-        const box = el("wallet-deposit-steps")
-        if (!box) return null
-        box.innerHTML = ""
-        box.classList.remove("hidden")
-
-        const first = document.createElement("p")
-        first.className = "wallet-verify-step"
-        first.textContent = VERIFY_STEPS[0]
-        box.appendChild(first)
-        await new Promise((r) => window.setTimeout(r, 320))
-
-        let data
-        try {
-            data = await verifyPromise
-        } catch (err) {
-            throw err
-        }
-
-        for (const line of VERIFY_STEPS.slice(1)) {
-            const p = document.createElement("p")
-            p.className = "wallet-verify-step is-done"
-            p.textContent = line
-            box.appendChild(p)
-            await new Promise((r) => window.setTimeout(r, 260))
-        }
-        return data
+    function closeModal() {
+        el("wallet-modal")?.classList.add("hidden")
+        stopWithdrawPoll()
     }
 
-    async function verifyDeposit() {
-        if (busy) return
-        const input = el("wallet-deposit-signature")
-        const errEl = el("wallet-deposit-error")
-        const sig = input?.value?.trim()
-        if (!sig) {
-            if (errEl) errEl.textContent = "Paste your transaction signature or Solscan link."
-            return
-        }
-        if (errEl) errEl.textContent = ""
-        setBusy(true)
-        el("wallet-deposit-success")?.classList.add("hidden")
-        try {
-            const verifyPromise = apiPost("/api/wallet/deposit/verify", { signature: sig })
-            const data = await animateVerifySteps(verifyPromise)
-            const credited = data.credited_amount || 0
-            const success = el("wallet-deposit-success")
-            if (success) {
-                success.textContent = `Deposit successful! +${fmt(credited)} CHIPS`
-                success.classList.remove("hidden")
-            }
-            spawnConfetti(el("wallet-deposit-modal"))
-            if (data.new_balance != null && window.session) {
-                window.session.balance = data.new_balance
-            }
-            refreshWalletDisplay(data.new_balance)
-            await onBalanceUpdate()
-            showToast(`+${fmt(credited)} CHIPS credited!`)
-            await loadHistory()
-            if (input) input.value = ""
-            window.setTimeout(() => closeModal("wallet-deposit-modal"), 3000)
-        } catch (err) {
-            if (errEl) errEl.textContent = err.message || "Verification failed."
-            el("wallet-deposit-steps")?.classList.add("hidden")
-        } finally {
-            setBusy(false)
+    function setTab(tab) {
+        activeTab = tab === "withdraw" ? "withdraw" : "deposit"
+        const depositTab = el("wallet-tab-deposit")
+        const withdrawTab = el("wallet-tab-withdraw")
+        const depositPanel = el("wallet-panel-deposit")
+        const withdrawPanel = el("wallet-panel-withdraw")
+        const isDeposit = activeTab === "deposit"
+        depositTab?.classList.toggle("is-active", isDeposit)
+        withdrawTab?.classList.toggle("is-active", !isDeposit)
+        depositTab?.setAttribute("aria-selected", isDeposit ? "true" : "false")
+        withdrawTab?.setAttribute("aria-selected", isDeposit ? "false" : "true")
+        depositPanel?.classList.toggle("hidden", !isDeposit)
+        withdrawPanel?.classList.toggle("hidden", isDeposit)
+        if (isDeposit) {
+            el("wallet-deposit-error").textContent = ""
+            el("wallet-deposit-success")?.classList.add("hidden")
+        } else {
+            el("wallet-withdraw-error").textContent = ""
+            el("wallet-withdraw-success")?.classList.add("hidden")
+            updateWithdrawPreview()
         }
     }
 
-    function updateWithdrawPreview() {
-        const amount = Math.floor(Number(el("wallet-withdraw-amount")?.value) || 0)
-        const out = el("wallet-withdraw-receive")
-        if (out) out.textContent = `${fmt(amount)} POKEQUEST`
-    }
-
-    async function submitWithdraw() {
-        if (busy) return
-        const errEl = el("wallet-withdraw-error")
-        const amount = Math.floor(Number(el("wallet-withdraw-amount")?.value) || 0)
-        const dest = el("wallet-withdraw-dest")?.value?.trim()
-        if (errEl) errEl.textContent = ""
-        if (!dest || amount <= 0) {
-            if (errEl) errEl.textContent = "Enter amount and destination wallet."
-            return
-        }
-        setBusy(true)
-        const progress = el("wallet-withdraw-progress")
-        if (progress) {
-            progress.classList.remove("hidden")
-            progress.textContent = "Preparing…"
-        }
-        try {
-            if (progress) progress.textContent = "Signing…"
-            await new Promise((r) => window.setTimeout(r, 200))
-            if (progress) progress.textContent = "Broadcasting…"
-            const data = await apiPost("/api/wallet/withdraw", {
-                amount,
-                destination_wallet: dest,
-            })
-            if (progress) progress.textContent = "Waiting confirmation…"
-            await new Promise((r) => window.setTimeout(r, 400))
-            if (progress) progress.textContent = "Completed — payout queued."
-            if (data.new_balance != null && window.session) {
-                window.session.balance = data.new_balance
-            }
-            refreshWalletDisplay(data.new_balance)
-            await onBalanceUpdate()
-            showToast("Withdrawal queued!")
-            await loadHistory()
-            window.setTimeout(() => closeModal("wallet-withdraw-modal"), 2000)
-        } catch (err) {
-            if (errEl) errEl.textContent = err.message || "Withdrawal failed."
-            if (progress) progress.classList.add("hidden")
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    function syncDepositConnectUi() {
-        const status = el("wallet-deposit-connect-status")
-        const btn = el("wallet-deposit-connect")
-        const address =
-            window.KinsWallet?.getSavedPaymentWallet?.()
-            || sessionStorage.getItem("pokequest_wallet_address")
-            || ""
-        const short = window.KinsWallet?.shortWallet?.(address) || address
+    function syncConnectUi() {
+        const wallet = connectedWallet()
+        const short = window.KinsWallet?.shortWallet?.(wallet) || wallet
+        const status = el("wallet-connect-status")
+        const btn = el("wallet-connect-btn")
+        const gate = el("wallet-connect-gate")
+        const flow = el("wallet-connected-flow")
         if (status) {
-            status.textContent = address ? `Connected: ${short}` : "Wallet not connected"
+            status.textContent = wallet ? `Connected: ${short}` : "Wallet not connected"
         }
         if (btn) {
-            btn.textContent = address ? "Change Wallet" : "Connect Wallet"
+            btn.textContent = wallet ? "Change Wallet" : "Connect Wallet"
         }
+        gate?.classList.toggle("hidden", Boolean(wallet))
+        flow?.classList.toggle("hidden", !wallet)
+        renderBalances()
     }
 
-    async function connectDepositWallet() {
+    async function connectWallet() {
         try {
             if (window.SaiPokePlay?.connectPaymentWallet) {
                 window.SaiPokePlay.connectPaymentWallet()
@@ -320,7 +284,9 @@
             }
             const addr = await window.KinsWallet?.ensureWalletConnected?.()
             if (addr) {
-                syncDepositConnectUi()
+                syncConnectUi()
+                await refreshBalances()
+                await loadHistory()
                 showToast("Wallet connected!")
             }
         } catch (err) {
@@ -328,77 +294,315 @@
         }
     }
 
+    function updateWithdrawPreview() {
+        const amount = Math.floor(Number(el("wallet-withdraw-amount")?.value) || 0)
+        const out = el("wallet-withdraw-receive")
+        if (out) out.textContent = `${fmt(amount)} $POKEQUEST`
+    }
+
+    function validateDepositAmount(amount) {
+        const min = Number(walletConfig?.minDeposit) || 1
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return "Enter an amount greater than 0."
+        }
+        if (amount < min) {
+            return `Minimum deposit is ${fmt(min)} $POKEQUEST.`
+        }
+        if (amount > (balances.wallet_token_balance || 0)) {
+            return `Amount exceeds wallet balance (${fmt(balances.wallet_token_balance)} $POKEQUEST).`
+        }
+        if (!Number.isInteger(amount)) {
+            return "Amount must be a whole number of tokens."
+        }
+        return ""
+    }
+
+    function validateWithdrawAmount(amount) {
+        const min = Number(walletConfig?.minWithdraw) || 1
+        const max = Number(walletConfig?.maxWithdraw) || Number.MAX_SAFE_INTEGER
+        const chips = balances.chips_balance || getBalance()
+        const treasury = balances.treasury_token_balance || 0
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return "Enter an amount greater than 0."
+        }
+        if (amount < min) {
+            return `Minimum withdrawal is ${fmt(min)} CHIPS.`
+        }
+        if (amount > max) {
+            return `Maximum withdrawal is ${fmt(max)} CHIPS.`
+        }
+        if (amount > chips) {
+            return `Not enough CHIPS — you have ${fmt(chips)}.`
+        }
+        if (amount > treasury) {
+            return `Treasury has insufficient $POKEQUEST (${fmt(treasury)} available).`
+        }
+        if (!Number.isInteger(amount)) {
+            return "Amount must be a whole number of CHIPS."
+        }
+        return ""
+    }
+
+    async function showDepositSteps(lines) {
+        const box = el("wallet-deposit-steps")
+        if (!box) return
+        box.classList.remove("hidden")
+        box.innerHTML = ""
+        for (const line of lines) {
+            const p = document.createElement("p")
+            p.className = "wallet-verify-step is-done"
+            p.textContent = line
+            box.appendChild(p)
+            await sleep(180)
+        }
+    }
+
+    async function verifyDepositWithRetry(signature, wallet, amount) {
+        let lastError = null
+        for (let attempt = 0; attempt < 18; attempt += 1) {
+            try {
+                return await apiPost("/api/wallet/deposit/verify", {
+                    signature,
+                    sender_wallet: wallet,
+                    amount,
+                })
+            } catch (err) {
+                lastError = err
+                if (err.code === "pending_credit") {
+                    await sleep(1500)
+                    continue
+                }
+                const msg = String(err.message || "")
+                if (/not found yet|not finalized|load transaction|try again shortly/i.test(msg)) {
+                    await sleep(2000)
+                    continue
+                }
+                throw err
+            }
+        }
+        throw lastError || new Error("Deposit verification timed out.")
+    }
+
+    async function submitDeposit() {
+        if (busy) return
+        const errEl = el("wallet-deposit-error")
+        const successEl = el("wallet-deposit-success")
+        const amount = Math.floor(Number(el("wallet-deposit-amount")?.value) || 0)
+        if (errEl) errEl.textContent = ""
+        successEl?.classList.add("hidden")
+        el("wallet-deposit-steps")?.classList.add("hidden")
+
+        const wallet = connectedWallet()
+        if (!wallet) {
+            if (errEl) errEl.textContent = "Connect your wallet first."
+            return
+        }
+
+        await refreshBalances()
+        const validation = validateDepositAmount(amount)
+        if (validation) {
+            if (errEl) errEl.textContent = validation
+            return
+        }
+
+        setBusy(true)
+        window.KinsWallet?.setPaymentPending?.(true, "Approve deposit in your wallet…")
+        try {
+            await showDepositSteps(DEPOSIT_STEPS.slice(0, 2))
+            const treasury = walletConfig?.gameWallet || walletConfig?.game_wallet
+            const signature = await window.KinsWallet.sendKinsTransfer({
+                amountKins: amount,
+                treasuryWallet: treasury,
+                mint: walletConfig?.tokenMint,
+                decimals: walletConfig?.mintDecimals,
+                tokenProgram: walletConfig?.tokenProgram,
+                createTreasuryAtaIfNeeded: walletConfig?.createTreasuryAtaIfNeeded,
+            })
+            await showDepositSteps(DEPOSIT_STEPS.slice(0, 4))
+            const data = await verifyDepositWithRetry(signature, wallet, amount)
+            await showDepositSteps(DEPOSIT_STEPS)
+            const credited = data.credited_amount || amount
+            if (successEl) {
+                successEl.textContent = `Deposit successful! +${fmt(credited)} CHIPS`
+                successEl.classList.remove("hidden")
+            }
+            if (data.new_balance != null && window.session) {
+                window.session.balance = data.new_balance
+            }
+            refreshWalletDisplay(data.new_balance)
+            await onBalanceUpdate()
+            await refreshBalances()
+            await loadHistory()
+            showToast(`+${fmt(credited)} CHIPS credited!`)
+            const input = el("wallet-deposit-amount")
+            if (input) input.value = ""
+        } catch (err) {
+            if (errEl) errEl.textContent = err.message || "Deposit failed."
+            el("wallet-deposit-steps")?.classList.add("hidden")
+            showToast(err.message || "Deposit failed.", true)
+        } finally {
+            window.KinsWallet?.setPaymentPending?.(false)
+            setBusy(false)
+        }
+    }
+
+    function stopWithdrawPoll() {
+        if (withdrawPollTimer) {
+            window.clearTimeout(withdrawPollTimer)
+            withdrawPollTimer = null
+        }
+    }
+
+    async function pollWithdrawal(withdrawalId) {
+        const progress = el("wallet-withdraw-progress")
+        const successEl = el("wallet-withdraw-success")
+        const errEl = el("wallet-withdraw-error")
+        const maxAttempts = 40
+        for (let i = 0; i < maxAttempts; i += 1) {
+            try {
+                const qs = new URLSearchParams(apiAuthBody({}))
+                const res = await fetch(`/api/wallet/withdraw/${withdrawalId}?${qs}`)
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || "Could not check withdrawal status.")
+                }
+                const status = String(data.status || "").toLowerCase()
+                if (progress) {
+                    if (status === "pending") progress.textContent = "Queued — waiting for treasury payout…"
+                    else if (status === "broadcasting") progress.textContent = "Sending $POKEQUEST from treasury…"
+                    else progress.textContent = `Status: ${status}`
+                }
+                if (status === "confirmed") {
+                    if (progress) progress.classList.add("hidden")
+                    if (successEl) {
+                        successEl.textContent = `Withdrawal complete! ${fmt(data.amount_chips)} $POKEQUEST sent.`
+                        successEl.classList.remove("hidden")
+                    }
+                    await onBalanceUpdate()
+                    await refreshBalances()
+                    await loadHistory()
+                    showToast("Withdrawal completed!")
+                    return
+                }
+                if (status === "failed" || status === "cancelled") {
+                    if (progress) progress.classList.add("hidden")
+                    const msg = data.error_message || "Withdrawal failed. CHIPS were restored."
+                    if (errEl) errEl.textContent = msg
+                    await onBalanceUpdate()
+                    await refreshBalances()
+                    await loadHistory()
+                    showToast(msg, true)
+                    return
+                }
+            } catch (err) {
+                if (i === maxAttempts - 1) {
+                    if (errEl) errEl.textContent = err.message || "Could not confirm withdrawal."
+                    return
+                }
+            }
+            await sleep(3000)
+        }
+        if (progress) {
+            progress.textContent = "Still processing — check history shortly."
+        }
+        await loadHistory()
+    }
+
+    async function submitWithdraw() {
+        if (busy) return
+        const errEl = el("wallet-withdraw-error")
+        const successEl = el("wallet-withdraw-success")
+        const progress = el("wallet-withdraw-progress")
+        const amount = Math.floor(Number(el("wallet-withdraw-amount")?.value) || 0)
+        if (errEl) errEl.textContent = ""
+        successEl?.classList.add("hidden")
+        progress?.classList.add("hidden")
+
+        const wallet = connectedWallet()
+        if (!wallet) {
+            if (errEl) errEl.textContent = "Connect your wallet first."
+            return
+        }
+
+        await refreshBalances()
+        const validation = validateWithdrawAmount(amount)
+        if (validation) {
+            if (errEl) errEl.textContent = validation
+            return
+        }
+
+        setBusy(true)
+        try {
+            if (progress) {
+                progress.classList.remove("hidden")
+                progress.textContent = "Reserving CHIPS…"
+            }
+            const data = await apiPost("/api/wallet/withdraw", {
+                amount,
+                destination_wallet: wallet,
+            })
+            if (data.new_balance != null && window.session) {
+                window.session.balance = data.new_balance
+            }
+            refreshWalletDisplay(data.new_balance)
+            await onBalanceUpdate()
+            await refreshBalances()
+            await loadHistory()
+            if (progress) progress.textContent = "Queued — waiting for treasury payout…"
+            showToast("Withdrawal queued!")
+            const input = el("wallet-withdraw-amount")
+            if (input) input.value = ""
+            updateWithdrawPreview()
+            // Keep button free while we poll; payout is server-side.
+            setBusy(false)
+            await pollWithdrawal(data.withdrawal_id)
+        } catch (err) {
+            if (errEl) errEl.textContent = err.message || "Withdrawal failed."
+            progress?.classList.add("hidden")
+            showToast(err.message || "Withdrawal failed.", true)
+            await refreshBalances()
+            setBusy(false)
+        }
+    }
+
     function bindEvents() {
         if (bound) return
         bound = true
 
-        el("wallet-deposit-btn")?.addEventListener("click", () => {
-            el("wallet-deposit-error").textContent = ""
-            el("wallet-deposit-success")?.classList.add("hidden")
-            el("wallet-deposit-steps")?.classList.add("hidden")
-            syncDepositConnectUi()
-            openModal("wallet-deposit-modal")
-            loadHistory()
-        })
-        el("wallet-withdraw-btn")?.addEventListener("click", () => {
-            el("wallet-withdraw-error").textContent = ""
-            el("wallet-withdraw-progress")?.classList.add("hidden")
-            el("wallet-withdraw-chips").textContent = fmt(getBalance())
-            updateWithdrawPreview()
-            openModal("wallet-withdraw-modal")
-            loadHistory()
-        })
-
-        el("wallet-deposit-connect")?.addEventListener("click", () => {
-            connectDepositWallet()
-        })
-
-        el("wallet-deposit-close")?.addEventListener("click", () => closeModal("wallet-deposit-modal"))
-        el("wallet-deposit-scrim")?.addEventListener("click", () => closeModal("wallet-deposit-modal"))
-        el("wallet-withdraw-close")?.addEventListener("click", () => closeModal("wallet-withdraw-modal"))
-        el("wallet-withdraw-scrim")?.addEventListener("click", () => closeModal("wallet-withdraw-modal"))
-
-        el("wallet-deposit-copy")?.addEventListener("click", async () => {
-            const addr = el("wallet-deposit-address")?.textContent?.trim()
-            const copyBtn = el("wallet-deposit-copy")
-            if (!addr || !copyBtn) return
-            const original = copyBtn.textContent || "Copy"
-            try {
-                await navigator.clipboard.writeText(addr)
-                copyBtn.textContent = "Copied!"
-                showToast("Copied!")
-                window.setTimeout(() => {
-                    copyBtn.textContent = original
-                }, 2000)
-            } catch {
-                showToast("Could not copy.", true)
-            }
-        })
-
-        el("wallet-deposit-paste")?.addEventListener("click", async () => {
-            try {
-                const text = await navigator.clipboard.readText()
-                const input = el("wallet-deposit-signature")
-                if (input) input.value = text.trim()
-            } catch {
-                showToast("Paste manually.", true)
-            }
-        })
-
-        el("wallet-deposit-verify")?.addEventListener("click", verifyDeposit)
+        el("wallet-deposit-btn")?.addEventListener("click", () => openModal("deposit"))
+        el("wallet-withdraw-btn")?.addEventListener("click", () => openModal("withdraw"))
+        el("wallet-modal-close")?.addEventListener("click", closeModal)
+        el("wallet-modal-scrim")?.addEventListener("click", closeModal)
+        el("wallet-connect-btn")?.addEventListener("click", connectWallet)
+        el("wallet-tab-deposit")?.addEventListener("click", () => setTab("deposit"))
+        el("wallet-tab-withdraw")?.addEventListener("click", () => setTab("withdraw"))
+        el("wallet-deposit-submit")?.addEventListener("click", submitDeposit)
         el("wallet-withdraw-submit")?.addEventListener("click", submitWithdraw)
         el("wallet-withdraw-amount")?.addEventListener("input", updateWithdrawPreview)
+        el("wallet-deposit-max")?.addEventListener("click", () => {
+            const input = el("wallet-deposit-amount")
+            if (input) input.value = String(Math.max(0, balances.wallet_token_balance || 0))
+        })
         el("wallet-withdraw-max")?.addEventListener("click", () => {
             const input = el("wallet-withdraw-amount")
-            const bal = getBalance()
-            const maxW = walletConfig?.maxWithdraw || bal
-            if (input) input.value = String(Math.min(bal, maxW))
+            const chips = balances.chips_balance || getBalance()
+            const treasury = balances.treasury_token_balance || 0
+            const maxW = walletConfig?.maxWithdraw || chips
+            if (input) input.value = String(Math.max(0, Math.min(chips, treasury, maxW)))
             updateWithdrawPreview()
         })
 
-        window.addEventListener("pokequest:payment-wallet", () => syncDepositConnectUi())
-        window.addEventListener("pokequest:wallet-connected", () => {
-            syncDepositConnectUi()
+        window.addEventListener("pokequest:payment-wallet", async () => {
+            syncConnectUi()
+            if (connectedWallet()) {
+                await refreshBalances()
+                await loadHistory()
+            }
+        })
+        window.addEventListener("pokequest:wallet-connected", async () => {
+            syncConnectUi()
+            await refreshBalances()
+            await loadHistory()
             showToast("Wallet connected!")
         })
     }
@@ -410,13 +614,22 @@
         showToast = deps.showToast || showToast
         bindEvents()
         loadConfig()
-        syncDepositConnectUi()
+        syncConnectUi()
+        refreshWalletDisplay()
     }
 
     function sync() {
         refreshWalletDisplay()
-        syncDepositConnectUi()
+        syncConnectUi()
     }
 
-    window.SaiPokeWallet = { init, sync, refreshWalletDisplay, loadHistory, syncDepositConnectUi }
+    window.SaiPokeWallet = {
+        init,
+        sync,
+        refreshWalletDisplay,
+        loadHistory,
+        syncDepositConnectUi: syncConnectUi,
+        open: openModal,
+        close: closeModal,
+    }
 })()

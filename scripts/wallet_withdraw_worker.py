@@ -107,7 +107,12 @@ def process_once() -> int:
             continue
 
         with db_connection() as conn:
-            mark_withdrawal_confirmed(conn, wid, sig)
+            if not mark_withdrawal_confirmed(conn, wid, sig):
+                print(
+                    f"withdrawal {wid} confirm skipped (already settled or duplicate sig)",
+                    file=sys.stderr,
+                )
+                continue
         print(f"withdrawal {wid} confirmed sig={sig}")
         processed += 1
     return processed

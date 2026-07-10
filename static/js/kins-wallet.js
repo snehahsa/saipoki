@@ -343,6 +343,35 @@
         }
     }
 
+    async function getTokenUiBalance(walletAddress) {
+        const address = String(walletAddress || "").trim()
+        if (!address) return 0
+        const config = await fetchKinsConfig()
+        if (!config.rpcUrl || !config.mint) return 0
+        const { web3 } = await loadSolanaModules()
+        const { Connection, PublicKey } = web3
+        const connection = new Connection(config.rpcUrl, "confirmed")
+        const mint = new PublicKey(config.mint)
+        const owner = new PublicKey(address)
+        const tokenProgramId = config.tokenProgram
+            ? new PublicKey(config.tokenProgram)
+            : undefined
+        try {
+            const accounts = await connection.getParsedTokenAccountsByOwner(
+                owner,
+                tokenProgramId ? { mint, programId: tokenProgramId } : { mint },
+            )
+            let total = 0
+            for (const item of accounts?.value || []) {
+                const amount = item?.account?.data?.parsed?.info?.tokenAmount
+                total += Number(amount?.uiAmount || 0)
+            }
+            return Math.floor(total + 1e-9)
+        } catch {
+            return 0
+        }
+    }
+
     window.KinsWallet = {
         fetchKinsConfig,
         sendKinsTransfer,
@@ -353,6 +382,7 @@
         getSavedPaymentWallet,
         savePaymentWallet,
         clearPaymentWallet,
+        getTokenUiBalance,
         shortWallet,
         isPaymentPending: () => kinsWalletPending,
         setPaymentPending: setKinsWalletPending,

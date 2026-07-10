@@ -37,7 +37,9 @@ VERIFY_RATE_WINDOW_SEC = 60
 WITHDRAW_COOLDOWN_SEC = 30
 WITHDRAW_RATE_LIMIT = 6
 
+DEPOSIT_STATUS_PENDING = "pending"
 DEPOSIT_STATUS_CONFIRMED = "confirmed"
+DEPOSIT_STATUS_FAILED = "failed"
 WITHDRAWAL_PENDING = "pending"
 WITHDRAWAL_BROADCASTING = "broadcasting"
 WITHDRAWAL_CONFIRMED = "confirmed"
@@ -112,9 +114,18 @@ def ensure_wallet_ledger_schema(conn: Any) -> None:
         WHERE status IN ('pending', 'broadcasting')
         """
     )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_withdrawals_tx_signature
+        ON withdrawals(tx_signature)
+        WHERE tx_signature IS NOT NULL AND TRIM(tx_signature) != ''
+        """
+    )
 
 
 def wallet_config_for_client() -> dict[str, Any]:
+    from kins_payments import TOKEN_2022_PROGRAM_ID, treasury_kins_ata_exists
+
     return {
         "gameWallet": GAME_WALLET,
         "tokenMint": POKEQUEST_MINT,
@@ -123,6 +134,9 @@ def wallet_config_for_client() -> dict[str, Any]:
         "minWithdraw": MIN_WITHDRAW_CHIPS,
         "maxWithdraw": MAX_WITHDRAW_CHIPS,
         "mintDecimals": get_mint_decimals(POKEQUEST_MINT),
+        "tokenProgram": TOKEN_2022_PROGRAM_ID,
+        "treasuryReady": treasury_kins_ata_exists(),
+        "createTreasuryAtaIfNeeded": not treasury_kins_ata_exists(),
     }
 
 
@@ -255,7 +269,44 @@ def _load_transaction(tx_signature: str) -> tuple[Optional[dict], str]:
     return result, ""
 
 
-def _verify_on_chain_transfer(tx_signature: str) -> tuple[bool, str, dict[str, Any]]:
+def get_owner_token_ui_balance(owner: str, *, mint: str = POKEQUEST_MINT) -> float:
+    """Return UI token balance for an owner wallet (sum of ATAs for the mint)."""
+    owner = str(owner or "").strip()
+    if not owner or not is_valid_solana_address(owner):
+        return 0.0
+    try:
+        result = _rpc(
+            "getTokenAccountsByOwner",
+            [
+                owner,
+                {"mint": mint},
+                {"encoding": "jsonParsed"},
+            ],
+        )
+    except (RuntimeError, OSError, ValueError, TypeError):
+        return 0.0
+
+    total = 0.0
+    for entry in (result or {}).get("value") or []:
+        try:
+            info = (
+                ((entry.get("account") or {}).get("data") or {})
+                .get("parsed", {})
+                .get("info", {})
+            )
+            token_amount = info.get("tokenAmount") or {}
+            total += float(token_amount.get("uiAmount") or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+    return total
+
+
+def _verify_on_chain_transfer(
+    tx_signature: str,
+    *,
+    expected_sender: str = "",
+    expected_amount: Optional[int] = None,
+) -> tuple[bool, str, dict[str, Any]]:
     result, err = _load_transaction(tx_signature)
     if not result:
         return False, err, {}
@@ -273,10 +324,38 @@ def _verify_on_chain_transfer(tx_signature: str) -> tuple[bool, str, dict[str, A
     if not sender_wallet:
         return False, "Could not determine sender wallet from transaction.", {}
 
+    expected_sender = str(expected_sender or "").strip()
+    if expected_sender:
+        if not is_valid_solana_address(expected_sender):
+            return False, "Invalid connected wallet address.", {}
+        if sender_wallet != expected_sender:
+            return (
+                False,
+                "Deposit sender does not match your connected wallet.",
+                {},
+            )
+
     decimals = get_mint_decimals(POKEQUEST_MINT)
     amount_chips = int(math.floor(received_ui + 1e-9))
     if amount_chips < MIN_DEPOSIT_CHIPS:
         return False, f"Deposit below minimum ({MIN_DEPOSIT_CHIPS:,} CHIPS).", {}
+
+    if expected_amount is not None:
+        try:
+            expected_amount = int(expected_amount)
+        except (TypeError, ValueError):
+            expected_amount = 0
+        if expected_amount <= 0:
+            return False, "Invalid deposit amount.", {}
+        if amount_chips != expected_amount:
+            return (
+                False,
+                (
+                    f"On-chain amount ({amount_chips:,}) does not match "
+                    f"requested deposit ({expected_amount:,})."
+                ),
+                {},
+            )
 
     amount_tokens = amount_chips * (10**decimals)
 
@@ -305,11 +384,80 @@ def _lock_user_balance(conn: Any, user_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def _complete_pending_deposit(
+    conn: Any,
+    *,
+    user_id: str,
+    tx_signature: str,
+) -> dict[str, Any]:
+    """Credit CHIPS for a pending deposit row (idempotent recovery)."""
+    ensure_wallet_ledger_schema(conn)
+    row = conn.execute(
+        "SELECT * FROM deposits WHERE tx_signature = ?",
+        (tx_signature,),
+    ).fetchone()
+    if row is None:
+        return {"ok": False, "error": "Deposit not found."}
+    if row["user_id"] != user_id:
+        return {"ok": False, "error": "Deposit already claimed.", "code": "duplicate"}
+    if row["status"] == DEPOSIT_STATUS_CONFIRMED:
+        bal = conn.execute(
+            "SELECT balance FROM users WHERE telegram_id = ?",
+            (user_id,),
+        ).fetchone()
+        return {
+            "ok": True,
+            "credited_amount": 0,
+            "new_balance": int(bal["balance"] or 0) if bal else 0,
+            "tx_signature": tx_signature,
+            "sender_wallet": row["sender_wallet"],
+            "already_credited": True,
+        }
+    if row["status"] != DEPOSIT_STATUS_PENDING:
+        return {"ok": False, "error": f"Deposit status is {row['status']}."}
+
+    amount_chips = int(row["amount_chips"] or 0)
+    now = int(time.time())
+    user = conn.execute(
+        "SELECT balance FROM users WHERE telegram_id = ?",
+        (user_id,),
+    ).fetchone()
+    if user is None:
+        return {"ok": False, "error": "User not found."}
+    prior = int(user["balance"] or 0)
+    conn.execute(
+        """
+        UPDATE users
+        SET balance = balance + ?, updated_at = ?
+        WHERE telegram_id = ?
+        """,
+        (amount_chips, now, user_id),
+    )
+    conn.execute(
+        """
+        UPDATE deposits
+        SET status = ?, verified_at = ?
+        WHERE tx_signature = ? AND status = ?
+        """,
+        (DEPOSIT_STATUS_CONFIRMED, now, tx_signature, DEPOSIT_STATUS_PENDING),
+    )
+    return {
+        "ok": True,
+        "credited_amount": amount_chips,
+        "new_balance": prior + amount_chips,
+        "tx_signature": tx_signature,
+        "sender_wallet": row["sender_wallet"],
+        "recovered": True,
+    }
+
+
 def verify_and_credit_deposit(
     conn: Any,
     *,
     user_id: str,
     signature_input: str,
+    expected_sender: str = "",
+    expected_amount: Optional[int] = None,
 ) -> dict[str, Any]:
     ensure_wallet_ledger_schema(conn)
 
@@ -320,10 +468,29 @@ def verify_and_credit_deposit(
     if not tx_signature:
         return {"ok": False, "error": norm_err or "Invalid signature."}
 
-    if _deposit_exists(conn, tx_signature):
+    existing = conn.execute(
+        "SELECT * FROM deposits WHERE tx_signature = ?",
+        (tx_signature,),
+    ).fetchone()
+    if existing is not None:
+        if existing["status"] == DEPOSIT_STATUS_PENDING and existing["user_id"] == user_id:
+            return _complete_pending_deposit(
+                conn, user_id=user_id, tx_signature=tx_signature
+            )
         return {"ok": False, "error": "Deposit already claimed.", "code": "duplicate"}
 
-    ok, err, details = _verify_on_chain_transfer(tx_signature)
+    expected_sender = str(expected_sender or "").strip()
+    if not expected_sender or not is_valid_solana_address(expected_sender):
+        return {
+            "ok": False,
+            "error": "Connect your wallet before verifying a deposit.",
+        }
+
+    ok, err, details = _verify_on_chain_transfer(
+        tx_signature,
+        expected_sender=expected_sender,
+        expected_amount=expected_amount,
+    )
     if not ok:
         return {"ok": False, "error": err}
 
@@ -339,6 +506,7 @@ def verify_and_credit_deposit(
 
     prior_balance = int(row["balance"] or 0)
 
+    # Insert pending first so an on-chain success is never lost if credit fails.
     try:
         conn.execute(
             """
@@ -355,11 +523,17 @@ def verify_and_credit_deposit(
                 details["receiver_wallet"],
                 int(details["amount_tokens"]),
                 amount_chips,
-                DEPOSIT_STATUS_CONFIRMED,
+                DEPOSIT_STATUS_PENDING,
                 now,
                 now,
             ),
         )
+    except Exception as exc:
+        if _is_unique_violation(exc):
+            return {"ok": False, "error": "Deposit already claimed.", "code": "duplicate"}
+        raise
+
+    try:
         conn.execute(
             """
             UPDATE users
@@ -368,10 +542,31 @@ def verify_and_credit_deposit(
             """,
             (amount_chips, now, user_id),
         )
+        conn.execute(
+            """
+            UPDATE deposits
+            SET status = ?, verified_at = ?
+            WHERE tx_signature = ? AND status = ?
+            """,
+            (DEPOSIT_STATUS_CONFIRMED, now, tx_signature, DEPOSIT_STATUS_PENDING),
+        )
     except Exception as exc:
-        if _is_unique_violation(exc):
-            return {"ok": False, "error": "Deposit already claimed.", "code": "duplicate"}
-        raise
+        logger.exception(
+            "deposit_credit_failed user=%s sig=%s chips=%s err=%s",
+            user_id,
+            tx_signature,
+            amount_chips,
+            exc,
+        )
+        return {
+            "ok": False,
+            "error": (
+                "Deposit recorded on-chain but CHIPS credit is pending recovery. "
+                "Retry verify with the same signature."
+            ),
+            "code": "pending_credit",
+            "tx_signature": tx_signature,
+        }
 
     new_balance = prior_balance + amount_chips
     logger.info(
@@ -480,6 +675,18 @@ def create_withdrawal_request(
             "balance": balance,
         }
 
+    treasury_ui = get_owner_token_ui_balance(GAME_WALLET)
+    treasury_chips = int(math.floor(treasury_ui + 1e-9))
+    if amount_chips > treasury_chips:
+        return {
+            "ok": False,
+            "error": (
+                f"Treasury has insufficient $POKEQUEST "
+                f"({treasury_chips:,} available)."
+            ),
+            "treasury_balance": treasury_chips,
+        }
+
     decimals = get_mint_decimals(POKEQUEST_MINT)
     amount_tokens = amount_chips * (10**decimals)
 
@@ -561,6 +768,9 @@ def refund_failed_withdrawal(
     ).fetchone()
     if not row or row["status"] not in (WITHDRAWAL_PENDING, WITHDRAWAL_BROADCASTING):
         return False
+    # Never refund if a payout signature is already recorded — tokens may have left.
+    if str(row["tx_signature"] or "").strip():
+        return False
 
     user_id = row["user_id"]
     amount_chips = int(row["amount_chips"] or 0)
@@ -579,8 +789,17 @@ def refund_failed_withdrawal(
         UPDATE withdrawals
         SET status = ?, error_message = ?, completed_at = ?
         WHERE id = ?
+          AND status IN (?, ?)
+          AND (tx_signature IS NULL OR tx_signature = '')
         """,
-        (WITHDRAWAL_FAILED, error_message[:500], now, int(withdrawal_id)),
+        (
+            WITHDRAWAL_FAILED,
+            error_message[:500],
+            now,
+            int(withdrawal_id),
+            WITHDRAWAL_PENDING,
+            WITHDRAWAL_BROADCASTING,
+        ),
     )
     logger.warning(
         "withdrawal_refunded id=%s user=%s chips=%s err=%s",
@@ -596,17 +815,80 @@ def mark_withdrawal_confirmed(
     conn: Any,
     withdrawal_id: int,
     tx_signature: str,
-) -> None:
+) -> bool:
     ensure_wallet_ledger_schema(conn)
+    tx_signature = str(tx_signature or "").strip()
+    if not tx_signature:
+        return False
     now = int(time.time())
-    conn.execute(
-        """
-        UPDATE withdrawals
-        SET status = ?, tx_signature = ?, completed_at = ?, error_message = NULL
-        WHERE id = ?
-        """,
-        (WITHDRAWAL_CONFIRMED, tx_signature, now, int(withdrawal_id)),
+    try:
+        cur = conn.execute(
+            """
+            UPDATE withdrawals
+            SET status = ?, tx_signature = ?, completed_at = ?, error_message = NULL
+            WHERE id = ?
+              AND status = ?
+              AND (tx_signature IS NULL OR tx_signature = '')
+            """,
+            (
+                WITHDRAWAL_CONFIRMED,
+                tx_signature,
+                now,
+                int(withdrawal_id),
+                WITHDRAWAL_BROADCASTING,
+            ),
+        )
+    except Exception as exc:
+        if _is_unique_violation(exc):
+            logger.error(
+                "withdrawal_confirm_duplicate_sig id=%s sig=%s",
+                withdrawal_id,
+                tx_signature,
+            )
+            return False
+        raise
+    return bool(getattr(cur, "rowcount", 0))
+
+
+def get_withdrawal(conn: Any, withdrawal_id: int, *, user_id: str = "") -> Optional[dict]:
+    ensure_wallet_ledger_schema(conn)
+    if user_id:
+        row = conn.execute(
+            "SELECT * FROM withdrawals WHERE id = ? AND user_id = ?",
+            (int(withdrawal_id), str(user_id)),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM withdrawals WHERE id = ?",
+            (int(withdrawal_id),),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def wallet_balances_for_client(
+    conn: Any,
+    *,
+    user_id: str,
+    wallet_address: str = "",
+) -> dict[str, Any]:
+    ensure_wallet_ledger_schema(conn)
+    row = conn.execute(
+        "SELECT balance FROM users WHERE telegram_id = ?",
+        (user_id,),
+    ).fetchone()
+    chips = int(row["balance"] or 0) if row else 0
+    wallet_address = str(wallet_address or "").strip()
+    wallet_tokens = (
+        get_owner_token_ui_balance(wallet_address) if wallet_address else 0.0
     )
+    treasury_tokens = get_owner_token_ui_balance(GAME_WALLET)
+    return {
+        "chips_balance": chips,
+        "wallet_token_balance": int(math.floor(wallet_tokens + 1e-9)),
+        "treasury_token_balance": int(math.floor(treasury_tokens + 1e-9)),
+        "wallet_address": wallet_address,
+        "chip_ratio": 1,
+    }
 
 
 def mark_withdrawal_broadcasting(conn: Any, withdrawal_id: int) -> bool:

@@ -894,6 +894,15 @@ function routeGuestAfterAuth() {
     resolveSavedGuestProfile()
     clearReturningGuestBoot()
 
+    if (!session?.has_pin) {
+        openPinScreen("setup")
+        return
+    }
+    if (!pinVerified) {
+        openPinScreen("login")
+        return
+    }
+
     if (guestProfileReady()) {
         showScreen("menu")
         startMenuStats()
@@ -994,7 +1003,33 @@ function advanceSkinSetupFromName() {
         }
         return
     }
-    setSkinSetupStep("picker")
+    if (status) {
+        status.textContent = "Checking username…"
+        status.classList.remove("error")
+    }
+    void (async () => {
+        try {
+            const response = await fetch("/api/username/check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(apiAuthBody({ displayName })),
+            })
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "Could not check username.")
+            }
+            if (!data.available) {
+                throw new Error(data.error || "Username already taken")
+            }
+            if (status) status.textContent = ""
+            setSkinSetupStep("picker")
+        } catch (error) {
+            if (status) {
+                status.textContent = error.message || "Username already taken"
+                status.classList.add("error")
+            }
+        }
+    })()
 }
 
 function skinImage(skin) {
@@ -3907,7 +3942,7 @@ function openPinScreen(mode) {
 }
 
 function pinUnlocked() {
-    if (TEST_MODE || guestPlayMode()) return true
+    if (TEST_MODE) return true
     return Boolean(session?.has_pin && pinVerified)
 }
 
@@ -3986,6 +4021,10 @@ async function completePinEntry() {
         await savePin(pinBuffer)
         session.has_pin = true
         pinVerified = true
+        window.SaiPokePlay?.syncGuestProfileMeta?.({
+            ...session,
+            has_pin: true,
+        })
         clearPinStatus()
         if (!profileSetupComplete()) {
             openSkinSetupScreen()
@@ -5844,7 +5883,10 @@ async function completeSessionBootstrap() {
     }
 
     hidePlayLanding()
-    pinVerified = guestPlayMode()
+    pinVerified = Boolean(window.SaiPokePlay?._guestPinVerified)
+    if (window.SaiPokePlay) {
+        window.SaiPokePlay._guestPinVerified = false
+    }
 
     if (guestPlayMode()) {
         routeGuestAfterAuth()

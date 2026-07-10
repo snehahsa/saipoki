@@ -239,3 +239,7 @@ def init_postgres_schema(conn: Any) -> None:
     from wallet_ledger import ensure_wallet_ledger_schema
 
     ensure_wallet_ledger_schema(conn)
+
+    from player_names import ensure_display_name_unique_index
+
+    ensure_display_name_unique_index(conn)

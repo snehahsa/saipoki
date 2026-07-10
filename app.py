@@ -84,7 +84,9 @@ from kins_payments import (
 )
 from wallet_ledger import (
     create_withdrawal_request,
+    get_withdrawal,
     verify_and_credit_deposit,
+    wallet_balances_for_client,
     wallet_config_for_client,
     wallet_history,
 )
@@ -615,14 +617,20 @@ def normalize_pin(raw) -> Optional[str]:
 
 
 def profile_setup_needs_pin(row, telegram_id: Optional[str] = None) -> bool:
-    """First-time profile save requires a PIN (blocks API bypass of onboarding)."""
-    if telegram_id and is_guest_user_id(telegram_id):
-        return False
+    """Block profile writes until a PIN exists for this trainer."""
     if row is None:
         return False
-    skin = row["skin"] if "skin" in row.keys() else None
     pin = row["pin"] if "pin" in row.keys() else None
-    return skin is None and not pin
+    if pin:
+        return False
+    # Guests and wallet users must set a PIN before saving username/skin.
+    if telegram_id and (
+        is_guest_user_id(telegram_id)
+        or (wallet_payments_enabled() and is_wallet_user_id(telegram_id))
+    ):
+        return True
+    skin = row["skin"] if "skin" in row.keys() else None
+    return skin is None
 
 
 def ensure_user_row(
@@ -1019,6 +1027,7 @@ def _render_game_app(play_mode: bool = False, test_mode: bool = False, test_play
         "dex_icon": asset_version("static/menuitems/dex.png"),
         "phone_icon": asset_version("static/menuitems/phone.png"),
         "kins_wallet_js": asset_version("static/js/kins-wallet.js"),
+        "wallet_panel_js": asset_version("static/js/wallet-panel.js"),
     }
     if play_mode:
         asset_v.update({
@@ -1415,6 +1424,28 @@ def wallet_config_api():
     return jsonify({"success": True, **wallet_config_for_client()})
 
 
+@app.route("/api/wallet/balances", methods=["GET", "POST"])
+def wallet_balances_api():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    wallet = str(
+        data.get("wallet")
+        or data.get("walletAddress")
+        or request.args.get("wallet")
+        or ""
+    ).strip()
+    with get_db() as conn:
+        balances = wallet_balances_for_client(
+            conn,
+            user_id=telegram_id,
+            wallet_address=wallet,
+        )
+    return jsonify({"success": True, **balances})
+
+
 @app.route("/api/wallet/deposit/verify", methods=["POST"])
 def wallet_deposit_verify_api():
     telegram_id, err = _auth_user_from_request()
@@ -1426,21 +1457,48 @@ def wallet_deposit_verify_api():
     if not signature:
         return jsonify({"success": False, "error": "Transaction signature required."}), 400
 
+    expected_sender = str(
+        data.get("sender_wallet")
+        or data.get("walletAddress")
+        or data.get("wallet")
+        or ""
+    ).strip()
+    expected_amount = data.get("amount") or data.get("expected_amount")
+    try:
+        expected_amount = int(expected_amount) if expected_amount is not None else None
+    except (TypeError, ValueError):
+        expected_amount = None
+
     with get_db() as conn:
         result = verify_and_credit_deposit(
             conn,
             user_id=telegram_id,
             signature_input=signature,
+            expected_sender=expected_sender,
+            expected_amount=expected_amount,
         )
     if not result.get("ok"):
         code = 409 if result.get("code") == "duplicate" else 400
-        return jsonify({"success": False, "error": result.get("error", "Verification failed.")}), code
+        if result.get("code") == "pending_credit":
+            code = 202
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": result.get("error", "Verification failed."),
+                    "code": result.get("code"),
+                    "tx_signature": result.get("tx_signature"),
+                }
+            ),
+            code,
+        )
     return jsonify(
         {
             "success": True,
             "credited_amount": result.get("credited_amount"),
             "new_balance": result.get("new_balance"),
             "tx_signature": result.get("tx_signature"),
+            "sender_wallet": result.get("sender_wallet"),
         }
     )
 
@@ -1487,6 +1545,32 @@ def wallet_withdraw_api():
             "status": result.get("status"),
             "new_balance": result.get("new_balance"),
             "amount_chips": result.get("amount_chips"),
+            "destination_wallet": result.get("destination_wallet"),
+        }
+    )
+
+
+@app.route("/api/wallet/withdraw/<int:withdrawal_id>", methods=["GET"])
+def wallet_withdraw_status_api(withdrawal_id: int):
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    with get_db() as conn:
+        row = get_withdrawal(conn, withdrawal_id, user_id=telegram_id)
+    if not row:
+        return jsonify({"success": False, "error": "Withdrawal not found."}), 404
+    return jsonify(
+        {
+            "success": True,
+            "withdrawal_id": row["id"],
+            "status": row["status"],
+            "amount_chips": row["amount_chips"],
+            "destination_wallet": row["destination_wallet"],
+            "tx_signature": row["tx_signature"],
+            "error_message": row["error_message"],
+            "created_at": row["created_at"],
+            "completed_at": row["completed_at"],
         }
     )
 
@@ -1889,7 +1973,7 @@ def guest_profiles_lookup():
         for guest_id in guest_ids:
             row = conn.execute(
                 """
-                SELECT display_name, skin, stats_xp, stats_wins, quest_progress
+                SELECT display_name, skin, stats_xp, stats_wins, quest_progress, pin
                 FROM users WHERE telegram_id = ?
                 """,
                 (guest_id,),
@@ -1903,6 +1987,7 @@ def guest_profiles_lookup():
                         "level": 0,
                         "has_skin": False,
                         "profile_ready": False,
+                        "has_pin": False,
                     }
                 )
                 continue
@@ -1912,6 +1997,7 @@ def guest_profiles_lookup():
             if is_guest_placeholder_name(name):
                 name = ""
             ready = guest_profile_ready(row["display_name"], skin)
+            pin = row["pin"] if "pin" in row.keys() else None
             profiles.append(
                 {
                     "guestId": guest_id,
@@ -1920,6 +2006,7 @@ def guest_profiles_lookup():
                     "level": int(stats.get("level") or 0),
                     "has_skin": skin is not None,
                     "profile_ready": ready,
+                    "has_pin": bool(pin),
                 }
             )
 
@@ -2088,7 +2175,10 @@ def _merge_guest_backup(conn, telegram_id: str, backup: dict, now: int) -> bool:
     if backup_name and (
         not row_name or is_guest_placeholder_name(row_name)
     ):
-        fields["display_name"] = backup_name
+        if not display_name_taken(
+            conn, backup_name, exclude_telegram_id=telegram_id
+        ):
+            fields["display_name"] = backup_name
 
     backup_skin = backup.get("skin") if backup.get("skin") in SKINS else None
     row_skin = row["skin"] if "skin" in row.keys() else None
@@ -2276,12 +2366,30 @@ def set_pin():
 
     now = int(time.time())
     with get_db() as conn:
-        updated = conn.execute(
+        row = conn.execute(
+            "SELECT pin FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        ).fetchone()
+        if row is None:
+            return jsonify({"success": False, "error": "User not found"}), 404
+        existing = row["pin"] if "pin" in row.keys() else None
+        if existing:
+            # PIN already set — only allow change when current PIN is provided.
+            current = normalize_pin(data.get("currentPin") or data.get("current_pin"))
+            if current is None or current != existing:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "PIN already set. Enter the current PIN to change it.",
+                        }
+                    ),
+                    409,
+                )
+        conn.execute(
             "UPDATE users SET pin = ?, updated_at = ? WHERE telegram_id = ?",
             (pin, now, telegram_id),
-        ).rowcount
-        if updated == 0:
-            return jsonify({"success": False, "error": "User not found"}), 404
+        )
 
     return jsonify({"success": True, "has_pin": True})
 
@@ -2310,6 +2418,40 @@ def verify_pin():
             return jsonify({"success": False, "error": "Wrong PIN"}), 401
 
     return jsonify({"success": True})
+
+
+@app.route("/api/username/check", methods=["POST"])
+def username_check_api():
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    display_name = normalize_player_name(data.get("displayName") or data.get("username"))
+    if not display_name:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "available": False,
+                    "error": "Enter a username (3–10 characters)",
+                }
+            ),
+            400,
+        )
+
+    with get_db() as conn:
+        taken = display_name_taken(
+            conn, display_name, exclude_telegram_id=telegram_id
+        )
+    return jsonify(
+        {
+            "success": True,
+            "available": not taken,
+            "display_name": display_name,
+            "error": "Username already taken" if taken else None,
+        }
+    )
 
 
 @app.route("/api/skin", methods=["POST"])

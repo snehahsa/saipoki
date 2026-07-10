@@ -3,14 +3,15 @@
     const VAULT_KEY = "pokequest_profile_vault"
     const GUEST_ID_KEY = "pokequest_guest_id"
     const GUEST_BACKUP_PREFIX = "pokequest_guest_server_backup:"
-    const UNLOCK_KEY = "pokequest_vault_unlocked"
     const MAX_PROFILES = 8
 
     let passcodeBuffer = ""
-    let passcodeMode = "unlock" // unlock | create | confirm
-    let pendingCreateHash = ""
+    let passcodeMode = "profile-login" // profile-login only (per-trainer PIN)
     let flowBusy = false
     let confirmResolver = null
+    let pendingPinGuestId = ""
+    let pendingPinIsNew = false
+    let pendingPinLabel = ""
 
     const flowEl = document.getElementById("play-profile-flow")
     const gateEl = document.getElementById("play-passcode-gate")
@@ -45,7 +46,7 @@
             const raw = localStorage.getItem(VAULT_KEY)
             if (!raw) return null
             const data = JSON.parse(raw)
-            if (!data || typeof data !== "object" || !data.passcodeHash) return null
+            if (!data || typeof data !== "object") return null
             if (!Array.isArray(data.profiles)) data.profiles = []
             data.profiles.forEach((profile, index) => {
                 if (!profile || typeof profile !== "object") return
@@ -63,15 +64,12 @@
         localStorage.setItem(VAULT_KEY, JSON.stringify(vault))
     }
 
-    async function hashPasscode(pin) {
-        const text = `pokequest-vault:${pin}`
-        if (!window.crypto?.subtle) {
-            return text
-        }
-        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
-        return Array.from(new Uint8Array(buf))
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join("")
+    function ensureVault() {
+        let vault = readVault()
+        if (vault) return vault
+        vault = { profiles: legacyProfilesForVault() }
+        writeVault(vault)
+        return vault
     }
 
     function setActiveGuestId(guestId) {
@@ -83,15 +81,6 @@
             ? crypto.randomUUID().replace(/-/g, "")
             : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
         return `guest:${uuid}`
-    }
-
-    function unlockSession(passcodeHash) {
-        sessionStorage.setItem(UNLOCK_KEY, passcodeHash)
-    }
-
-    function isVaultUnlocked(vault) {
-        if (!vault) return false
-        return sessionStorage.getItem(UNLOCK_KEY) === vault.passcodeHash
     }
 
     function isPlaceholderGuestName(name) {
@@ -121,6 +110,8 @@
 
         if (row.has_skin) patch.has_skin = true
         if (row.profile_ready) patch.profile_ready = true
+        if (row.has_pin) patch.has_pin = true
+        if (row.has_pin === false) patch.has_pin = false
 
         const skin = String(row.skin || "").trim()
         if (skin) patch.skin = skin
@@ -310,8 +301,8 @@
     }
 
     function upsertProfileMeta(guestId, patch) {
-        const vault = readVault()
-        if (!vault || !guestId) return
+        const vault = ensureVault()
+        if (!guestId) return
         const idx = vault.profiles.findIndex((p) => p.guestId === guestId)
         const now = Date.now()
         const metaPatch = { ...(patch || {}) }
@@ -409,66 +400,64 @@
         })
     }
 
-    function configurePasscodeGate(mode) {
+    function configurePasscodeGate(mode, label = "") {
         passcodeMode = mode
         clearPasscodeEntry()
-        if (mode === "create") {
-            if (passcodeTitle) passcodeTitle.textContent = "Create passcode"
-            if (passcodeSubtitle) {
-                passcodeSubtitle.textContent = "Pick a 3-digit code to protect profiles on this browser."
-            }
-        } else if (mode === "confirm") {
-            if (passcodeTitle) passcodeTitle.textContent = "Confirm passcode"
-            if (passcodeSubtitle) passcodeSubtitle.textContent = "Enter the same code again."
-        } else {
-            if (passcodeTitle) passcodeTitle.textContent = "Enter passcode"
-            if (passcodeSubtitle) {
-                passcodeSubtitle.textContent = "Unlock your saved trainers on this device."
-            }
+        const name = label || pendingPinLabel || "this trainer"
+        if (passcodeTitle) passcodeTitle.textContent = "Enter trainer PIN"
+        if (passcodeSubtitle) {
+            passcodeSubtitle.textContent = `Enter the 3-digit PIN for ${name}.`
         }
     }
 
-    async function submitPasscode(pin) {
-        const vault = readVault()
-        const hash = await hashPasscode(pin)
+    async function verifyProfilePin(guestId, pin) {
+        const response = await fetch("/api/pin/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ guestId, pin }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || "Wrong PIN")
+        }
+        return true
+    }
 
-        if (passcodeMode === "create") {
-            pendingCreateHash = hash
-            configurePasscodeGate("confirm")
+    async function submitPasscode(pin) {
+        if (passcodeMode !== "profile-login" || !pendingPinGuestId) {
+            closeGuestProfileFlow()
             return
         }
-
-        if (passcodeMode === "confirm") {
-            if (hash !== pendingCreateHash) {
-                if (passcodeStatus) {
-                    passcodeStatus.textContent = "Codes did not match. Try again."
-                    passcodeStatus.classList.add("is-error")
-                }
-                configurePasscodeGate("create")
-                pendingCreateHash = ""
+        const guestId = pendingPinGuestId
+        const isNew = pendingPinIsNew
+        try {
+            await verifyProfilePin(guestId, pin)
+            if (window.SaiPokePlay) {
+                window.SaiPokePlay._guestPinVerified = true
+            }
+            pendingPinGuestId = ""
+            pendingPinIsNew = false
+            pendingPinLabel = ""
+            await bootSelectedProfile(guestId, { isNew, pinAlreadyVerified: true })
+        } catch (error) {
+            const msg = String(error?.message || "")
+            // Server lost the PIN (wipe) — allow entry and force a new PIN setup.
+            if (/not set yet/i.test(msg)) {
+                upsertProfileMeta(guestId, { has_pin: false })
+                pendingPinGuestId = ""
+                pendingPinIsNew = false
+                pendingPinLabel = ""
+                if (window.SaiPokePlay) window.SaiPokePlay._guestPinVerified = false
+                await bootSelectedProfile(guestId, { isNew, pinAlreadyVerified: false })
                 return
             }
-            writeVault({ passcodeHash: hash, profiles: legacyProfilesForVault() })
-            unlockSession(hash)
-            renderProfilePicker()
-            return
-        }
-
-        if (!vault) {
-            configurePasscodeGate("create")
-            return
-        }
-
-        if (hash !== vault.passcodeHash) {
             if (passcodeStatus) {
-                passcodeStatus.textContent = "Wrong passcode."
+                passcodeStatus.textContent = msg || "Wrong PIN."
                 passcodeStatus.classList.add("is-error")
             }
-            return
+            clearPasscodeEntry()
         }
-
-        unlockSession(hash)
-        renderProfilePicker()
     }
 
     function onPasscodeDigit(digit) {
@@ -491,12 +480,7 @@
     }
 
     async function renderProfilePicker() {
-        const vault = readVault()
-        if (!vault || !isVaultUnlocked(vault)) {
-            openGuestProfileFlow()
-            return
-        }
-
+        ensureVault()
         showFlowPanel("picker")
         if (!profileList) return
 
@@ -505,10 +489,11 @@
             profileStatus.classList.remove("is-error")
         }
 
-        await refreshProfileNamesFromServer(vault.profiles)
+        const vault = readVault()
+        await refreshProfileNamesFromServer(vault?.profiles || [])
 
         const refreshedVault = readVault()
-        const sorted = [...(refreshedVault?.profiles || vault.profiles)].sort(
+        const sorted = [...(refreshedVault?.profiles || vault?.profiles || [])].sort(
             (a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0),
         )
 
@@ -522,13 +507,14 @@
             profileList.innerHTML = sorted.map((profile) => {
                 const label = profileLabel(profile)
                 const level = Number(profile.level) > 0 ? `Lv.${profile.level}` : ""
+                const lock = profile.has_pin ? " · PIN" : ""
                 const guestIdEnc = encodeURIComponent(profile.guestId)
                 return (
                     `<div class="play-profile-row" role="listitem">`
                     + `<button type="button" class="play-btn play-btn--ghost play-profile-slot" `
                     + `data-guest-id="${guestIdEnc}">`
                     + `<span class="play-profile-slot-name">${escapeHtml(label)}</span>`
-                    + `<span class="play-profile-slot-meta">${escapeHtml(level)}</span>`
+                    + `<span class="play-profile-slot-meta">${escapeHtml(level)}${escapeHtml(lock)}</span>`
                     + `</button>`
                     + `<button type="button" class="play-profile-delete" data-guest-id="${guestIdEnc}" `
                     + `aria-label="Delete ${escapeHtml(label)}" title="Delete profile">×</button>`
@@ -578,7 +564,32 @@
         })
     }
 
-    async function bootSelectedProfile(guestId, { isNew = false } = {}) {
+    async function beginProfileEntry(guestId, { isNew = false } = {}) {
+        if (!guestId || flowBusy) return
+
+        await refreshProfileNamesFromServer([{ guestId }])
+        const meta = getCachedGuestProfileMeta(guestId)
+        const hasPin = Boolean(meta?.has_pin)
+        const label = profileLabel(meta || { guestId, name: "" })
+
+        // Existing trainer with PIN: unlock that profile before loading session.
+        if (hasPin && !isNew) {
+            pendingPinGuestId = guestId
+            pendingPinIsNew = false
+            pendingPinLabel = label
+            showFlowPanel("gate")
+            configurePasscodeGate("profile-login", label)
+            return
+        }
+
+        // New profile or PIN not set yet — boot, then force PIN setup in-app.
+        if (window.SaiPokePlay) {
+            window.SaiPokePlay._guestPinVerified = false
+        }
+        await bootSelectedProfile(guestId, { isNew, pinAlreadyVerified: false })
+    }
+
+    async function bootSelectedProfile(guestId, { isNew = false, pinAlreadyVerified = false } = {}) {
         if (!guestId || flowBusy) return
         flowBusy = true
         if (profileStatus) {
@@ -588,6 +599,9 @@
 
         if (window.SaiPokePlay) {
             window.SaiPokePlay._returningGuestBoot = !isNew
+            if (pinAlreadyVerified) {
+                window.SaiPokePlay._guestPinVerified = true
+            }
         }
 
         setActiveGuestId(guestId)
@@ -596,6 +610,7 @@
         try {
             const ok = await window.SaiPokePlay?.bootAfterWallet?.()
             if (!ok) {
+                if (window.SaiPokePlay) window.SaiPokePlay._guestPinVerified = false
                 if (profileStatus) {
                     profileStatus.textContent = "Could not load trainer. Try again."
                     profileStatus.classList.add("is-error")
@@ -606,6 +621,7 @@
             const status = document.getElementById("play-status")
             if (status) status.textContent = ""
         } catch (error) {
+            if (window.SaiPokePlay) window.SaiPokePlay._guestPinVerified = false
             if (profileStatus) {
                 profileStatus.textContent = error?.message || "Could not sign in."
                 profileStatus.classList.add("is-error")
@@ -616,8 +632,7 @@
     }
 
     function addNewProfile() {
-        const vault = readVault()
-        if (!vault || !isVaultUnlocked(vault)) return
+        const vault = ensureVault()
         if (vault.profiles.length >= MAX_PROFILES) return
 
         const guestId = createGuestId()
@@ -627,16 +642,16 @@
             name: `New Trainer ${slot}`,
             slot,
             level: 0,
+            has_pin: false,
             updatedAt: Date.now(),
         })
         writeVault(vault)
-        void bootSelectedProfile(guestId, { isNew: true })
+        void beginProfileEntry(guestId, { isNew: true })
     }
 
     async function deleteProfile(guestId) {
         if (!guestId || flowBusy) return
-        const vault = readVault()
-        if (!vault || !isVaultUnlocked(vault)) return
+        const vault = ensureVault()
 
         const profile = vault.profiles.find((p) => p.guestId === guestId)
         const label = profile ? profileLabel(profile) : "this trainer"
@@ -677,21 +692,12 @@
 
     function openGuestProfileFlow() {
         if (!guestProfilesEnabled()) return
-
-        const vault = readVault()
-        if (!vault) {
-            showFlowPanel("gate")
-            configurePasscodeGate("create")
-            return
-        }
-
-        if (isVaultUnlocked(vault)) {
-            renderProfilePicker()
-            return
-        }
-
-        showFlowPanel("gate")
-        configurePasscodeGate("unlock")
+        ensureVault()
+        pendingPinGuestId = ""
+        pendingPinIsNew = false
+        pendingPinLabel = ""
+        if (window.SaiPokePlay) window.SaiPokePlay._guestPinVerified = false
+        void renderProfilePicker()
     }
 
     function getCachedProfileName(guestId) {
@@ -711,6 +717,7 @@
             skin: String(profile.skin || "").trim(),
             has_skin: Boolean(profile.has_skin),
             profile_ready: Boolean(profile.profile_ready),
+            has_pin: Boolean(profile.has_pin),
             serverBackup: profile.serverBackup || null,
         }
     }
@@ -725,6 +732,7 @@
         const patch = { level }
         if (data.has_skin) patch.has_skin = true
         if (data.profile_ready) patch.profile_ready = true
+        if (data.has_pin) patch.has_pin = true
         const skin = String(data.skin || "").trim()
         if (skin) patch.skin = skin
         if (name && !isPlaceholderGuestName(name)) {
@@ -751,22 +759,14 @@
         })
 
         document.getElementById("play-passcode-back")?.addEventListener("click", () => {
-            if (passcodeMode === "confirm") {
-                configurePasscodeGate("create")
-                return
-            }
-            closeGuestProfileFlow()
+            pendingPinGuestId = ""
+            pendingPinIsNew = false
+            pendingPinLabel = ""
+            void renderProfilePicker()
         })
 
         document.getElementById("play-profile-back")?.addEventListener("click", () => {
-            sessionStorage.removeItem(UNLOCK_KEY)
-            const vault = readVault()
-            if (!vault) {
-                closeGuestProfileFlow()
-                return
-            }
-            showFlowPanel("gate")
-            configurePasscodeGate("unlock")
+            closeGuestProfileFlow()
         })
 
         document.getElementById("play-profile-add-btn")?.addEventListener("click", () => {
@@ -794,7 +794,7 @@
             }
             const btn = event.target.closest(".play-profile-slot")
             if (!btn?.dataset.guestId) return
-            void bootSelectedProfile(decodeURIComponent(btn.dataset.guestId))
+            void beginProfileEntry(decodeURIComponent(btn.dataset.guestId))
         })
     }
 

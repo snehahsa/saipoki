@@ -123,12 +123,16 @@ ensure_python_deps
 ensure_game_server_deps
 
 cleanup() {
-  kill "$GAME_PID" "$FLASK_PID" 2>/dev/null || true
+  kill "$GAME_PID" "$FLASK_PID" "$WITHDRAW_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
 (cd game-server && npm run dev) &
 GAME_PID=$!
+
+"$PYTHON" scripts/wallet_withdraw_worker.py &
+WITHDRAW_PID=$!
+echo "Withdraw worker pid ${WITHDRAW_PID}"
 
 for _ in $(seq 1 40); do
   if lsof -ti "tcp:${GAME_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -165,4 +169,4 @@ fi
 
 echo "Game ready → http://127.0.0.1:${PORT}/play?alice"
 
-wait "$FLASK_PID" "$GAME_PID"
+wait "$FLASK_PID" "$GAME_PID" "$WITHDRAW_PID"
