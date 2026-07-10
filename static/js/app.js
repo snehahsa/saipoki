@@ -1119,18 +1119,15 @@ let profileChipsMode = "buy"
 let gameHudChipsToastTimer = null
 
 function syncGameHudDepositUi() {
-    const wrap = document.getElementById("game-hud-deposit")
-    if (!wrap) return
-    wrap.classList.remove("hidden")
-    syncPaymentWalletUi()
+    // Buy/Sell HUD removed — Deposit/Withdraw panel only.
+    document.getElementById("game-hud-deposit")?.classList.add("hidden")
 }
 
 function syncProfileKinsDepositUi() {
     const section = document.getElementById("profile-kins-deposit")
     if (!section) return
-    section.classList.remove("hidden")
+    section.classList.add("hidden")
     syncWalletEconomyLabels()
-    syncPaymentWalletUi()
 }
 
 function hideGameHudChipsToast() {
@@ -6151,33 +6148,6 @@ async function init() {
         }
     })
 
-    document.getElementById("game-hud-buy-toggle")?.addEventListener("click", () => {
-        if (!getPaymentWalletAddress()) {
-            openGameHudChipsPop("buy")
-            connectPaymentWalletFromUi()
-            return
-        }
-        openGameHudChipsPop("buy")
-    })
-    document.getElementById("game-hud-sell-toggle")?.addEventListener("click", () => {
-        if (!getPaymentWalletAddress()) {
-            openGameHudChipsPop("sell")
-            connectPaymentWalletFromUi()
-            return
-        }
-        openGameHudChipsPop("sell")
-    })
-    document.getElementById("game-hud-wallet-connect")?.addEventListener("click", () => {
-        connectPaymentWalletFromUi()
-    })
-    document.getElementById("profile-wallet-connect-btn")?.addEventListener("click", () => {
-        connectPaymentWalletFromUi()
-    })
-    window.addEventListener("pokequest:payment-wallet", () => syncPaymentWalletUi())
-    window.addEventListener("pokequest:wallet-connected", () => {
-        syncPaymentWalletUi()
-        showGameHudChipsToast("Wallet connected!", "success")
-    })
     document.getElementById("game-hud-chips-submit")?.addEventListener("click", () => {
         handleGameHudChipsSubmit()
     })
@@ -6186,19 +6156,9 @@ async function init() {
     })
 
     document.getElementById("profile-deposit-btn")?.addEventListener("click", () => {
-        if (!getPaymentWalletAddress()) {
-            openProfileChipsForm("buy")
-            connectPaymentWalletFromUi()
-            return
-        }
         openProfileChipsForm("buy")
     })
     document.getElementById("profile-withdraw-btn")?.addEventListener("click", () => {
-        if (!getPaymentWalletAddress()) {
-            openProfileChipsForm("sell")
-            connectPaymentWalletFromUi()
-            return
-        }
         openProfileChipsForm("sell")
     })
     document.getElementById("profile-chips-submit")?.addEventListener("click", () => {

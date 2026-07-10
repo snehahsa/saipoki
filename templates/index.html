@@ -488,13 +488,9 @@
             <span class="profile-balance-label"> CHIPS</span>
         </div>
 
-        <section class="profile-section profile-kins-deposit" id="profile-kins-deposit" aria-label="Buy and sell CHIPS">
+        <section class="profile-section profile-kins-deposit hidden" id="profile-kins-deposit" aria-label="Buy and sell CHIPS">
             <p class="profile-section-title">CHIPS Exchange</p>
-            <p class="profile-section-note">1 $POKEQUEST = 1 CHIPS. Connect your wallet to buy or sell.</p>
-            <div class="profile-wallet-row" id="profile-wallet-row">
-                <span class="profile-wallet-label" id="profile-wallet-label">Wallet not connected</span>
-                <button type="button" class="profile-chips-btn profile-chips-btn--connect" id="profile-wallet-connect-btn">Connect Wallet</button>
-            </div>
+            <p class="profile-section-note">1 $POKEQUEST = 1 CHIPS. Buy sends on-chain to treasury; sell debits CHIPS and queues $POKEQUEST to your wallet.</p>
             <div class="profile-chips-actions">
                 <button class="profile-chips-btn profile-chips-btn--buy" id="profile-deposit-btn" type="button" data-kins-buy>Buy CHIPS</button>
                 <button class="profile-chips-btn profile-chips-btn--sell" id="profile-withdraw-btn" type="button">Sell CHIPS</button>
@@ -688,36 +684,6 @@
                 <button type="button" class="game-hud-wallet-btn game-hud-wallet-btn--withdraw" id="wallet-withdraw-btn">Withdraw</button>
             </div>
         </section>
-        <div class="game-hud-deposit" id="game-hud-deposit" aria-label="Buy and sell CHIPS">
-            <div class="game-hud-wallet-link" id="game-hud-wallet-link">
-                <span class="game-hud-wallet-link-label" id="game-hud-wallet-link-label">Wallet not connected</span>
-                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--connect" id="game-hud-wallet-connect">Connect</button>
-            </div>
-            <div class="game-hud-chips-actions">
-                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--buy" id="game-hud-buy-toggle" data-kins-buy>Buy CHIPS</button>
-                <button type="button" class="game-hud-chips-btn game-hud-chips-btn--sell" id="game-hud-sell-toggle">Sell CHIPS</button>
-            </div>
-            <div class="game-hud-chips-form hidden" id="game-hud-chips-form">
-                <input
-                    type="number"
-                    id="game-hud-deposit-amount"
-                    class="game-hud-chips-amount-input"
-                    min="1"
-                    step="1"
-                    inputmode="numeric"
-                    placeholder="Amount"
-                    aria-label="Amount"
-                >
-                <button type="button" class="game-hud-chips-submit game-hud-chips-submit--buy" id="game-hud-chips-submit" data-kins-buy>Buy</button>
-                <button type="button" class="game-hud-chips-close" id="game-hud-chips-close">Cancel</button>
-            </div>
-            <div class="game-hud-chips-toast hidden" id="game-hud-chips-toast" role="status" aria-live="polite">
-                <div class="game-hud-chips-toast-row">
-                    <span class="poke-chips poke-chips--sm game-hud-chips-toast-chips" aria-hidden="true"></span>
-                    <p class="game-hud-chips-toast-text" id="game-hud-chips-toast-text"></p>
-                </div>
-            </div>
-        </div>
     </div>
     <div class="game-top-actions">
         <button
@@ -1458,6 +1424,10 @@
             <button type="button" class="wallet-modal-close" id="wallet-deposit-close" aria-label="Close">×</button>
         </header>
         <div class="wallet-modal-body">
+            <div class="wallet-connect-row" id="wallet-deposit-connect-row">
+                <span class="wallet-connect-status" id="wallet-deposit-connect-status">Wallet not connected</span>
+                <button type="button" class="wallet-mini-btn wallet-mini-btn--connect" id="wallet-deposit-connect">Connect Wallet</button>
+            </div>
             <p class="wallet-modal-label">Deposit address</p>
             <div class="wallet-address-row">
                 <code class="wallet-address" id="wallet-deposit-address">—</code>

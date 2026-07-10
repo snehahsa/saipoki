@@ -296,6 +296,38 @@
         }
     }
 
+    function syncDepositConnectUi() {
+        const status = el("wallet-deposit-connect-status")
+        const btn = el("wallet-deposit-connect")
+        const address =
+            window.KinsWallet?.getSavedPaymentWallet?.()
+            || sessionStorage.getItem("pokequest_wallet_address")
+            || ""
+        const short = window.KinsWallet?.shortWallet?.(address) || address
+        if (status) {
+            status.textContent = address ? `Connected: ${short}` : "Wallet not connected"
+        }
+        if (btn) {
+            btn.textContent = address ? "Change Wallet" : "Connect Wallet"
+        }
+    }
+
+    async function connectDepositWallet() {
+        try {
+            if (window.SaiPokePlay?.connectPaymentWallet) {
+                window.SaiPokePlay.connectPaymentWallet()
+                return
+            }
+            const addr = await window.KinsWallet?.ensureWalletConnected?.()
+            if (addr) {
+                syncDepositConnectUi()
+                showToast("Wallet connected!")
+            }
+        } catch (err) {
+            showToast(err.message || "Could not connect wallet.", true)
+        }
+    }
+
     function bindEvents() {
         if (bound) return
         bound = true
@@ -304,6 +336,7 @@
             el("wallet-deposit-error").textContent = ""
             el("wallet-deposit-success")?.classList.add("hidden")
             el("wallet-deposit-steps")?.classList.add("hidden")
+            syncDepositConnectUi()
             openModal("wallet-deposit-modal")
             loadHistory()
         })
@@ -314,6 +347,10 @@
             updateWithdrawPreview()
             openModal("wallet-withdraw-modal")
             loadHistory()
+        })
+
+        el("wallet-deposit-connect")?.addEventListener("click", () => {
+            connectDepositWallet()
         })
 
         el("wallet-deposit-close")?.addEventListener("click", () => closeModal("wallet-deposit-modal"))
@@ -358,6 +395,12 @@
             if (input) input.value = String(Math.min(bal, maxW))
             updateWithdrawPreview()
         })
+
+        window.addEventListener("pokequest:payment-wallet", () => syncDepositConnectUi())
+        window.addEventListener("pokequest:wallet-connected", () => {
+            syncDepositConnectUi()
+            showToast("Wallet connected!")
+        })
     }
 
     function init(deps = {}) {
@@ -367,11 +410,13 @@
         showToast = deps.showToast || showToast
         bindEvents()
         loadConfig()
+        syncDepositConnectUi()
     }
 
     function sync() {
         refreshWalletDisplay()
+        syncDepositConnectUi()
     }
 
-    window.SaiPokeWallet = { init, sync, refreshWalletDisplay, loadHistory }
+    window.SaiPokeWallet = { init, sync, refreshWalletDisplay, loadHistory, syncDepositConnectUi }
 })()
