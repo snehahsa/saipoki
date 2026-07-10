@@ -10368,7 +10368,7 @@ body.vending-open {
 .wallet-connect-status {
     font-family: silkscreen, monospace;
     font-size: 9px;
-    color: #4a3728;
+    color: #111;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -10376,8 +10376,9 @@ body.vending-open {
 
 .wallet-mini-btn--connect {
     flex-shrink: 0;
-    background: #2a4a6b;
-    color: #e8f4ff;
+    background: #f5e6c8;
+    color: #111;
+    border: 2px solid #2a1f14;
 }
 
 .wallet-modal-note,
