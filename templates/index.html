@@ -317,7 +317,7 @@
         </div>
 
         <button class="btn btn-play welcome-setup-btn" id="welcome-setup-btn" type="button">Setup Your Profile</button>
-        <p class="welcome-footnote">Set a PIN, enter your trainer name &amp; choose your avatar</p>
+        <p class="welcome-footnote">Set a PIN, enter your username &amp; choose your avatar</p>
     </div>
 </div>
 
@@ -364,21 +364,22 @@
             <button class="btn btn-secondary btn-screen-back hidden" id="skin-name-back-btn" type="button">← Back</button>
         </nav>
         <p class="panel-pixel-title">SETUP YOUR PROFILE</p>
-        <p class="subtitle" id="skin-setup-subtitle">Enter your trainer name</p>
+        <p class="subtitle" id="skin-setup-subtitle">Enter your username</p>
 
-        <section class="skin-section skin-section-name" id="skin-setup-name-step" aria-label="Trainer name">
+        <section class="skin-section skin-section-name" id="skin-setup-name-step" aria-label="Username">
             <label class="skin-name-field">
-                <span class="skin-name-label">Enter your trainer name</span>
+                <span class="skin-name-label">Username</span>
                 <input
                     type="text"
                     id="skin-player-name-input"
                     class="skin-name-input"
-                    maxlength="24"
-                    autocomplete="nickname"
+                    maxlength="10"
+                    minlength="3"
+                    autocomplete="username"
                     placeholder=""
                 >
             </label>
-            <p class="skin-name-hint">Shown under your character in the world</p>
+            <p class="skin-name-hint">3–10 characters. Progress is saved to this username.</p>
         </section>
 
         <section class="skin-section skin-section-picker hidden" id="skin-setup-skin-step" aria-label="Avatar selection">

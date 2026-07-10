@@ -247,7 +247,9 @@ export class PlayApp extends App {
         const flow = npc.getActiveFlow()
         const holds = this.getPlayerHolds()
         if (flow) {
-            if (flow.takeGear) {
+            // Never takeGear before grantHold — grant_consumes_gear removes the item
+            // atomically. Parallel takeGear races and bricks the hand-in (key gone, no tablet).
+            if (flow.takeGear && !flow.grantHold) {
                 signal.emit('takeGear', { item: flow.takeGear, source: `npc:${npc.id}` })
             }
             if (flow.grantHold && canGrantFlowHold(flow, holds, this.holdGrantRules)) {
@@ -256,7 +258,12 @@ export class PlayApp extends App {
             if (flow.grantGear) {
                 signal.emit('grantGear', { item: flow.grantGear, source: `npc:${npc.id}` })
             }
-            if (flow.questStep && (!flow.grantHold || canGrantFlowHold(flow, holds, this.holdGrantRules))) {
+            // When grantHold owns the quest_step (via hold catalog), only complete it
+            // after a successful grant — do not mark the step on dialogue alone.
+            if (
+                flow.questStep
+                && !flow.grantHold
+            ) {
                 signal.emit('questStep', {
                     step_id: flow.questStep,
                     quest_id: flow.questId || 'week1_vault_trail',

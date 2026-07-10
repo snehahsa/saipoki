@@ -581,9 +581,28 @@ def normalize_player_name(raw) -> Optional[str]:
     if raw is None:
         return None
     name = " ".join(str(raw).strip().split())
-    if not name or len(name) > 24:
+    if not name or len(name) < 3 or len(name) > 10:
         return None
     return name
+
+
+def display_name_taken(conn, display_name: str, *, exclude_telegram_id: str) -> bool:
+    """Case-insensitive uniqueness check for player usernames."""
+    name = normalize_player_name(display_name)
+    if not name:
+        return False
+    row = conn.execute(
+        """
+        SELECT telegram_id FROM users
+        WHERE LOWER(display_name) = LOWER(?)
+          AND telegram_id != ?
+          AND display_name IS NOT NULL
+          AND TRIM(display_name) != ''
+        LIMIT 1
+        """,
+        (name, str(exclude_telegram_id)),
+    ).fetchone()
+    return row is not None
 
 
 def normalize_pin(raw) -> Optional[str]:
@@ -1504,8 +1523,8 @@ def kins_skin_intent_api():
     display_name = None
     if data.get("displayName") is not None and str(data.get("displayName")).strip():
         display_name = normalize_player_name(data.get("displayName"))
-        if display_name is None:
-            return jsonify({"success": False, "error": "Enter a name (1–24 characters)"}), 400
+        if not display_name:
+            return jsonify({"success": False, "error": "Enter a username (3–10 characters)"}), 400
 
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
     with get_db() as conn:
@@ -1517,6 +1536,10 @@ def kins_skin_intent_api():
             return jsonify({"success": False, "error": "User not found"}), 404
         if profile_setup_needs_pin(row, telegram_id):
             return jsonify({"success": False, "error": "Set a trainer PIN first."}), 403
+        if display_name is not None and display_name_taken(
+            conn, display_name, exclude_telegram_id=telegram_id
+        ):
+            return jsonify({"success": False, "error": "Username already taken"}), 409
         owned_skins = parse_owned_skins(row["owned_skins"], row["skin"])
         cost = purchase_cost(skin, owned_skins, avatar_costs)
         if cost <= 0:
@@ -2285,7 +2308,7 @@ def save_skin():
     if display_name_raw is not None and str(display_name_raw).strip():
         display_name = normalize_player_name(display_name_raw)
         if display_name is None:
-            return jsonify({"success": False, "error": "Enter a name (1–24 characters)"}), 400
+            return jsonify({"success": False, "error": "Enter a username (3–10 characters)"}), 400
 
     telegram_id = str(user["id"])
     avatar_costs = load_avatar_costs_from_map(WORLD_MAP_PATH)
@@ -2293,6 +2316,10 @@ def save_skin():
     now = int(time.time())
     with get_db() as conn:
         ensure_user_row(conn, telegram_id, user=user, is_test=request_is_test_mode(data), now=now)
+        if display_name is not None and display_name_taken(
+            conn, display_name, exclude_telegram_id=telegram_id
+        ):
+            return jsonify({"success": False, "error": "Username already taken"}), 409
         row = conn.execute(
             "SELECT display_name, skin, balance, owned_skins FROM users WHERE telegram_id = ?",
             (telegram_id,),

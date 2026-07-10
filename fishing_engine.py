@@ -143,6 +143,33 @@ def start_fishing_cast(
     fishing = parse_fishing_progress(progress.get("fishing"))
     state = fishing.get(quest_key) or _default_fishing_state()
 
+    # Sticky found with no key in slots = broken hand-in (key consumed without tablet).
+    # Allow re-fishing so the player can recover.
+    if state.get("found") and reward_gear and reward_gear not in slots:
+        import json as _json
+
+        holds_raw = row["holds"] if "holds" in row.keys() else None
+        holds: list[str] = []
+        if isinstance(holds_raw, list):
+            holds = [str(x) for x in holds_raw]
+        elif holds_raw:
+            try:
+                parsed = _json.loads(holds_raw)
+                if isinstance(parsed, list):
+                    holds = [str(x) for x in parsed]
+            except (TypeError, ValueError):
+                holds = []
+        if "poketab" not in holds:
+            state["found"] = False
+            state["win_trial"] = 0
+            state["salvage_casts"] = 0
+            fishing[quest_key] = state
+            progress["fishing"] = fishing
+            conn.execute(
+                "UPDATE users SET quest_progress = ?, updated_at = ? WHERE telegram_id = ?",
+                (_json.dumps(progress), int(time.time()), telegram_id),
+            )
+
     if state.get("found") or reward_gear in slots:
         return {"ok": False, "error": "Quest already complete"}
 

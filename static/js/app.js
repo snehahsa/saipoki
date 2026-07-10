@@ -183,8 +183,8 @@ function syncWelcomeCopy() {
     const footnote = document.querySelector(".welcome-footnote")
     if (!footnote) return
     footnote.textContent = guestPlayMode()
-        ? "Enter your trainer name & choose your avatar"
-        : "Set a PIN, enter your trainer name & choose your avatar"
+        ? "Enter your username & choose your avatar"
+        : "Set a PIN, enter your username & choose your avatar"
 }
 
 function questTitleForId(questId) {
@@ -757,7 +757,7 @@ function truncateDisplayName(name) {
 
 function normalizePlayerName(raw) {
     const name = String(raw || "").trim().replace(/\s+/g, " ")
-    if (!name || name.length > 24) return null
+    if (!name || name.length < 3 || name.length > 10) return null
     return name
 }
 
@@ -946,7 +946,7 @@ function setSkinSetupStep(step) {
     backBtn?.classList.toggle("hidden", onNameStep)
 
     if (subtitle) {
-        subtitle.textContent = onNameStep ? "Enter your trainer name" : "Choose your avatar"
+        subtitle.textContent = onNameStep ? "Enter your username" : "Choose your avatar"
     }
     if (onNameStep) {
         if (hint) hint.textContent = ""
@@ -989,7 +989,7 @@ function advanceSkinSetupFromName() {
     const displayName = normalizePlayerName(getSkinNameInputValue())
     if (!displayName) {
         if (status) {
-            status.textContent = "Enter a trainer name (1–24 characters)"
+            status.textContent = "Enter a username (3–10 characters)"
             status.classList.add("error")
         }
         return
@@ -5967,7 +5967,7 @@ async function init() {
             const skin = sortedSkins[skinIndex]
             const displayName = normalizePlayerName(getSkinNameInputValue())
             if (!displayName) {
-                throw new Error("Enter a trainer name (1–24 characters)")
+                throw new Error("Enter a username (3–10 characters)")
             }
 
             const cost = avatarPurchaseCost(skin)
