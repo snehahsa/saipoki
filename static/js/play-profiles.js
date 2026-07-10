@@ -216,11 +216,20 @@
         if (!guestId) return
         const backup = sessionBackupFromAuth(data)
         if (!backup) return
-        // The auth response never carries the PIN value, so carry it over from the
-        // previously-saved backup (set explicitly via setGuestBackupPin) — otherwise
-        // every save would drop the PIN and it'd be lost after a server wipe.
-        const prevPin = readStandaloneGuestBackup(guestId)?.pin
-        if (prevPin && !backup.pin) backup.pin = prevPin
+        // Auth responses often omit PIN and (after a wipe) display_name. Never let an
+        // empty re-auth clobber a previously saved username/PIN in the browser vault.
+        const prev = readStandaloneGuestBackup(guestId)
+            || getCachedGuestProfileMeta(guestId)?.serverBackup
+            || null
+        if (prev?.pin && !backup.pin) backup.pin = prev.pin
+        const prevName = String(prev?.display_name || "").trim()
+        if (prevName && !isPlaceholderGuestName(prevName) && !backup.display_name) {
+            backup.display_name = prevName
+        }
+        const metaName = String(getCachedGuestProfileMeta(guestId)?.name || "").trim()
+        if (metaName && !isPlaceholderGuestName(metaName) && !backup.display_name) {
+            backup.display_name = metaName
+        }
         writeStandaloneGuestBackup(guestId, backup)
         upsertProfileMeta(guestId, { serverBackup: backup })
     }
@@ -328,6 +337,15 @@
                 const nextSteps = metaPatch.serverBackup?.quest_progress?.completed_steps?.length || 0
                 if (prevSteps > nextSteps) {
                     next.serverBackup = prev.serverBackup
+                } else {
+                    const prevBackupName = String(prev.serverBackup.display_name || "").trim()
+                    const nextBackupName = String(metaPatch.serverBackup.display_name || "").trim()
+                    if (prevBackupName && !isPlaceholderGuestName(prevBackupName) && !nextBackupName) {
+                        next.serverBackup = {
+                            ...metaPatch.serverBackup,
+                            display_name: prevBackupName,
+                        }
+                    }
                 }
             }
             if (!next.slot) {

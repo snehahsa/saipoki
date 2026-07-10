@@ -4537,6 +4537,10 @@ async function enterGame() {
         if (!response.ok || !fresh.success) {
             throw new Error(fresh.error || "Session expired. Reopen the app.")
         }
+        // Keep the local username if /api/auth returns empty (common after a DB wipe
+        // or when the guest row has skin but no display_name yet). Spreading `fresh`
+        // would otherwise overwrite "zai" with "" and the realm label becomes Trainer.
+        const previousDisplayName = String(session?.display_name || "").trim()
         session = {
             ...session,
             ...fresh,
@@ -4548,12 +4552,18 @@ async function enterGame() {
             ),
         }
         session.vault = vaultCardIdsFromDetail(session.vault_detail)
-        touchGuestServerBackup()
+        if (!guestHasRealName(session.display_name) && guestHasRealName(previousDisplayName)) {
+            session.display_name = previousDisplayName
+        }
         if (guestPlayMode()) {
+            finalizeGuestSessionFromAuth(session)
+            touchGuestServerBackup()
             const guestId = getActiveGuestId()
             if (guestId) {
                 void window.SaiPokePlay?.syncGuestProfileToServer?.(guestId)
             }
+        } else {
+            touchGuestServerBackup()
         }
     } catch (error) {
         setGameLoading("", false)
