@@ -10353,6 +10353,33 @@ body.vending-open {
     margin: 0;
 }
 
+.wallet-connect-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 0 4px;
+    padding: 8px 10px;
+    background: rgba(255, 248, 234, 0.85);
+    border: 2px solid var(--panel-border);
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.wallet-connect-status {
+    font-family: silkscreen, monospace;
+    font-size: 9px;
+    color: #4a3728;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wallet-mini-btn--connect {
+    flex-shrink: 0;
+    background: #2a4a6b;
+    color: #e8f4ff;
+}
+
 .wallet-modal-note,
 .wallet-modal-hint {
     font-size: 12px;
