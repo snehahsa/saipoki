@@ -451,6 +451,18 @@
         </div>
 
         <div class="menu-audio-row">
+            {% if play_mode %}
+            <button
+                type="button"
+                class="menu-wallet-btn is-disconnected"
+                id="menu-wallet-connect-btn"
+                aria-label="Connect wallet"
+                title="Connect Phantom or Solflare"
+            >
+                <span class="menu-wallet-glyph" aria-hidden="true">◎</span>
+                <span class="menu-wallet-text">Wallet</span>
+            </button>
+            {% endif %}
             <button
                 type="button"
                 class="audio-mute-btn"

@@ -3643,9 +3643,60 @@ body.kins-wallet-pending [data-kins-buy] {
 
 .menu-audio-row {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
     width: 100%;
     margin: 2px 0 10px;
+}
+
+.menu-wallet-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 28px;
+    padding: 4px 10px;
+    border: 2px solid rgba(0, 0, 0, 0.22);
+    border-radius: 0;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.18);
+    font-family: silkscreen, "Courier New", monospace;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #fff;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    flex-shrink: 0;
+}
+
+.menu-wallet-btn.is-disconnected {
+    background: #b91c1c;
+    border-color: #7f1d1d;
+}
+
+.menu-wallet-btn.is-connected {
+    background: #15803d;
+    border-color: #14532d;
+}
+
+.menu-wallet-btn:active,
+.menu-wallet-btn.pressed {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+}
+
+.menu-wallet-glyph {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.menu-wallet-text {
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .audio-mute-btn {

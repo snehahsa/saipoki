@@ -512,6 +512,9 @@ function showScreen(name) {
             if (name === "profile") {
                 renderProfileScreen()
             }
+            if (name === "menu") {
+                syncPaymentWalletUi()
+            }
         })
     }
 }
@@ -588,6 +591,16 @@ function bindAudioMuteButtons() {
         })
     })
     syncAudioMuteUi()
+}
+
+function bindMenuWalletButton() {
+    const btn = document.getElementById("menu-wallet-connect-btn")
+    if (!btn || btn.dataset.menuWalletBound) return
+    btn.dataset.menuWalletBound = "1"
+    btn.addEventListener("click", () => {
+        void connectPaymentWalletFromUi()
+    })
+    syncPaymentWalletUi()
 }
 
 function gameClientReady() {
@@ -1121,6 +1134,18 @@ function syncPaymentWalletUi() {
     }
     if (profileBtn) {
         profileBtn.textContent = connected ? "Change Wallet" : "Connect Wallet"
+    }
+
+    const menuBtn = document.getElementById("menu-wallet-connect-btn")
+    const menuText = menuBtn?.querySelector(".menu-wallet-text")
+    if (menuBtn) {
+        menuBtn.classList.toggle("is-connected", connected)
+        menuBtn.classList.toggle("is-disconnected", !connected)
+        menuBtn.setAttribute("aria-label", connected ? `Wallet connected ${short}` : "Connect wallet")
+        menuBtn.title = connected ? `Connected ${short} — tap to change` : "Connect Phantom or Solflare"
+        if (menuText) {
+            menuText.textContent = connected ? short : "Wallet"
+        }
     }
 }
 
@@ -4116,6 +4141,7 @@ function populateMenu() {
 
     updateMenuAvatar(session.skin)
     initSkinNameInput()
+    syncPaymentWalletUi()
 }
 
 function shortWalletAddress(address) {
@@ -6318,6 +6344,9 @@ async function init() {
     document.getElementById("sign-modal-skip")?.addEventListener("click", skipSignModal)
 
     bindAudioMuteButtons()
+    bindMenuWalletButton()
+    window.addEventListener("pokequest:payment-wallet", () => syncPaymentWalletUi())
+    window.addEventListener("pokequest:wallet-connected", () => syncPaymentWalletUi())
     bindNoSelectOnButtons()
     bindButtonPressAnimation()
     bindPadControls()
