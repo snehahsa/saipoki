@@ -10677,6 +10677,26 @@ body.vending-open {
     color: #2a1f14;
 }
 
+.link-wallet-connect-block {
+    margin-top: 14px;
+    text-align: left;
+}
+
+.link-wallet-connect-hint {
+    margin: 0 0 10px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #4a3728;
+}
+
+#link-wallet-screen .link-wallet-options {
+    margin: 0;
+}
+
+#link-wallet-screen .play-wallet-option {
+    width: 100%;
+}
+
 .wallet-verify-steps {
     display: flex;
     flex-direction: column;

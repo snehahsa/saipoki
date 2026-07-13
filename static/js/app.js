@@ -513,7 +513,7 @@ function showScreen(name) {
                 renderProfileScreen()
             }
             if (name === "menu") {
-                syncPaymentWalletUi()
+                syncMenuLinkedWalletUi()
             }
         })
     }
@@ -598,6 +598,7 @@ function bindMenuWalletButton() {
     if (!btn || btn.dataset.menuWalletBound) return
     btn.dataset.menuWalletBound = "1"
     btn.addEventListener("click", () => {
+        // Same path as the menu "Link Wallet" item — never payment-connect from here.
         if (guestPlayMode()) {
             void openLinkWalletScreen()
             return
@@ -1140,7 +1141,7 @@ function syncPaymentWalletUi() {
         profileBtn.textContent = connected ? "Change Wallet" : "Connect Wallet"
     }
 
-    syncMenuLinkedWalletUi()
+    // Menu status is identity-link only — never update it from payment connects.
 }
 
 function getLinkedWalletAddress() {
@@ -4163,6 +4164,7 @@ function populateMenu() {
     updateMenuAvatar(session.skin)
     initSkinNameInput()
     syncPaymentWalletUi()
+    syncMenuLinkedWalletUi()
 }
 
 function shortWalletAddress(address) {
@@ -4195,13 +4197,71 @@ function renderLinkWalletScreen() {
     }
     if (actionBtn) {
         actionBtn.disabled = false
-        actionBtn.textContent = linked ? "Re-verify linked wallet" : "Link Phantom / Solflare"
+        actionBtn.textContent = linked ? "Open wallet picker" : "Open wallet picker"
+    }
+}
+
+function refreshLinkWalletDetection() {
+    void window.SaiPokePlay?.warmWallet?.().then(() => {
+        window.SaiPokePlay?.syncWalletOptionDetection?.()
+    })
+    window.SaiPokePlay?.syncWalletOptionDetection?.()
+}
+
+function startLinkWalletConnect(walletName) {
+    const errorEl = document.getElementById("link-wallet-error")
+    const successEl = document.getElementById("link-wallet-success")
+    if (errorEl) {
+        errorEl.textContent = ""
+        errorEl.classList.remove("error")
+    }
+    if (successEl) {
+        successEl.textContent = ""
+        successEl.classList.add("hidden")
+    }
+    if (!getActiveGuestId()) {
+        if (errorEl) {
+            errorEl.textContent = "Sign in to your trainer first, then link a wallet."
+            errorEl.classList.add("error")
+        }
+        return
+    }
+    // Same connect path as Sign in with Wallet (mode = link).
+    if (walletName) {
+        if (typeof window.SaiPokePlay?.beginWalletConnect !== "function") {
+            if (errorEl) {
+                errorEl.textContent = "Wallet connect UI failed to load. Hard refresh and try again."
+                errorEl.classList.add("error")
+            }
+            return
+        }
+        window.SaiPokePlay.beginWalletConnect(walletName, "link")
+        return
+    }
+    if (typeof window.SaiPokePlay?.connectLinkWallet !== "function"
+        && typeof window.SaiPokePlay?.startWalletFlow !== "function") {
+        if (errorEl) {
+            errorEl.textContent = "Wallet link UI failed to load. Hard refresh and try again."
+            errorEl.classList.add("error")
+        }
+        return
+    }
+    if (window.SaiPokePlay.startWalletFlow) {
+        window.SaiPokePlay.startWalletFlow("link")
+    } else {
+        window.SaiPokePlay.connectLinkWallet()
     }
 }
 
 async function openLinkWalletScreen() {
     if (!guestPlayMode()) return
-    // Always trust the server row — never browser cache for linkage status.
+
+    // Navigate immediately so the menu wallet button does not wait / flicker.
+    renderLinkWalletScreen()
+    showScreen("linkWallet")
+    refreshLinkWalletDetection()
+
+    // Refresh status from server after the screen is visible.
     try {
         const data = await authenticate()
         if (data) {
@@ -4209,12 +4269,11 @@ async function openLinkWalletScreen() {
             session.has_linked_wallet = Boolean(data.has_linked_wallet && session.linked_wallet)
         }
     } catch {
-        session.linked_wallet = null
-        session.has_linked_wallet = false
+        /* keep current session values; screen already open */
     }
     renderLinkWalletScreen()
     syncMenuLinkedWalletUi()
-    showScreen("linkWallet")
+    refreshLinkWalletDetection()
 }
 
 function onWalletLinked(detail = {}) {
@@ -6240,37 +6299,20 @@ async function init() {
         showScreen("profile")
     })
     document.getElementById("link-wallet-btn")?.addEventListener("click", () => {
-        openLinkWalletScreen()
+        void openLinkWalletScreen()
     })
     document.getElementById("link-wallet-back-btn")?.addEventListener("click", () => {
         showScreen("menu")
     })
     document.getElementById("link-wallet-action-btn")?.addEventListener("click", () => {
-        const errorEl = document.getElementById("link-wallet-error")
-        const successEl = document.getElementById("link-wallet-success")
-        if (errorEl) {
-            errorEl.textContent = ""
-            errorEl.classList.remove("error")
-        }
-        if (successEl) {
-            successEl.textContent = ""
-            successEl.classList.add("hidden")
-        }
-        if (typeof window.SaiPokePlay?.connectLinkWallet !== "function") {
-            if (errorEl) {
-                errorEl.textContent = "Wallet link UI failed to load. Hard refresh and try again."
-                errorEl.classList.add("error")
-            }
-            return
-        }
-        if (!getActiveGuestId()) {
-            if (errorEl) {
-                errorEl.textContent = "Sign in to your trainer first, then link a wallet."
-                errorEl.classList.add("error")
-            }
-            return
-        }
-        window.SaiPokePlay.connectLinkWallet()
+        // Same calling pattern as landing "Sign in with Wallet".
+        startLinkWalletConnect()
+    })
+    document.querySelectorAll("#link-wallet-screen [data-link-wallet][data-wallet]").forEach((btn) => {
+        btn.addEventListener("click", (event) => {
+            event.preventDefault()
+            startLinkWalletConnect(btn.getAttribute("data-wallet"))
+        })
     })
     window.addEventListener("pokequest:wallet-linked", (event) => {
         onWalletLinked(event.detail || {})

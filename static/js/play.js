@@ -167,6 +167,40 @@
         }
     }
 
+    /** Same entry used by Sign in with Wallet and Link Wallet. */
+    function startWalletFlow(mode) {
+        if (walletBusy) return false
+        openWalletModal({ mode: resolveConnectMode({ mode }) })
+        return true
+    }
+
+    /**
+     * Pick Phantom/Solflare for a specific flow (link / login / payment).
+     * Opens the shared status modal, then runs the same connect + signMessage path.
+     */
+    function beginWalletConnect(walletName, mode) {
+        if (walletBusy || !walletName) return false
+        const resolved = resolveConnectMode({ mode })
+        pendingChallenge = null
+        clearModalStatus()
+        walletModal?.classList.remove("hidden")
+        walletModal?.setAttribute("data-connect-mode", resolved)
+        walletModal?.setAttribute("data-payment-only", resolved === "payment" ? "1" : "0")
+        updateWalletModalCopy(resolved)
+        syncWalletOptionDetection()
+        void waitForWalletInject().then(() => syncWalletOptionDetection())
+        prefetchChallenge()
+        if (walletName === "phantom" && !isPhantomSupportedHost()) {
+            setModalStatus(
+                `Phantom only works on localhost or https. Open ${phantomLocalhostUrl()} instead.`,
+                "error",
+            )
+            return false
+        }
+        onWalletButtonClick(walletName)
+        return true
+    }
+
     function closeWalletModal() {
         walletModal?.classList.add("hidden")
         walletModal?.removeAttribute("data-payment-only")
@@ -772,7 +806,7 @@
 
         document.getElementById("wallet-login-btn")?.addEventListener("click", () => {
             if (walletBusy || walletRequired()) return
-            openWalletModal({ mode: "login" })
+            startWalletFlow("login")
         })
 
         walletDisconnectBtn?.addEventListener("click", () => {
@@ -789,7 +823,7 @@
                 if (event.target === walletModal) closeWalletModal()
             })
 
-            document.querySelectorAll("[data-wallet]").forEach((btn) => {
+            document.querySelectorAll("#play-wallet-modal [data-wallet]").forEach((btn) => {
                 btn.addEventListener("click", (event) => {
                     event.preventDefault()
                     onWalletButtonClick(btn.getAttribute("data-wallet"))
@@ -799,12 +833,12 @@
             void waitForWalletInject().then(() => syncWalletOptionDetection())
             prefetchChallenge()
         } else {
-            // Guest play: still allow Connect Wallet from Buy/Sell.
+            // Guest play: payment / link / login share this modal.
             document.getElementById("play-wallet-close")?.addEventListener("click", closeWalletModal)
             walletModal?.addEventListener("click", (event) => {
                 if (event.target === walletModal) closeWalletModal()
             })
-            document.querySelectorAll("[data-wallet]").forEach((btn) => {
+            document.querySelectorAll("#play-wallet-modal [data-wallet]").forEach((btn) => {
                 btn.addEventListener("click", (event) => {
                     event.preventDefault()
                     onWalletButtonClick(btn.getAttribute("data-wallet"))
@@ -819,12 +853,15 @@
     window.SaiPokePlay = window.SaiPokePlay || {}
     window.SaiPokePlay.bindLanding = bindLanding
     window.SaiPokePlay.warmWallet = waitForWalletInject
+    window.SaiPokePlay.syncWalletOptionDetection = syncWalletOptionDetection
     window.SaiPokePlay.syncWalletConnectedUi = syncWalletConnectedUi
     window.SaiPokePlay.disconnectWallet = disconnectWallet
     window.SaiPokePlay.openWalletModal = openWalletModal
-    window.SaiPokePlay.connectPaymentWallet = () => openWalletModal({ mode: "payment" })
-    window.SaiPokePlay.connectLinkWallet = () => openWalletModal({ mode: "link" })
-    window.SaiPokePlay.connectWalletLogin = () => openWalletModal({ mode: "login" })
+    window.SaiPokePlay.startWalletFlow = startWalletFlow
+    window.SaiPokePlay.beginWalletConnect = beginWalletConnect
+    window.SaiPokePlay.connectPaymentWallet = () => startWalletFlow("payment")
+    window.SaiPokePlay.connectLinkWallet = () => startWalletFlow("link")
+    window.SaiPokePlay.connectWalletLogin = () => startWalletFlow("login")
 
     bindLanding()
 })()

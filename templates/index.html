@@ -518,8 +518,33 @@
 
         <p class="status" id="link-wallet-error"></p>
         <p class="wallet-success hidden" id="link-wallet-success"></p>
-        <div class="menu-grid" style="margin-top: 12px;">
-            <button class="btn btn-play" id="link-wallet-action-btn" type="button">Link Phantom / Solflare</button>
+
+        <div class="link-wallet-connect-block" aria-label="Connect wallet to link">
+            <p class="wallet-modal-label">Connect wallet</p>
+            <p class="link-wallet-connect-hint">Same Phantom / Solflare flow as Sign in with Wallet — off-chain message only.</p>
+            <div class="play-wallet-options link-wallet-options">
+                <button type="button" class="play-wallet-option" id="link-wallet-phantom-btn" data-wallet="phantom" data-link-wallet="1">
+                    <span class="play-wallet-icon" aria-hidden="true">
+                        <img src="/static/logos/ph.svg?v={{ asset_v.phantom_logo }}" alt="" width="28" height="28" decoding="async">
+                    </span>
+                    <span class="play-wallet-option-text">
+                        <span class="play-wallet-option-name">Phantom</span>
+                        <span class="play-wallet-detected hidden" data-wallet-detected="phantom">Phantom detected</span>
+                    </span>
+                </button>
+                <button type="button" class="play-wallet-option" id="link-wallet-solflare-btn" data-wallet="solflare" data-link-wallet="1">
+                    <span class="play-wallet-icon" aria-hidden="true">
+                        <img src="/static/logos/sol.svg?v={{ asset_v.solflare_logo }}" alt="" width="28" height="28" decoding="async">
+                    </span>
+                    <span class="play-wallet-option-text">
+                        <span class="play-wallet-option-name">Solflare</span>
+                        <span class="play-wallet-detected hidden" data-wallet-detected="solflare">Solflare detected</span>
+                    </span>
+                </button>
+            </div>
+            <button class="btn btn-secondary" id="link-wallet-action-btn" type="button" style="margin-top: 10px; width: 100%;">
+                Open wallet picker
+            </button>
         </div>
     </div>
 </div>
