@@ -421,7 +421,11 @@
     }
 
     function guestIdForAuth() {
-        return String(localStorage.getItem("pokequest_guest_id") || "").trim()
+        return String(
+            window.SaiPokePlay?.getActiveGuestId?.()
+            || localStorage.getItem("pokequest_guest_id")
+            || "",
+        ).trim()
     }
 
     async function postWalletOwnership(path, walletAddress, challengeId, signature, extra = {}) {
@@ -633,6 +637,7 @@
             clearTimeout(hintTimer)
             const code = error?.code
             const message = String(error?.message || "")
+            const modeNow = getConnectMode()
 
             if (code === 4001 || /reject|denied|cancel/i.test(message)) {
                 setModalStatus("Wallet connection cancelled.", "error")
@@ -645,6 +650,9 @@
                 setModalStatus(message || "Wallet connect failed.", "error")
             } else {
                 setLandingStatus(message || "Wallet connect failed.", "error")
+            }
+
+            if (modeNow === "link" || modeNow === "login") {
                 window.dispatchEvent(
                     new CustomEvent("pokequest:wallet-link-error", {
                         detail: { message: message || "Wallet connect failed." },

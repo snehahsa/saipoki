@@ -598,9 +598,13 @@ function bindMenuWalletButton() {
     if (!btn || btn.dataset.menuWalletBound) return
     btn.dataset.menuWalletBound = "1"
     btn.addEventListener("click", () => {
+        if (guestPlayMode()) {
+            void openLinkWalletScreen()
+            return
+        }
         void connectPaymentWalletFromUi()
     })
-    syncPaymentWalletUi()
+    syncMenuLinkedWalletUi()
 }
 
 function gameClientReady() {
@@ -1136,16 +1140,33 @@ function syncPaymentWalletUi() {
         profileBtn.textContent = connected ? "Change Wallet" : "Connect Wallet"
     }
 
+    syncMenuLinkedWalletUi()
+}
+
+function getLinkedWalletAddress() {
+    return String(session?.linked_wallet || "").trim()
+}
+
+function syncMenuLinkedWalletUi() {
     const menuBtn = document.getElementById("menu-wallet-connect-btn")
     const menuText = menuBtn?.querySelector(".menu-wallet-text")
-    if (menuBtn) {
-        menuBtn.classList.toggle("is-connected", connected)
-        menuBtn.classList.toggle("is-disconnected", !connected)
-        menuBtn.setAttribute("aria-label", connected ? `Wallet connected ${short}` : "Connect wallet")
-        menuBtn.title = connected ? `Connected ${short} — tap to change` : "Connect Phantom or Solflare"
-        if (menuText) {
-            menuText.textContent = connected ? short : "Wallet"
-        }
+    if (!menuBtn) return
+
+    const linked = getLinkedWalletAddress()
+    const short = shortWalletAddress(linked) || (window.KinsWallet?.shortWallet?.(linked) || linked)
+    const isLinked = Boolean(linked)
+
+    menuBtn.classList.toggle("is-connected", isLinked)
+    menuBtn.classList.toggle("is-disconnected", !isLinked)
+    menuBtn.setAttribute(
+        "aria-label",
+        isLinked ? `Linked wallet ${short}` : "Link wallet",
+    )
+    menuBtn.title = isLinked
+        ? `Linked ${short} — open Link Wallet`
+        : "Link Phantom or Solflare to this trainer"
+    if (menuText) {
+        menuText.textContent = isLinked ? short : "Wallet"
     }
 }
 
@@ -4192,6 +4213,7 @@ async function openLinkWalletScreen() {
         session.has_linked_wallet = false
     }
     renderLinkWalletScreen()
+    syncMenuLinkedWalletUi()
     showScreen("linkWallet")
 }
 
@@ -4202,6 +4224,7 @@ function onWalletLinked(detail = {}) {
         session.has_linked_wallet = true
     }
     renderLinkWalletScreen()
+    syncMenuLinkedWalletUi()
     const successEl = document.getElementById("link-wallet-success")
     if (successEl) {
         successEl.textContent = address
@@ -6233,7 +6256,21 @@ async function init() {
             successEl.textContent = ""
             successEl.classList.add("hidden")
         }
-        window.SaiPokePlay?.connectLinkWallet?.()
+        if (typeof window.SaiPokePlay?.connectLinkWallet !== "function") {
+            if (errorEl) {
+                errorEl.textContent = "Wallet link UI failed to load. Hard refresh and try again."
+                errorEl.classList.add("error")
+            }
+            return
+        }
+        if (!getActiveGuestId()) {
+            if (errorEl) {
+                errorEl.textContent = "Sign in to your trainer first, then link a wallet."
+                errorEl.classList.add("error")
+            }
+            return
+        }
+        window.SaiPokePlay.connectLinkWallet()
     })
     window.addEventListener("pokequest:wallet-linked", (event) => {
         onWalletLinked(event.detail || {})
@@ -6376,7 +6413,8 @@ const restoreGuestProfileFromVault = window.SaiPokePlay?.restoreGuestProfileFrom
 const syncGuestProfileToServer = window.SaiPokePlay?.syncGuestProfileToServer
 const getGuestServerBackup = window.SaiPokePlay?.getGuestServerBackup
 
-window.SaiPokePlay = {
+// Merge — never replace. play.js / play-profiles.js attach connectLinkWallet, acceptWalletLogin, etc.
+Object.assign(window.SaiPokePlay || (window.SaiPokePlay = {}), {
     hidePlayLanding,
     showPlayLanding,
     bootAfterWallet: () => {
@@ -6402,7 +6440,8 @@ window.SaiPokePlay = {
     restoreGuestProfileFromVault,
     syncGuestProfileToServer,
     getGuestServerBackup,
-}
+    getActiveGuestId,
+})
 
 init().catch((error) => {
     console.error("Pokequest-cards init failed:", error)

@@ -571,7 +571,7 @@ body.play-in-app:has(#game-screen:not(.hidden)) .play-wallet-bar {
 .play-wallet-modal {
     position: fixed;
     inset: 0;
-    z-index: 10100;
+    z-index: 12000;
     display: flex;
     align-items: center;
     justify-content: center;
