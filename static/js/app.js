@@ -1095,7 +1095,6 @@ function chipsExchangeAvailable() {
 function getPaymentWalletAddress() {
     return (
         window.KinsWallet?.getSavedPaymentWallet?.()
-        || sessionStorage.getItem("pokequest_wallet_address")
         || session?.wallet_address
         || ""
     )
@@ -4153,8 +4152,19 @@ function renderLinkWalletScreen() {
     }
 }
 
-function openLinkWalletScreen() {
+async function openLinkWalletScreen() {
     if (!guestPlayMode()) return
+    // Always trust the server row — never browser cache for linkage status.
+    try {
+        const data = await authenticate()
+        if (data) {
+            session.linked_wallet = String(data.linked_wallet || "").trim() || null
+            session.has_linked_wallet = Boolean(data.has_linked_wallet && session.linked_wallet)
+        }
+    } catch {
+        session.linked_wallet = null
+        session.has_linked_wallet = false
+    }
     renderLinkWalletScreen()
     showScreen("linkWallet")
 }
@@ -4165,7 +4175,6 @@ function onWalletLinked(detail = {}) {
         session.linked_wallet = address
         session.has_linked_wallet = true
     }
-    window.SaiPokePlay?.syncGuestProfileMeta?.(session)
     renderLinkWalletScreen()
     const successEl = document.getElementById("link-wallet-success")
     if (successEl) {

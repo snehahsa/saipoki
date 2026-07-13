@@ -74,11 +74,12 @@
     }
 
     function syncWalletConnectedUi() {
-        const token = sessionStorage.getItem(STORAGE_KEY)
-        const address =
-            sessionStorage.getItem(WALLET_ADDRESS_KEY)
-            || window.KinsWallet?.getSavedPaymentWallet?.()
-            || ""
+        // Guest link/login must not surface a sticky "connected wallet" from cache.
+        // Only show the bar for wallet-gated play sessions or an active payment connect.
+        const token = walletRequired() ? sessionStorage.getItem(STORAGE_KEY) : ""
+        const address = walletRequired()
+            ? (sessionStorage.getItem(WALLET_ADDRESS_KEY) || "")
+            : (window.KinsWallet?.getSavedPaymentWallet?.() || "")
         const showBar = Boolean(token || address) && shouldShowWalletDisconnect()
         if (walletBar) {
             walletBar.classList.toggle("hidden", !showBar)
@@ -183,6 +184,7 @@
         try {
             clearWalletSession()
             window.KinsWallet?.clearPaymentWallet?.()
+            window.KinsWallet?.purgeCachedWalletKeys?.()
             for (const name of ["phantom", "solflare"]) {
                 const provider = getWalletProvider(name)
                 if (!provider?.disconnect) continue
@@ -517,9 +519,7 @@
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || "Could not link wallet.")
                 }
-                window.KinsWallet?.savePaymentWallet?.(data.linked_wallet || walletAddress)
-                sessionStorage.setItem(WALLET_ADDRESS_KEY, data.linked_wallet || walletAddress)
-                syncWalletConnectedUi()
+                // Identity link is server-side only — do not cache wallet in browser storage.
                 closeWalletModal()
                 setLandingStatus("")
                 window.dispatchEvent(
@@ -560,12 +560,7 @@
                 if (!response.ok || !data.success || !data.guestId) {
                     throw new Error(data.error || "Could not sign in with wallet.")
                 }
-                if (data.walletSession) {
-                    sessionStorage.setItem(STORAGE_KEY, data.walletSession)
-                }
-                sessionStorage.setItem(WALLET_ADDRESS_KEY, data.walletAddress || walletAddress)
-                window.KinsWallet?.savePaymentWallet?.(data.walletAddress || walletAddress)
-                syncWalletConnectedUi()
+                // Do not persist wallet session/address — recovery is signature + PIN only.
                 closeWalletModal()
                 setLandingStatus("")
                 // Wallet proves ownership only — PIN unlock happens next.
@@ -603,26 +598,28 @@
                 throw new Error(verifyData.error || "Wallet verification failed.")
             }
 
-            sessionStorage.setItem(STORAGE_KEY, verifyData.walletSession)
-            if (verifyData.walletAddress) {
-                sessionStorage.setItem(WALLET_ADDRESS_KEY, verifyData.walletAddress)
-                window.KinsWallet?.savePaymentWallet?.(verifyData.walletAddress)
-            } else {
-                window.KinsWallet?.savePaymentWallet?.(walletAddress)
-            }
-            syncWalletConnectedUi()
+            const verifiedAddress = verifyData.walletAddress || walletAddress
 
-            // Guest play / in-game buy-sell: keep current profile, just save the wallet.
+            // Guest buy/sell: session-only payment wallet — not an account/link identity.
             if (isPaymentOnlyConnect()) {
+                window.KinsWallet?.savePaymentWallet?.(verifiedAddress)
+                syncWalletConnectedUi()
                 setLandingStatus("")
                 window.SaiPokeKins?.syncPaymentWalletUi?.()
                 window.dispatchEvent(
                     new CustomEvent("pokequest:wallet-connected", {
-                        detail: { address: verifyData.walletAddress || walletAddress },
+                        detail: { address: verifiedAddress },
                     }),
                 )
                 return
             }
+
+            sessionStorage.setItem(STORAGE_KEY, verifyData.walletSession)
+            if (verifiedAddress) {
+                sessionStorage.setItem(WALLET_ADDRESS_KEY, verifiedAddress)
+                window.KinsWallet?.savePaymentWallet?.(verifiedAddress)
+            }
+            syncWalletConnectedUi()
 
             setLandingStatus("Wallet verified. Setting up trainer…", "success")
 

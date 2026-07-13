@@ -15,7 +15,8 @@
 
     function getSavedPaymentWallet() {
         try {
-            return localStorage.getItem(PAYMENT_WALLET_KEY) || sessionStorage.getItem(PAYMENT_WALLET_KEY) || ""
+            // Session-only: never treat a cached address as a lasting identity/link.
+            return sessionStorage.getItem(PAYMENT_WALLET_KEY) || ""
         } catch {
             return ""
         }
@@ -25,9 +26,8 @@
         const addr = String(address || "").trim()
         if (!addr) return
         try {
-            localStorage.setItem(PAYMENT_WALLET_KEY, addr)
             sessionStorage.setItem(PAYMENT_WALLET_KEY, addr)
-            sessionStorage.setItem("pokequest_wallet_address", addr)
+            localStorage.removeItem(PAYMENT_WALLET_KEY)
         } catch {
             /* ignore */
         }
@@ -38,6 +38,26 @@
         try {
             localStorage.removeItem(PAYMENT_WALLET_KEY)
             sessionStorage.removeItem(PAYMENT_WALLET_KEY)
+            sessionStorage.removeItem("pokequest_wallet_address")
+            localStorage.removeItem("pokequest_wallet_address")
+        } catch {
+            /* ignore */
+        }
+        window.dispatchEvent(new CustomEvent("pokequest:payment-wallet", { detail: { address: "" } }))
+    }
+
+    /** One-shot wipe of legacy cached payment/link wallet keys. */
+    function purgeCachedWalletKeys() {
+        const keys = [
+            PAYMENT_WALLET_KEY,
+            "pokequest_wallet_address",
+            "pokequest_wallet_session",
+        ]
+        try {
+            for (const key of keys) {
+                localStorage.removeItem(key)
+                sessionStorage.removeItem(key)
+            }
         } catch {
             /* ignore */
         }
@@ -382,9 +402,15 @@
         getSavedPaymentWallet,
         savePaymentWallet,
         clearPaymentWallet,
+        purgeCachedWalletKeys,
         getTokenUiBalance,
         shortWallet,
         isPaymentPending: () => kinsWalletPending,
         setPaymentPending: setKinsWalletPending,
+    }
+
+    // Guest play: never keep sticky wallet identity in browser storage across loads.
+    if (Number(window.APP_CONFIG?.walletCheck ?? 1) === 0) {
+        purgeCachedWalletKeys()
     }
 })()

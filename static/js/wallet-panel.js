@@ -56,11 +56,7 @@
     }
 
     function connectedWallet() {
-        return (
-            window.KinsWallet?.getSavedPaymentWallet?.()
-            || sessionStorage.getItem("pokequest_wallet_address")
-            || ""
-        ).trim()
+        return (window.KinsWallet?.getSavedPaymentWallet?.() || "").trim()
     }
 
     async function apiPost(path, body = {}) {
