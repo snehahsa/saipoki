@@ -146,6 +146,9 @@
         </p>
         <div class="play-actions">
             <button type="button" class="play-btn play-btn--primary" id="play-now-btn">Play Now</button>
+            {% if not wallet_check %}
+            <button type="button" class="play-btn play-btn--ghost" id="wallet-login-btn">Sign in with Wallet</button>
+            {% endif %}
             <button type="button" class="play-btn play-btn--ghost" id="spectate-btn">Spectate</button>
         </div>
         <p class="play-status" id="play-status" aria-live="polite"></p>
@@ -207,8 +210,8 @@
 <div id="play-wallet-modal" class="play-wallet-modal hidden" role="dialog" aria-labelledby="play-wallet-title" aria-modal="true">
     <div class="play-wallet-panel">
         <p class="play-wallet-title" id="play-wallet-title">Connect Wallet</p>
-        <p class="play-wallet-copy">
-            Connect Phantom or Solflare to buy and sell CHIPS with $POKEQUEST.
+        <p class="play-wallet-copy" id="play-wallet-copy">
+            Connect Phantom or Solflare. You will sign an off-chain message — no gas and no token transfer.
         </p>
         <p id="play-wallet-status" class="play-wallet-status hidden" aria-live="polite"></p>
         <div class="play-wallet-options">
@@ -467,10 +470,45 @@
             <button class="btn btn-leaderboard" id="leaderboard-btn" type="button">Leaderboard</button>
             <button class="btn btn-revenue" id="revenue-share-btn" type="button">Revenue Share</button>
             <button class="btn btn-settings btn-profile" id="profile-btn" type="button">Profile</button>
+            {% if play_mode and not wallet_check %}
+            <button class="btn btn-settings" id="link-wallet-btn" type="button">Link Wallet</button>
+            {% endif %}
             <button class="btn btn-exit" id="exit-btn" type="button">Exit</button>
         </div>
 
         <p class="status" id="menu-status"></p>
+    </div>
+</div>
+
+<div id="link-wallet-screen" class="screen hidden">
+    <div class="panel panel-with-nav panel-hub panel-link-wallet">
+        <nav class="screen-nav" aria-label="Screen navigation">
+            <button class="btn btn-secondary btn-screen-back" id="link-wallet-back-btn" type="button">← Back</button>
+        </nav>
+        <p class="panel-pixel-title">LINK WALLET</p>
+        <p class="subtitle">recover this trainer on any device</p>
+
+        <div class="link-wallet-status-card" aria-live="polite">
+            <p class="wallet-modal-label">Status</p>
+            <p class="link-wallet-status-value" id="link-wallet-status-value">Not linked</p>
+        </div>
+
+        <div class="link-wallet-copy-block">
+            <p class="link-wallet-lead">Link a Solana wallet to this trainer so you can sign in from other phones or computers.</p>
+            <ul class="link-wallet-points">
+                <li><strong>Off-chain message signing only</strong> — prove wallet ownership without sending a blockchain transaction.</li>
+                <li><strong>Gasless</strong> — no SOL fee and no token transfer for linking or wallet sign-in.</li>
+                <li><strong>Non-custodial</strong> — we never receive your private keys; the wallet extension signs a login message.</li>
+                <li><strong>PIN still required</strong> — wallet recovers your profile, then your 3-digit trainer PIN unlocks it.</li>
+            </ul>
+            <p class="link-wallet-note">This is separate from Deposit/Withdraw. Linking does not move $POKEQUEST.</p>
+        </div>
+
+        <p class="status" id="link-wallet-error"></p>
+        <p class="wallet-success hidden" id="link-wallet-success"></p>
+        <div class="menu-grid" style="margin-top: 12px;">
+            <button class="btn btn-play" id="link-wallet-action-btn" type="button">Link Phantom / Solflare</button>
+        </div>
     </div>
 </div>
 

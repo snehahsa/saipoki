@@ -112,6 +112,8 @@
         if (row.profile_ready) patch.profile_ready = true
         if (row.has_pin) patch.has_pin = true
         if (row.has_pin === false) patch.has_pin = false
+        if (row.has_linked_wallet) patch.has_linked_wallet = true
+        if (row.has_linked_wallet === false) patch.has_linked_wallet = false
 
         const skin = String(row.skin || "").trim()
         if (skin) patch.skin = skin
@@ -508,13 +510,14 @@
                 const label = profileLabel(profile)
                 const level = Number(profile.level) > 0 ? `Lv.${profile.level}` : ""
                 const lock = profile.has_pin ? " · PIN" : ""
+                const linked = profile.has_linked_wallet ? " · Wallet" : ""
                 const guestIdEnc = encodeURIComponent(profile.guestId)
                 return (
                     `<div class="play-profile-row" role="listitem">`
                     + `<button type="button" class="play-btn play-btn--ghost play-profile-slot" `
                     + `data-guest-id="${guestIdEnc}">`
                     + `<span class="play-profile-slot-name">${escapeHtml(label)}</span>`
-                    + `<span class="play-profile-slot-meta">${escapeHtml(level)}${escapeHtml(lock)}</span>`
+                    + `<span class="play-profile-slot-meta">${escapeHtml(level)}${escapeHtml(lock)}${escapeHtml(linked)}</span>`
                     + `</button>`
                     + `<button type="button" class="play-profile-delete" data-guest-id="${guestIdEnc}" `
                     + `aria-label="Delete ${escapeHtml(label)}" title="Delete profile">×</button>`
@@ -718,6 +721,8 @@
             has_skin: Boolean(profile.has_skin),
             profile_ready: Boolean(profile.profile_ready),
             has_pin: Boolean(profile.has_pin),
+            has_linked_wallet: Boolean(profile.has_linked_wallet),
+            linked_wallet: String(profile.linked_wallet || "").trim(),
             serverBackup: profile.serverBackup || null,
         }
     }
@@ -733,6 +738,9 @@
         if (data.has_skin) patch.has_skin = true
         if (data.profile_ready) patch.profile_ready = true
         if (data.has_pin) patch.has_pin = true
+        if (data.has_linked_wallet || data.linked_wallet) patch.has_linked_wallet = true
+        const linked = String(data.linked_wallet || "").trim()
+        if (linked) patch.linked_wallet = linked
         const skin = String(data.skin || "").trim()
         if (skin) patch.skin = skin
         if (name && !isPlaceholderGuestName(name)) {
@@ -741,6 +749,37 @@
         const backup = sessionBackupFromAuth(data)
         if (backup) patch.serverBackup = backup
         upsertProfileMeta(guestId, patch)
+    }
+
+    async function acceptWalletLogin(data) {
+        if (!guestProfilesEnabled()) return false
+        const guestId = String(data?.guestId || "").trim()
+        if (!guestId) return false
+
+        ensureVault()
+        const name = String(data.display_name || "").trim()
+        const wallet = String(data.walletAddress || data.linked_wallet || "").trim()
+        upsertProfileMeta(guestId, {
+            name: name && !isPlaceholderGuestName(name) ? name : undefined,
+            has_pin: Boolean(data.has_pin),
+            has_linked_wallet: true,
+            linked_wallet: wallet || undefined,
+        })
+
+        const meta = getCachedGuestProfileMeta(guestId)
+        if (!meta) {
+            throw new Error(
+                "Profile limit reached on this device. Delete a local trainer, then sign in with wallet again.",
+            )
+        }
+
+        // Wallet ownership is not a PIN unlock.
+        if (window.SaiPokePlay) {
+            window.SaiPokePlay._guestPinVerified = false
+        }
+
+        await beginProfileEntry(guestId, { isNew: false })
+        return true
     }
 
     function bindProfileUi() {
@@ -802,6 +841,7 @@
     window.SaiPokePlay.openGuestProfileFlow = openGuestProfileFlow
     window.SaiPokePlay.closeGuestProfileFlow = closeGuestProfileFlow
     window.SaiPokePlay.syncGuestProfileMeta = syncGuestProfileMeta
+    window.SaiPokePlay.acceptWalletLogin = acceptWalletLogin
     window.SaiPokePlay.getCachedGuestProfileName = getCachedProfileName
     window.SaiPokePlay.getCachedGuestProfileMeta = getCachedGuestProfileMeta
     window.SaiPokePlay.saveGuestServerBackup = saveGuestServerBackup

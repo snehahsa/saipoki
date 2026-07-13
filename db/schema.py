@@ -31,6 +31,7 @@ def init_postgres_schema(conn: Any) -> None:
             balance INTEGER NOT NULL DEFAULT 0,
             owned_skins TEXT NOT NULL DEFAULT '["009"]',
             pin TEXT,
+            linked_wallet TEXT,
             stats_wagered INTEGER NOT NULL DEFAULT 0,
             stats_battles INTEGER NOT NULL DEFAULT 0,
             stats_wins INTEGER NOT NULL DEFAULT 0,
@@ -243,3 +244,7 @@ def init_postgres_schema(conn: Any) -> None:
     from player_names import ensure_display_name_unique_index
 
     ensure_display_name_unique_index(conn)
+
+    from wallet_auth import ensure_linked_wallet_schema
+
+    ensure_linked_wallet_schema(conn)

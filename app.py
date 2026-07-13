@@ -57,10 +57,12 @@ from wallet_auth import (
     SOLANA_RPC_URL,
     WALLET_CHECK,
     create_wallet_challenge,
+    find_guest_by_linked_wallet,
     guest_profile_ready,
     is_guest_user_id,
     is_guest_placeholder_name,
     issue_wallet_session,
+    normalize_wallet_address,
     resolve_guest_user,
     verify_wallet_login,
     verify_wallet_session,
@@ -1155,6 +1157,192 @@ def wallet_verify_api():
     )
 
 
+@app.route("/api/wallet/link", methods=["POST"])
+def wallet_link_api():
+    """Attach a Solana wallet to the current guest trainer (message signature only)."""
+    from wallet_ledger import is_valid_solana_address
+
+    if wallet_payments_enabled():
+        return jsonify(
+            {
+                "success": False,
+                "error": "Wallet linking is for guest play mode.",
+            }
+        ), 400
+
+    telegram_id, err = _auth_user_from_request()
+    if err:
+        return err
+    if not is_guest_user_id(telegram_id):
+        return jsonify({"success": False, "error": "Only guest trainers can link a wallet."}), 400
+
+    data = request.get_json(silent=True) or {}
+    wallet = normalize_wallet_address(
+        data.get("walletAddress") or data.get("wallet") or ""
+    )
+    challenge_id = str(data.get("challengeId") or "").strip()
+    signature = str(data.get("signature") or "").strip()
+    if not is_valid_solana_address(wallet):
+        return jsonify({"success": False, "error": "Invalid Solana wallet address."}), 400
+
+    ok, error, _session = verify_wallet_login(
+        wallet,
+        challenge_id,
+        signature,
+        require_token=False,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": error}), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        from wallet_auth import ensure_linked_wallet_schema
+
+        ensure_linked_wallet_schema(conn)
+        owner = find_guest_by_linked_wallet(conn, wallet)
+        if owner and str(owner.get("telegram_id")) != telegram_id:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "This wallet is already linked to another trainer.",
+                    }
+                ),
+                409,
+            )
+
+        row = conn.execute(
+            "SELECT linked_wallet, pin FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        ).fetchone()
+        if row is None:
+            return jsonify({"success": False, "error": "User not found"}), 404
+
+        current = str(row["linked_wallet"] or "").strip() if "linked_wallet" in row.keys() else ""
+        if current and current != wallet:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "This trainer already has a different wallet linked.",
+                    }
+                ),
+                409,
+            )
+
+        # Block linking if a legacy wallet:* progress account owns this address.
+        legacy_id = wallet_telegram_id(wallet)
+        legacy = conn.execute(
+            "SELECT telegram_id, balance, skin FROM users WHERE telegram_id = ?",
+            (legacy_id,),
+        ).fetchone()
+        if legacy is not None and str(legacy["telegram_id"]) != telegram_id:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "This wallet already has a separate wallet-mode account.",
+                    }
+                ),
+                409,
+            )
+
+        conn.execute(
+            """
+            UPDATE users
+            SET linked_wallet = ?, updated_at = ?
+            WHERE telegram_id = ?
+            """,
+            (wallet, now, telegram_id),
+        )
+        has_pin = bool(row["pin"] if "pin" in row.keys() else None)
+
+    return jsonify(
+        {
+            "success": True,
+            "linked_wallet": wallet,
+            "guestId": telegram_id,
+            "has_pin": has_pin,
+        }
+    )
+
+
+@app.route("/api/wallet/login", methods=["POST"])
+def wallet_login_api():
+    """Recover a linked guest trainer via wallet message signature (PIN still required)."""
+    from wallet_ledger import is_valid_solana_address
+
+    if wallet_payments_enabled():
+        return jsonify(
+            {
+                "success": False,
+                "error": "Wallet login is for guest play mode.",
+            }
+        ), 400
+
+    data = request.get_json(silent=True) or {}
+    wallet = normalize_wallet_address(
+        data.get("walletAddress") or data.get("wallet") or ""
+    )
+    challenge_id = str(data.get("challengeId") or "").strip()
+    signature = str(data.get("signature") or "").strip()
+    if not is_valid_solana_address(wallet):
+        return jsonify({"success": False, "error": "Invalid Solana wallet address."}), 400
+
+    ok, error, session_token = verify_wallet_login(
+        wallet,
+        challenge_id,
+        signature,
+        require_token=False,
+    )
+    if not ok:
+        return jsonify({"success": False, "error": error}), 400
+
+    with get_db() as conn:
+        from wallet_auth import ensure_linked_wallet_schema
+
+        ensure_linked_wallet_schema(conn)
+        row = find_guest_by_linked_wallet(conn, wallet)
+        if row is None:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "No trainer is linked to this wallet yet.",
+                        "code": "not_linked",
+                    }
+                ),
+                404,
+            )
+        guest_id = str(row.get("telegram_id") or "")
+        if not is_guest_user_id(guest_id):
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Linked account is invalid.",
+                    }
+                ),
+                400,
+            )
+        name = str(row.get("display_name") or "").strip()
+        if is_guest_placeholder_name(name):
+            name = ""
+        has_pin = bool(row.get("pin"))
+
+    return jsonify(
+        {
+            "success": True,
+            "guestId": guest_id,
+            "has_pin": has_pin,
+            "display_name": name,
+            "walletAddress": wallet,
+            "walletSession": session_token,
+            "requires_pin": True,
+        }
+    )
+
+
 def _auth_wallet_context(data: Optional[dict] = None):
     payload = data if data is not None else (request.get_json(silent=True) or {})
     user = resolve_auth_user(payload)
@@ -1806,6 +1994,7 @@ def auth():
             vending_spins = 0
             owned_skins = parse_owned_skins([AVATAR_DEFAULT_SKIN] if auto_profile else [])
             user_pin = "123" if is_test else None
+            linked_wallet = None
             quest_progress = quest_progress_for_user([], [])
             row_after = conn.execute(
                 "SELECT quest_progress FROM users WHERE telegram_id = ?",
@@ -1856,6 +2045,11 @@ def auth():
                 row["skin"],
             )
             user_pin = row["pin"] if "pin" in row.keys() else None
+            linked_wallet = (
+                str(row["linked_wallet"] or "").strip()
+                if "linked_wallet" in row.keys()
+                else ""
+            ) or None
             backfill_quest_triggers(conn, telegram_id)
             row_after = conn.execute(
                 "SELECT quest_progress FROM users WHERE telegram_id = ?",
@@ -1938,6 +2132,8 @@ def auth():
             "vending_spin_first_cost": VENDING_SPIN_FIRST_COST,
             "vending_spin_repeat_cost": VENDING_SPIN_REPEAT_COST,
             "has_pin": bool(user_pin),
+            "linked_wallet": linked_wallet,
+            "has_linked_wallet": bool(linked_wallet),
             "trainer_stats": trainer_stats,
             "level": trainer_stats["level"] if trainer_stats else 0,
             "wallet_address": wallet_address,
@@ -1973,7 +2169,7 @@ def guest_profiles_lookup():
         for guest_id in guest_ids:
             row = conn.execute(
                 """
-                SELECT display_name, skin, stats_xp, stats_wins, quest_progress, pin
+                SELECT display_name, skin, stats_xp, stats_wins, quest_progress, pin, linked_wallet
                 FROM users WHERE telegram_id = ?
                 """,
                 (guest_id,),
@@ -1988,6 +2184,7 @@ def guest_profiles_lookup():
                         "has_skin": False,
                         "profile_ready": False,
                         "has_pin": False,
+                        "has_linked_wallet": False,
                     }
                 )
                 continue
@@ -1998,6 +2195,11 @@ def guest_profiles_lookup():
                 name = ""
             ready = guest_profile_ready(row["display_name"], skin)
             pin = row["pin"] if "pin" in row.keys() else None
+            linked = (
+                str(row["linked_wallet"] or "").strip()
+                if "linked_wallet" in row.keys()
+                else ""
+            )
             profiles.append(
                 {
                     "guestId": guest_id,
@@ -2007,6 +2209,7 @@ def guest_profiles_lookup():
                     "has_skin": skin is not None,
                     "profile_ready": ready,
                     "has_pin": bool(pin),
+                    "has_linked_wallet": bool(linked),
                 }
             )
 

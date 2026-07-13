@@ -376,6 +376,7 @@ const screens = {
     skin: document.getElementById("skin-screen"),
     menu: document.getElementById("menu-screen"),
     profile: document.getElementById("profile-screen"),
+    linkWallet: document.getElementById("link-wallet-screen"),
     bag: document.getElementById("bag-screen"),
     quests: document.getElementById("quests-screen"),
     revenueShare: document.getElementById("revenue-share-screen"),
@@ -488,7 +489,7 @@ function showScreen(name) {
     document.body.classList.toggle("game-active", name === "game")
     document.body.classList.toggle(
         "sky-plain-bg",
-        name === "menu" || name === "welcome" || name === "pin" || name === "skin"
+        name === "menu" || name === "welcome" || name === "pin" || name === "skin" || name === "linkWallet"
     )
 
     if (name === "game") {
@@ -529,7 +530,7 @@ function dismissBootSplash() {
 }
 
 const MENU_AUDIO_SCREENS = new Set([
-    "menu", "welcome", "pin", "skin", "profile", "quests", "bag", "revenueShare", "leaderboard", "loading",
+    "menu", "welcome", "pin", "skin", "profile", "linkWallet", "quests", "bag", "revenueShare", "leaderboard", "loading",
 ])
 
 function syncRetroAudioForScreen(name) {
@@ -4118,6 +4119,63 @@ function populateMenu() {
     initSkinNameInput()
 }
 
+function shortWalletAddress(address) {
+    const value = String(address || "").trim()
+    if (!value) return ""
+    if (value.length <= 12) return value
+    return `${value.slice(0, 4)}…${value.slice(-4)}`
+}
+
+function renderLinkWalletScreen() {
+    const statusEl = document.getElementById("link-wallet-status-value")
+    const actionBtn = document.getElementById("link-wallet-action-btn")
+    const errorEl = document.getElementById("link-wallet-error")
+    const successEl = document.getElementById("link-wallet-success")
+    const linked = String(session?.linked_wallet || "").trim()
+
+    if (errorEl) {
+        errorEl.textContent = ""
+        errorEl.classList.remove("error")
+    }
+    if (successEl) {
+        successEl.textContent = ""
+        successEl.classList.add("hidden")
+    }
+
+    if (statusEl) {
+        statusEl.textContent = linked
+            ? `Linked · ${shortWalletAddress(linked)}`
+            : "Not linked"
+    }
+    if (actionBtn) {
+        actionBtn.disabled = false
+        actionBtn.textContent = linked ? "Re-verify linked wallet" : "Link Phantom / Solflare"
+    }
+}
+
+function openLinkWalletScreen() {
+    if (!guestPlayMode()) return
+    renderLinkWalletScreen()
+    showScreen("linkWallet")
+}
+
+function onWalletLinked(detail = {}) {
+    const address = String(detail.address || "").trim()
+    if (address) {
+        session.linked_wallet = address
+        session.has_linked_wallet = true
+    }
+    window.SaiPokePlay?.syncGuestProfileMeta?.(session)
+    renderLinkWalletScreen()
+    const successEl = document.getElementById("link-wallet-success")
+    if (successEl) {
+        successEl.textContent = address
+            ? `Wallet linked: ${shortWalletAddress(address)}. You can now sign in on other devices with this wallet + your PIN.`
+            : "Wallet linked."
+        successEl.classList.remove("hidden")
+    }
+}
+
 function bindSkinControls(prevId, nextId, onChange) {
     document.getElementById(prevId).addEventListener("click", () => {
         skinIndex = (skinIndex - 1 + sortedSkins.length) % sortedSkins.length
@@ -6122,6 +6180,35 @@ async function init() {
         renderProfileXp()
         renderProfileScreen()
         showScreen("profile")
+    })
+    document.getElementById("link-wallet-btn")?.addEventListener("click", () => {
+        openLinkWalletScreen()
+    })
+    document.getElementById("link-wallet-back-btn")?.addEventListener("click", () => {
+        showScreen("menu")
+    })
+    document.getElementById("link-wallet-action-btn")?.addEventListener("click", () => {
+        const errorEl = document.getElementById("link-wallet-error")
+        const successEl = document.getElementById("link-wallet-success")
+        if (errorEl) {
+            errorEl.textContent = ""
+            errorEl.classList.remove("error")
+        }
+        if (successEl) {
+            successEl.textContent = ""
+            successEl.classList.add("hidden")
+        }
+        window.SaiPokePlay?.connectLinkWallet?.()
+    })
+    window.addEventListener("pokequest:wallet-linked", (event) => {
+        onWalletLinked(event.detail || {})
+    })
+    window.addEventListener("pokequest:wallet-link-error", (event) => {
+        const message = String(event.detail?.message || "Could not link wallet.")
+        const errorEl = document.getElementById("link-wallet-error")
+        if (!errorEl || screens.linkWallet?.classList.contains("hidden")) return
+        errorEl.textContent = message
+        errorEl.classList.add("error")
     })
     document.getElementById("quests-btn").addEventListener("click", () => {
         questsReturnScreen = "menu"

@@ -96,6 +96,7 @@ def init_sqlite_schema(conn: Any) -> None:
             f"'[\"{AVATAR_DEFAULT_SKIN}\"]'"
         ),
         "pin": "ALTER TABLE users ADD COLUMN pin TEXT",
+        "linked_wallet": "ALTER TABLE users ADD COLUMN linked_wallet TEXT",
         "stats_wagered": "ALTER TABLE users ADD COLUMN stats_wagered INTEGER NOT NULL DEFAULT 0",
         "stats_battles": "ALTER TABLE users ADD COLUMN stats_battles INTEGER NOT NULL DEFAULT 0",
         "stats_wins": "ALTER TABLE users ADD COLUMN stats_wins INTEGER NOT NULL DEFAULT 0",
@@ -113,6 +114,10 @@ def init_sqlite_schema(conn: Any) -> None:
     for col, ddl in migrations.items():
         if col not in user_cols:
             conn.execute(ddl)
+
+    from wallet_auth import ensure_linked_wallet_schema
+
+    ensure_linked_wallet_schema(conn)
 
     reset_key = "skins_reset_v1"
     if conn.execute(

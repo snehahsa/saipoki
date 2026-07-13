@@ -50,6 +50,8 @@
         walletBusy = busy
         if (playBtn) playBtn.disabled = busy
         if (spectateBtn) spectateBtn.disabled = busy
+        const walletLoginBtn = document.getElementById("wallet-login-btn")
+        if (walletLoginBtn) walletLoginBtn.disabled = busy
         document.querySelectorAll("[data-wallet]").forEach((btn) => {
             btn.disabled = busy
         })
@@ -94,11 +96,65 @@
         window.SaiPokeKins?.syncPaymentWalletUi?.()
     }
 
+    function resolveConnectMode(opts = {}) {
+        if (opts.mode === "payment" || opts.mode === "link" || opts.mode === "login" || opts.mode === "auth") {
+            return opts.mode
+        }
+        if (opts.paymentOnly) return "payment"
+        if (walletRequired()) return "auth"
+        return "payment"
+    }
+
+    function getConnectMode() {
+        const mode = walletModal?.getAttribute("data-connect-mode")
+        if (mode === "payment" || mode === "link" || mode === "login" || mode === "auth") {
+            return mode
+        }
+        return walletRequired() ? "auth" : "payment"
+    }
+
+    function updateWalletModalCopy(mode) {
+        const titleEl = document.getElementById("play-wallet-title")
+        const copyEl = document.getElementById("play-wallet-copy")
+        if (mode === "link") {
+            if (titleEl) titleEl.textContent = "Link Wallet"
+            if (copyEl) {
+                copyEl.textContent =
+                    "Prove ownership with an off-chain message signature. No transaction, no gas, and no tokens move."
+            }
+            return
+        }
+        if (mode === "login") {
+            if (titleEl) titleEl.textContent = "Sign in with Wallet"
+            if (copyEl) {
+                copyEl.textContent =
+                    "Connect the wallet linked to your trainer, sign a gasless message, then enter your PIN."
+            }
+            return
+        }
+        if (mode === "payment") {
+            if (titleEl) titleEl.textContent = "Connect Wallet"
+            if (copyEl) {
+                copyEl.textContent =
+                    "Connect Phantom or Solflare to buy and sell CHIPS with $POKEQUEST."
+            }
+            return
+        }
+        if (titleEl) titleEl.textContent = "Connect Wallet"
+        if (copyEl) {
+            copyEl.textContent =
+                "Connect Phantom or Solflare. You will sign an off-chain message — no gas and no token transfer."
+        }
+    }
+
     function openWalletModal(opts = {}) {
+        const mode = resolveConnectMode(opts)
         pendingChallenge = null
         clearModalStatus()
         walletModal?.classList.remove("hidden")
-        walletModal?.setAttribute("data-payment-only", opts.paymentOnly ? "1" : "0")
+        walletModal?.setAttribute("data-connect-mode", mode)
+        walletModal?.setAttribute("data-payment-only", mode === "payment" ? "1" : "0")
+        updateWalletModalCopy(mode)
         syncWalletOptionDetection()
         void waitForWalletInject().then(() => syncWalletOptionDetection())
         prefetchChallenge()
@@ -113,11 +169,12 @@
     function closeWalletModal() {
         walletModal?.classList.add("hidden")
         walletModal?.removeAttribute("data-payment-only")
+        walletModal?.removeAttribute("data-connect-mode")
         clearModalStatus()
     }
 
     function isPaymentOnlyConnect() {
-        return walletModal?.getAttribute("data-payment-only") === "1" || !walletRequired()
+        return getConnectMode() === "payment"
     }
 
     async function disconnectWallet() {
@@ -361,10 +418,39 @@
         return { verifyRes, verifyData }
     }
 
+    function guestIdForAuth() {
+        return String(localStorage.getItem("pokequest_guest_id") || "").trim()
+    }
+
+    async function postWalletOwnership(path, walletAddress, challengeId, signature, extra = {}) {
+        const response = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({
+                walletAddress,
+                challengeId,
+                signature,
+                ...extra,
+            }),
+        })
+        const data = await response.json().catch(() => ({}))
+        return { response, data }
+    }
+
+    function setConnectProgress(message, kind = "info") {
+        if (walletModal && !walletModal.classList.contains("hidden")) {
+            setModalStatus(message, kind)
+            return
+        }
+        setLandingStatus(message, kind === "info" ? "success" : kind)
+    }
+
     async function finishWalletConnect(walletName, provider, connectPromise) {
         if (walletBusy) return
 
         const label = walletLabel(walletName)
+        const mode = getConnectMode()
         setBusy(true)
         setModalStatus(`Opening ${label}…`, "info")
 
@@ -390,11 +476,106 @@
                 throw new Error("Wallet did not return a public key.")
             }
 
-            closeWalletModal()
+            // Keep modal open for link/login so progress + errors stay visible off the landing page.
+            if (mode === "payment" || mode === "auth") {
+                closeWalletModal()
+            }
 
             let challenge = await resolveChallenge()
-            setLandingStatus("Sign the message in your wallet…")
+            setConnectProgress("Sign the message in your wallet…")
             let signature = await signWalletChallenge(provider, challenge)
+
+            if (mode === "link") {
+                const guestId = guestIdForAuth()
+                if (!guestId) {
+                    throw new Error("Sign in to your trainer first, then link a wallet.")
+                }
+                setConnectProgress("Linking wallet…")
+                let { response, data } = await postWalletOwnership(
+                    "/api/wallet/link",
+                    walletAddress,
+                    challenge.challengeId,
+                    signature,
+                    { guestId },
+                )
+                if (
+                    !response.ok
+                    && /challenge expired/i.test(String(data?.error || ""))
+                ) {
+                    setConnectProgress("Refreshing challenge — approve the new message…")
+                    challenge = await fetchWalletChallenge()
+                    signature = await signWalletChallenge(provider, challenge)
+                    setConnectProgress("Linking wallet…")
+                    ;({ response, data } = await postWalletOwnership(
+                        "/api/wallet/link",
+                        walletAddress,
+                        challenge.challengeId,
+                        signature,
+                        { guestId },
+                    ))
+                }
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || "Could not link wallet.")
+                }
+                window.KinsWallet?.savePaymentWallet?.(data.linked_wallet || walletAddress)
+                sessionStorage.setItem(WALLET_ADDRESS_KEY, data.linked_wallet || walletAddress)
+                syncWalletConnectedUi()
+                closeWalletModal()
+                setLandingStatus("")
+                window.dispatchEvent(
+                    new CustomEvent("pokequest:wallet-linked", {
+                        detail: {
+                            address: data.linked_wallet || walletAddress,
+                            guestId: data.guestId || guestId,
+                            has_pin: Boolean(data.has_pin),
+                        },
+                    }),
+                )
+                return
+            }
+
+            if (mode === "login") {
+                setConnectProgress("Looking up linked trainer…")
+                let { response, data } = await postWalletOwnership(
+                    "/api/wallet/login",
+                    walletAddress,
+                    challenge.challengeId,
+                    signature,
+                )
+                if (
+                    !response.ok
+                    && /challenge expired/i.test(String(data?.error || ""))
+                ) {
+                    setConnectProgress("Refreshing challenge — approve the new message…")
+                    challenge = await fetchWalletChallenge()
+                    signature = await signWalletChallenge(provider, challenge)
+                    setConnectProgress("Looking up linked trainer…")
+                    ;({ response, data } = await postWalletOwnership(
+                        "/api/wallet/login",
+                        walletAddress,
+                        challenge.challengeId,
+                        signature,
+                    ))
+                }
+                if (!response.ok || !data.success || !data.guestId) {
+                    throw new Error(data.error || "Could not sign in with wallet.")
+                }
+                if (data.walletSession) {
+                    sessionStorage.setItem(STORAGE_KEY, data.walletSession)
+                }
+                sessionStorage.setItem(WALLET_ADDRESS_KEY, data.walletAddress || walletAddress)
+                window.KinsWallet?.savePaymentWallet?.(data.walletAddress || walletAddress)
+                syncWalletConnectedUi()
+                closeWalletModal()
+                setLandingStatus("")
+                // Wallet proves ownership only — PIN unlock happens next.
+                if (window.SaiPokePlay) window.SaiPokePlay._guestPinVerified = false
+                const accepted = await window.SaiPokePlay?.acceptWalletLogin?.(data)
+                if (!accepted) {
+                    throw new Error("Could not open your linked trainer.")
+                }
+                return
+            }
 
             setLandingStatus("Verifying ownership…")
             let { verifyRes, verifyData } = await verifyWalletProof(
@@ -434,8 +615,6 @@
             // Guest play / in-game buy-sell: keep current profile, just save the wallet.
             if (isPaymentOnlyConnect()) {
                 setLandingStatus("")
-                setModalStatus("Wallet connected.", "success")
-                closeWalletModal()
                 window.SaiPokeKins?.syncPaymentWalletUi?.()
                 window.dispatchEvent(
                     new CustomEvent("pokequest:wallet-connected", {
@@ -460,12 +639,20 @@
 
             if (code === 4001 || /reject|denied|cancel/i.test(message)) {
                 setModalStatus("Wallet connection cancelled.", "error")
+                if (walletModal?.classList.contains("hidden")) {
+                    setLandingStatus("Wallet connection cancelled.", "error")
+                }
             } else if (code === -32002) {
                 setModalStatus("Phantom already has a pending request — check the extension popup.", "error")
             } else if (walletModal && !walletModal.classList.contains("hidden")) {
                 setModalStatus(message || "Wallet connect failed.", "error")
             } else {
                 setLandingStatus(message || "Wallet connect failed.", "error")
+                window.dispatchEvent(
+                    new CustomEvent("pokequest:wallet-link-error", {
+                        detail: { message: message || "Wallet connect failed." },
+                    }),
+                )
             }
         } finally {
             setBusy(false)
@@ -578,6 +765,11 @@
             if (!walletBusy) startSpectator()
         })
 
+        document.getElementById("wallet-login-btn")?.addEventListener("click", () => {
+            if (walletBusy || walletRequired()) return
+            openWalletModal({ mode: "login" })
+        })
+
         walletDisconnectBtn?.addEventListener("click", () => {
             if (!walletBusy) void disconnectWallet()
         })
@@ -625,7 +817,9 @@
     window.SaiPokePlay.syncWalletConnectedUi = syncWalletConnectedUi
     window.SaiPokePlay.disconnectWallet = disconnectWallet
     window.SaiPokePlay.openWalletModal = openWalletModal
-    window.SaiPokePlay.connectPaymentWallet = () => openWalletModal({ paymentOnly: true })
+    window.SaiPokePlay.connectPaymentWallet = () => openWalletModal({ mode: "payment" })
+    window.SaiPokePlay.connectLinkWallet = () => openWalletModal({ mode: "link" })
+    window.SaiPokePlay.connectWalletLogin = () => openWalletModal({ mode: "login" })
 
     bindLanding()
 })()

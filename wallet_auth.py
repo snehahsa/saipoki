@@ -374,6 +374,67 @@ def verify_wallet_login(
     return True, "", issue_wallet_session(wallet_address)
 
 
+def ensure_linked_wallet_schema(conn) -> None:
+    """Ensure users.linked_wallet exists with a unique index."""
+    try:
+        cols = {
+            str(row[1] if isinstance(row, tuple) else row["name"]).lower()
+            for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+    except Exception:
+        cols = set()
+    # Postgres / generic path — try ADD COLUMN if missing via information_schema later.
+    if cols and "linked_wallet" not in cols:
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN linked_wallet TEXT")
+        except Exception:
+            pass
+    elif not cols:
+        # Non-SQLite: best-effort add (idempotent via try).
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN linked_wallet TEXT")
+        except Exception:
+            pass
+    try:
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_linked_wallet
+            ON users (linked_wallet)
+            WHERE linked_wallet IS NOT NULL AND TRIM(linked_wallet) != ''
+            """
+        )
+    except Exception:
+        try:
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_linked_wallet
+                ON users (linked_wallet)
+                """
+            )
+        except Exception:
+            pass
+
+
+def normalize_wallet_address(address: str) -> str:
+    return str(address or "").strip()
+
+
+def find_guest_by_linked_wallet(conn, wallet_address: str) -> Optional[dict[str, Any]]:
+    wallet_address = normalize_wallet_address(wallet_address)
+    if not wallet_address:
+        return None
+    row = conn.execute(
+        """
+        SELECT telegram_id, display_name, pin, skin, linked_wallet
+        FROM users
+        WHERE linked_wallet = ?
+        LIMIT 1
+        """,
+        (wallet_address,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def clear_wallet_sessions() -> None:
     with _lock:
         _sessions.clear()

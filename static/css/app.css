@@ -10582,6 +10582,50 @@ body.vending-open {
     margin: 0;
 }
 
+.panel-link-wallet .link-wallet-status-card {
+    margin: 10px 0 14px;
+    padding: 10px 12px;
+    border: 2px solid rgba(74, 55, 40, 0.28);
+    background: rgba(255, 252, 244, 0.72);
+}
+
+.link-wallet-status-value {
+    margin: 4px 0 0;
+    font-family: silkscreen, monospace;
+    font-size: 12px;
+    color: #2a1f14;
+    word-break: break-all;
+}
+
+.link-wallet-copy-block {
+    text-align: left;
+    margin: 0 0 12px;
+}
+
+.link-wallet-lead,
+.link-wallet-note {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #4a3728;
+}
+
+.link-wallet-points {
+    margin: 0 0 12px;
+    padding-left: 1.15rem;
+    color: #4a3728;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.link-wallet-points li + li {
+    margin-top: 8px;
+}
+
+.link-wallet-points strong {
+    color: #2a1f14;
+}
+
 .wallet-verify-steps {
     display: flex;
     flex-direction: column;
