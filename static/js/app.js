@@ -1151,23 +1151,31 @@ function getLinkedWalletAddress() {
 function syncMenuLinkedWalletUi() {
     const menuBtn = document.getElementById("menu-wallet-connect-btn")
     const menuText = menuBtn?.querySelector(".menu-wallet-text")
-    if (!menuBtn) return
-
     const linked = getLinkedWalletAddress()
     const short = shortWalletAddress(linked) || (window.KinsWallet?.shortWallet?.(linked) || linked)
     const isLinked = Boolean(linked)
 
-    menuBtn.classList.toggle("is-connected", isLinked)
-    menuBtn.classList.toggle("is-disconnected", !isLinked)
-    menuBtn.setAttribute(
-        "aria-label",
-        isLinked ? `Linked wallet ${short}` : "Link wallet",
-    )
-    menuBtn.title = isLinked
-        ? `Linked ${short} — open Link Wallet`
-        : "Link Phantom or Solflare to this trainer"
-    if (menuText) {
-        menuText.textContent = isLinked ? short : "Wallet"
+    if (menuBtn) {
+        menuBtn.classList.toggle("is-connected", isLinked)
+        menuBtn.classList.toggle("is-disconnected", !isLinked)
+        menuBtn.setAttribute(
+            "aria-label",
+            isLinked ? `Linked wallet ${short}` : "Link wallet",
+        )
+        menuBtn.title = isLinked
+            ? `Linked ${short} — open Link Wallet`
+            : "Link Phantom or Solflare to this trainer"
+        if (menuText) {
+            menuText.textContent = isLinked ? short : "Wallet"
+        }
+    }
+
+    const linkMenuBtn = document.getElementById("link-wallet-btn")
+    if (linkMenuBtn) {
+        linkMenuBtn.classList.toggle("is-linked", isLinked)
+        linkMenuBtn.title = isLinked
+            ? `Linked ${short}`
+            : "Link a Solana wallet to this trainer"
     }
 }
 
@@ -4175,11 +4183,13 @@ function shortWalletAddress(address) {
 }
 
 function renderLinkWalletScreen() {
+    const statusCard = document.querySelector("#link-wallet-screen .link-wallet-status-card")
     const statusEl = document.getElementById("link-wallet-status-value")
     const actionBtn = document.getElementById("link-wallet-action-btn")
     const errorEl = document.getElementById("link-wallet-error")
     const successEl = document.getElementById("link-wallet-success")
     const linked = String(session?.linked_wallet || "").trim()
+    const isLinked = Boolean(linked)
 
     if (errorEl) {
         errorEl.textContent = ""
@@ -4191,14 +4201,18 @@ function renderLinkWalletScreen() {
     }
 
     if (statusEl) {
-        statusEl.textContent = linked
+        statusEl.textContent = isLinked
             ? `Linked · ${shortWalletAddress(linked)}`
             : "Not linked"
+        statusEl.classList.toggle("is-linked", isLinked)
     }
+    statusCard?.classList.toggle("is-linked", isLinked)
     if (actionBtn) {
         actionBtn.disabled = false
-        actionBtn.textContent = linked ? "Open wallet picker" : "Open wallet picker"
+        actionBtn.textContent = "Open wallet picker"
+        actionBtn.classList.toggle("is-linked", isLinked)
     }
+    document.getElementById("link-wallet-btn")?.classList.toggle("is-linked", isLinked)
 }
 
 function refreshLinkWalletDetection() {

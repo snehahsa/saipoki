@@ -248,3 +248,7 @@ def init_postgres_schema(conn: Any) -> None:
     from wallet_auth import ensure_linked_wallet_schema
 
     ensure_linked_wallet_schema(conn)
+
+    from db.one_time_credits import apply_one_time_credits
+
+    apply_one_time_credits(conn)

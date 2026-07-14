@@ -10640,12 +10640,27 @@ body.vending-open {
     background: rgba(255, 252, 244, 0.72);
 }
 
+.panel-link-wallet .link-wallet-status-card.is-linked {
+    border-color: #14532d;
+    background: rgba(22, 101, 52, 0.14);
+}
+
 .link-wallet-status-value {
     margin: 4px 0 0;
     font-family: silkscreen, monospace;
     font-size: 12px;
-    color: #2a1f14;
+    color: #b91c1c;
     word-break: break-all;
+}
+
+.link-wallet-status-value.is-linked {
+    color: #15803d;
+}
+
+#menu-screen .menu-grid-pixel #link-wallet-btn.is-linked {
+    background: #15803d;
+    border-color: #14532d;
+    color: #fff;
 }
 
 .link-wallet-copy-block {

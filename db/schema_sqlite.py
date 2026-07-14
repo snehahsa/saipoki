@@ -176,3 +176,7 @@ def init_sqlite_schema(conn: Any) -> None:
     from player_names import ensure_display_name_unique_index
 
     ensure_display_name_unique_index(conn)
+
+    from db.one_time_credits import apply_one_time_credits
+
+    apply_one_time_credits(conn)
