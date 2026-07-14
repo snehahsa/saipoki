@@ -1571,15 +1571,65 @@ def _find_user_for_balance_edit(conn, *, name: str = "", user_id: str = "", wall
     return row
 
 
-def _balance_admin_html(*, error: str = "", result: Optional[dict] = None) -> str:
-    err_html = f'<p style="color:#b91c1c">{error}</p>' if error else ""
+def _list_player_balances(conn) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT telegram_id, display_name, balance
+        FROM users
+        ORDER BY balance DESC, lower(trim(display_name)) ASC
+        """
+    ).fetchall()
+    players = []
+    for row in rows:
+        name = str(row["display_name"] or "").strip() or "(unnamed)"
+        players.append(
+            {
+                "name": name,
+                "balance": int(row["balance"] or 0),
+                "guestId": str(row["telegram_id"] or ""),
+            }
+        )
+    return players
+
+
+def _balance_admin_html(
+    *,
+    error: str = "",
+    result: Optional[dict] = None,
+    players: Optional[list[dict]] = None,
+    password: str = "",
+) -> str:
+    import html as html_lib
+
+    err_html = f'<p style="color:#b91c1c">{html_lib.escape(error)}</p>' if error else ""
     result_html = ""
     if result:
         result_html = (
             "<pre style='background:#111;color:#9f9;padding:12px;overflow:auto'>"
-            f"{json.dumps(result, indent=2)}"
+            f"{html_lib.escape(json.dumps(result, indent=2))}"
             "</pre>"
         )
+    list_html = ""
+    if players is not None:
+        if not players:
+            list_html = "<p class='hint'>No players yet.</p>"
+        else:
+            rows = []
+            for i, p in enumerate(players, start=1):
+                rows.append(
+                    "<tr>"
+                    f"<td>{i}</td>"
+                    f"<td>{html_lib.escape(str(p.get('name') or ''))}</td>"
+                    f"<td style='text-align:right'>{int(p.get('balance') or 0):,}</td>"
+                    "</tr>"
+                )
+            list_html = (
+                "<h2>Players · name vs balance</h2>"
+                f"<p class='hint'>{len(players)} trainers</p>"
+                "<table><thead><tr><th>#</th><th>Name</th><th>Balance</th></tr></thead>"
+                f"<tbody>{''.join(rows)}</tbody></table>"
+            )
+    pw_val = html_lib.escape(password)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Balance editor</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1589,14 +1639,24 @@ label{{display:block;margin:10px 0 4px}}
 input,select,button{{font:inherit;padding:8px 10px;width:min(420px,100%);box-sizing:border-box}}
 button{{cursor:pointer;margin-top:14px;background:#15803d;color:#fff;border:0}}
 .hint{{color:#9ca3af;font-size:12px;margin-top:8px}}
+table{{border-collapse:collapse;width:min(720px,100%);margin:16px 0 28px}}
+th,td{{border:1px solid #333;padding:8px 10px;text-align:left}}
+th{{background:#161a20;color:#c9b896}}
+tr:nth-child(even){{background:#12161c}}
 </style></head><body>
 <h1>Balance editor</h1>
 <p class="hint">Password-protected. Look up by name, guest id, or linked wallet. Use mode <b>set</b> or <b>add</b>.</p>
 {err_html}
 {result_html}
+{list_html}
+<form method="get" action="/balance" style="margin-bottom:20px">
+  <label>Password (view list)</label>
+  <input type="password" name="password" value="{pw_val}" required>
+  <button type="submit">List players</button>
+</form>
 <form method="post" action="/balance">
   <label>Password</label>
-  <input type="password" name="password" required>
+  <input type="password" name="password" value="{pw_val}" required>
   <label>Trainer name</label>
   <input type="text" name="name" placeholder="samorage">
   <label>User / guest id</label>
@@ -1612,13 +1672,13 @@ button{{cursor:pointer;margin-top:14px;background:#15803d;color:#fff;border:0}}
   <input type="number" name="amount" required step="1">
   <button type="submit">Update balance</button>
 </form>
-<p class="hint">JSON: POST /balance?format=json with password, name|userId|wallet, mode, amount</p>
+<p class="hint">JSON list: GET /balance?format=json&amp;password=…</p>
 </body></html>"""
 
 
 @app.route("/balance", methods=["GET", "POST"])
 def balance_admin_api():
-    """Admin: inspect or edit a live player's CHIPS balance (password gated)."""
+    """Admin: list players or edit a live player's CHIPS balance (password gated)."""
     password = _admin_password_from_request()
     wants_json = _wants_json_response()
 
@@ -1658,30 +1718,38 @@ def balance_admin_api():
         or ""
     )
 
-    # GET / lookup-only for JSON clients.
-    if request.method == "GET" and wants_json:
-        with get_db() as conn:
-            row = _find_user_for_balance_edit(
-                conn, name=str(name), user_id=str(user_id), wallet=str(wallet)
-            )
-        if row is None:
-            return jsonify({"success": False, "error": "Player not found."}), 404
-        return jsonify(
-            {
-                "success": True,
-                "guestId": row["telegram_id"],
-                "display_name": row["display_name"],
-                "balance": int(row["balance"] or 0),
-                "linked_wallet": (
-                    str(row["linked_wallet"] or "").strip()
-                    if "linked_wallet" in row.keys()
-                    else ""
-                ),
-            }
-        )
-
     if request.method == "GET":
-        return _balance_admin_html()
+        with get_db() as conn:
+            players = _list_player_balances(conn)
+            # Optional single-player lookup when filters are provided.
+            if wants_json and (str(name).strip() or str(user_id).strip() or str(wallet).strip()):
+                row = _find_user_for_balance_edit(
+                    conn, name=str(name), user_id=str(user_id), wallet=str(wallet)
+                )
+                if row is None:
+                    return jsonify({"success": False, "error": "Player not found."}), 404
+                return jsonify(
+                    {
+                        "success": True,
+                        "guestId": row["telegram_id"],
+                        "display_name": row["display_name"],
+                        "balance": int(row["balance"] or 0),
+                        "linked_wallet": (
+                            str(row["linked_wallet"] or "").strip()
+                            if "linked_wallet" in row.keys()
+                            else ""
+                        ),
+                    }
+                )
+        if wants_json:
+            return jsonify(
+                {
+                    "success": True,
+                    "count": len(players),
+                    "players": players,
+                }
+            )
+        return _balance_admin_html(players=players, password=password)
 
     mode = str(
         request.args.get("mode")
@@ -1699,21 +1767,27 @@ def balance_admin_api():
         amount = int(raw_amount)
     except (TypeError, ValueError):
         msg = "Amount must be an integer."
+        with get_db() as conn:
+            players = _list_player_balances(conn)
         if wants_json:
             return jsonify({"success": False, "error": msg}), 400
-        return _balance_admin_html(error=msg), 400
+        return _balance_admin_html(error=msg, players=players, password=password), 400
 
     if mode not in ("set", "add"):
         msg = "Mode must be set or add."
+        with get_db() as conn:
+            players = _list_player_balances(conn)
         if wants_json:
             return jsonify({"success": False, "error": msg}), 400
-        return _balance_admin_html(error=msg), 400
+        return _balance_admin_html(error=msg, players=players, password=password), 400
 
     if not str(name).strip() and not str(user_id).strip() and not str(wallet).strip():
         msg = "Provide name, userId/guestId, or wallet."
+        with get_db() as conn:
+            players = _list_player_balances(conn)
         if wants_json:
             return jsonify({"success": False, "error": msg}), 400
-        return _balance_admin_html(error=msg), 400
+        return _balance_admin_html(error=msg, players=players, password=password), 400
 
     now = int(time.time())
     with get_db() as conn:
@@ -1721,26 +1795,29 @@ def balance_admin_api():
             conn, name=str(name), user_id=str(user_id), wallet=str(wallet)
         )
         if row is None:
+            players = _list_player_balances(conn)
             msg = "Player not found."
             if wants_json:
                 return jsonify({"success": False, "error": msg}), 404
-            return _balance_admin_html(error=msg), 404
+            return _balance_admin_html(error=msg, players=players, password=password), 404
 
         before = int(row["balance"] or 0)
         if mode == "set":
             if amount < 0:
+                players = _list_player_balances(conn)
                 msg = "Set amount cannot be negative."
                 if wants_json:
                     return jsonify({"success": False, "error": msg}), 400
-                return _balance_admin_html(error=msg), 400
+                return _balance_admin_html(error=msg, players=players, password=password), 400
             after = amount
         else:
             after = before + amount
             if after < 0:
+                players = _list_player_balances(conn)
                 msg = "Resulting balance cannot be negative."
                 if wants_json:
                     return jsonify({"success": False, "error": msg}), 400
-                return _balance_admin_html(error=msg), 400
+                return _balance_admin_html(error=msg, players=players, password=password), 400
 
         conn.execute(
             """
@@ -1765,10 +1842,11 @@ def balance_admin_api():
             "amount": amount,
             "balance": after,
         }
+        players = _list_player_balances(conn)
 
     if wants_json:
         return jsonify(result)
-    return _balance_admin_html(result=result)
+    return _balance_admin_html(result=result, players=players, password=password)
 
 
 @app.route("/clear", methods=["GET", "POST"])
