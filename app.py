@@ -1572,24 +1572,68 @@ def _find_user_for_balance_edit(conn, *, name: str = "", user_id: str = "", wall
 
 
 def _list_player_balances(conn) -> list[dict]:
+    from db.connection import table_columns
+
+    cols = table_columns(conn, "users")
+    has_linked = "linked_wallet" in cols
+    select_cols = "telegram_id, display_name, balance"
+    if has_linked:
+        select_cols += ", linked_wallet"
     rows = conn.execute(
-        """
-        SELECT telegram_id, display_name, balance
+        f"""
+        SELECT {select_cols}
         FROM users
-        ORDER BY balance DESC, lower(trim(display_name)) ASC
+        ORDER BY balance DESC, lower(COALESCE(display_name, '')) ASC
         """
     ).fetchall()
     players = []
     for row in rows:
         name = str(row["display_name"] or "").strip() or "(unnamed)"
+        linked = ""
+        if has_linked:
+            try:
+                linked = str(row["linked_wallet"] or "").strip()
+            except (KeyError, IndexError, TypeError):
+                linked = ""
         players.append(
             {
                 "name": name,
                 "balance": int(row["balance"] or 0),
                 "guestId": str(row["telegram_id"] or ""),
+                "linked_wallet": linked,
             }
         )
     return players
+
+
+def _balance_db_info() -> dict:
+    from db.connection import get_db_path, is_postgres
+
+    if is_postgres():
+        return {"backend": "postgres", "persistent_hint": True}
+    path = str(get_db_path())
+    persistent = path.startswith("/data/")
+    return {
+        "backend": "sqlite",
+        "path": path,
+        "persistent_hint": persistent,
+    }
+
+
+def _balance_page(
+    *,
+    error: str = "",
+    result: Optional[dict] = None,
+    players: Optional[list[dict]] = None,
+    password: str = "",
+):
+    return _balance_page(
+        error=error,
+        result=result,
+        players=players,
+        password=password,
+        db_info=_balance_db_info(),
+    )
 
 
 def _balance_admin_html(
@@ -1598,6 +1642,7 @@ def _balance_admin_html(
     result: Optional[dict] = None,
     players: Optional[list[dict]] = None,
     password: str = "",
+    db_info: Optional[dict] = None,
 ) -> str:
     import html as html_lib
 
@@ -1609,24 +1654,59 @@ def _balance_admin_html(
             f"{html_lib.escape(json.dumps(result, indent=2))}"
             "</pre>"
         )
+
+    db_html = ""
+    if db_info:
+        backend = html_lib.escape(str(db_info.get("backend") or "?"))
+        warn = ""
+        if not db_info.get("persistent_hint"):
+            warn = (
+                "<p style='color:#f59e0b'>Warning: SQLite is not on /data — "
+                "player rows can disappear on redeploy. Mount a Railway volume at "
+                "<code>/data</code> or attach Postgres (<code>DATABASE_URL</code>).</p>"
+            )
+        path_bit = ""
+        if db_info.get("path"):
+            path_bit = f" · <code>{html_lib.escape(str(db_info['path']))}</code>"
+        db_html = f"<p class='hint'>DB: <b>{backend}</b>{path_bit}</p>{warn}"
+
     list_html = ""
     if players is not None:
+        named = sum(1 for p in players if p.get("name") and p["name"] != "(unnamed)")
         if not players:
-            list_html = "<p class='hint'>No players yet.</p>"
+            list_html = (
+                "<h2>Players · name vs balance</h2>"
+                "<p style='color:#f59e0b'>No players in this database yet "
+                "(0 rows in <code>users</code>). If you expected live trainers, "
+                "this deploy is likely on a fresh/ephemeral DB.</p>"
+            )
         else:
             rows = []
             for i, p in enumerate(players, start=1):
+                gid = html_lib.escape(str(p.get("guestId") or ""))
+                linked = html_lib.escape(str(p.get("linked_wallet") or "") or "—")
                 rows.append(
                     "<tr>"
                     f"<td>{i}</td>"
                     f"<td>{html_lib.escape(str(p.get('name') or ''))}</td>"
                     f"<td style='text-align:right'>{int(p.get('balance') or 0):,}</td>"
+                    f"<td style='font-size:11px;word-break:break-all'>{gid}</td>"
+                    f"<td style='font-size:11px;word-break:break-all'>{linked}</td>"
                     "</tr>"
+                )
+            note = ""
+            if named == 0:
+                note = (
+                    "<p style='color:#f59e0b'>No named trainers yet — only "
+                    "unnamed guest rows. Saved names may be on a different DB volume.</p>"
                 )
             list_html = (
                 "<h2>Players · name vs balance</h2>"
-                f"<p class='hint'>{len(players)} trainers</p>"
-                "<table><thead><tr><th>#</th><th>Name</th><th>Balance</th></tr></thead>"
+                f"<p class='hint'>{len(players)} trainers · {named} named</p>"
+                f"{note}"
+                "<table><thead><tr>"
+                "<th>#</th><th>Name</th><th>Balance</th><th>Guest id</th><th>Linked wallet</th>"
+                "</tr></thead>"
                 f"<tbody>{''.join(rows)}</tbody></table>"
             )
     pw_val = html_lib.escape(password)
@@ -1639,13 +1719,15 @@ label{{display:block;margin:10px 0 4px}}
 input,select,button{{font:inherit;padding:8px 10px;width:min(420px,100%);box-sizing:border-box}}
 button{{cursor:pointer;margin-top:14px;background:#15803d;color:#fff;border:0}}
 .hint{{color:#9ca3af;font-size:12px;margin-top:8px}}
-table{{border-collapse:collapse;width:min(720px,100%);margin:16px 0 28px}}
+table{{border-collapse:collapse;width:min(960px,100%);margin:16px 0 28px}}
 th,td{{border:1px solid #333;padding:8px 10px;text-align:left}}
 th{{background:#161a20;color:#c9b896}}
 tr:nth-child(even){{background:#12161c}}
+code{{color:#93c5fd}}
 </style></head><body>
 <h1>Balance editor</h1>
-<p class="hint">Password-protected. Look up by name, guest id, or linked wallet. Use mode <b>set</b> or <b>add</b>.</p>
+<p class="hint">Password-protected. Enter password below and click <b>List players</b> to load name vs balance.</p>
+{db_html}
 {err_html}
 {result_html}
 {list_html}
@@ -1687,7 +1769,7 @@ def balance_admin_api():
             return jsonify({"success": False, "error": "Invalid password."}), 403
         if wants_json and not password:
             return jsonify({"success": False, "error": "Password required."}), 401
-        return _balance_admin_html(
+        return _balance_page(
             error="Invalid password." if password else ""
         ), (403 if password else 401)
 
@@ -1747,9 +1829,10 @@ def balance_admin_api():
                     "success": True,
                     "count": len(players),
                     "players": players,
+                    "db": _balance_db_info(),
                 }
             )
-        return _balance_admin_html(players=players, password=password)
+        return _balance_page(players=players, password=password)
 
     mode = str(
         request.args.get("mode")
@@ -1771,7 +1854,7 @@ def balance_admin_api():
             players = _list_player_balances(conn)
         if wants_json:
             return jsonify({"success": False, "error": msg}), 400
-        return _balance_admin_html(error=msg, players=players, password=password), 400
+        return _balance_page(error=msg, players=players, password=password), 400
 
     if mode not in ("set", "add"):
         msg = "Mode must be set or add."
@@ -1779,7 +1862,7 @@ def balance_admin_api():
             players = _list_player_balances(conn)
         if wants_json:
             return jsonify({"success": False, "error": msg}), 400
-        return _balance_admin_html(error=msg, players=players, password=password), 400
+        return _balance_page(error=msg, players=players, password=password), 400
 
     if not str(name).strip() and not str(user_id).strip() and not str(wallet).strip():
         msg = "Provide name, userId/guestId, or wallet."
@@ -1787,7 +1870,7 @@ def balance_admin_api():
             players = _list_player_balances(conn)
         if wants_json:
             return jsonify({"success": False, "error": msg}), 400
-        return _balance_admin_html(error=msg, players=players, password=password), 400
+        return _balance_page(error=msg, players=players, password=password), 400
 
     now = int(time.time())
     with get_db() as conn:
@@ -1799,7 +1882,7 @@ def balance_admin_api():
             msg = "Player not found."
             if wants_json:
                 return jsonify({"success": False, "error": msg}), 404
-            return _balance_admin_html(error=msg, players=players, password=password), 404
+            return _balance_page(error=msg, players=players, password=password), 404
 
         before = int(row["balance"] or 0)
         if mode == "set":
@@ -1808,7 +1891,7 @@ def balance_admin_api():
                 msg = "Set amount cannot be negative."
                 if wants_json:
                     return jsonify({"success": False, "error": msg}), 400
-                return _balance_admin_html(error=msg, players=players, password=password), 400
+                return _balance_page(error=msg, players=players, password=password), 400
             after = amount
         else:
             after = before + amount
@@ -1817,7 +1900,7 @@ def balance_admin_api():
                 msg = "Resulting balance cannot be negative."
                 if wants_json:
                     return jsonify({"success": False, "error": msg}), 400
-                return _balance_admin_html(error=msg, players=players, password=password), 400
+                return _balance_page(error=msg, players=players, password=password), 400
 
         conn.execute(
             """
@@ -1846,7 +1929,7 @@ def balance_admin_api():
 
     if wants_json:
         return jsonify(result)
-    return _balance_admin_html(result=result, players=players, password=password)
+    return _balance_page(result=result, players=players, password=password)
 
 
 @app.route("/clear", methods=["GET", "POST"])
