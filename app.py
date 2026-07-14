@@ -1494,6 +1494,281 @@ def kins_blockhash_api():
 
 
 CLEAR_DB_PASSWORD = os.getenv("CLEAR_DB_PASSWORD", "9999")
+BALANCE_ADMIN_PASSWORD = os.getenv("BALANCE_ADMIN_PASSWORD", CLEAR_DB_PASSWORD)
+
+
+def _admin_password_from_request() -> str:
+    payload = request.get_json(silent=True) or {}
+    return str(
+        request.args.get("password")
+        or request.form.get("password")
+        or payload.get("password")
+        or request.headers.get("X-Admin-Password")
+        or ""
+    )
+
+
+def _wants_json_response() -> bool:
+    return (
+        request.args.get("format") == "json"
+        or request.is_json
+        or (
+            request.accept_mimetypes.best_match(["application/json", "text/html"])
+            == "application/json"
+            and "text/html" not in (request.headers.get("Accept") or "")
+        )
+    )
+
+
+def _find_user_for_balance_edit(conn, *, name: str = "", user_id: str = "", wallet: str = ""):
+    name = str(name or "").strip()
+    user_id = str(user_id or "").strip()
+    wallet = str(wallet or "").strip()
+
+    row = None
+    if user_id:
+        row = conn.execute(
+            """
+            SELECT telegram_id, display_name, balance, linked_wallet
+            FROM users WHERE telegram_id = ?
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+    if row is None and name:
+        row = conn.execute(
+            """
+            SELECT telegram_id, display_name, balance, linked_wallet
+            FROM users
+            WHERE lower(trim(display_name)) = lower(trim(?))
+            LIMIT 1
+            """,
+            (name,),
+        ).fetchone()
+    if row is None and wallet:
+        from wallet_auth import find_guest_by_linked_wallet, normalize_wallet_address
+
+        linked = find_guest_by_linked_wallet(conn, normalize_wallet_address(wallet))
+        if linked:
+            row = conn.execute(
+                """
+                SELECT telegram_id, display_name, balance, linked_wallet
+                FROM users WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (str(linked.get("telegram_id") or ""),),
+            ).fetchone()
+        if row is None:
+            legacy_id = f"wallet:{normalize_wallet_address(wallet)}"
+            row = conn.execute(
+                """
+                SELECT telegram_id, display_name, balance, linked_wallet
+                FROM users WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (legacy_id,),
+            ).fetchone()
+    return row
+
+
+def _balance_admin_html(*, error: str = "", result: Optional[dict] = None) -> str:
+    err_html = f'<p style="color:#b91c1c">{error}</p>' if error else ""
+    result_html = ""
+    if result:
+        result_html = (
+            "<pre style='background:#111;color:#9f9;padding:12px;overflow:auto'>"
+            f"{json.dumps(result, indent=2)}"
+            "</pre>"
+        )
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Balance editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{{font-family:ui-monospace,monospace;background:#0b0d10;color:#f4ecd8;padding:24px}}
+label{{display:block;margin:10px 0 4px}}
+input,select,button{{font:inherit;padding:8px 10px;width:min(420px,100%);box-sizing:border-box}}
+button{{cursor:pointer;margin-top:14px;background:#15803d;color:#fff;border:0}}
+.hint{{color:#9ca3af;font-size:12px;margin-top:8px}}
+</style></head><body>
+<h1>Balance editor</h1>
+<p class="hint">Password-protected. Look up by name, guest id, or linked wallet. Use mode <b>set</b> or <b>add</b>.</p>
+{err_html}
+{result_html}
+<form method="post" action="/balance">
+  <label>Password</label>
+  <input type="password" name="password" required>
+  <label>Trainer name</label>
+  <input type="text" name="name" placeholder="samorage">
+  <label>User / guest id</label>
+  <input type="text" name="userId" placeholder="guest:...">
+  <label>Linked wallet</label>
+  <input type="text" name="wallet" placeholder="Solana address">
+  <label>Mode</label>
+  <select name="mode">
+    <option value="set">set (absolute balance)</option>
+    <option value="add" selected>add (delta)</option>
+  </select>
+  <label>Amount</label>
+  <input type="number" name="amount" required step="1">
+  <button type="submit">Update balance</button>
+</form>
+<p class="hint">JSON: POST /balance?format=json with password, name|userId|wallet, mode, amount</p>
+</body></html>"""
+
+
+@app.route("/balance", methods=["GET", "POST"])
+def balance_admin_api():
+    """Admin: inspect or edit a live player's CHIPS balance (password gated)."""
+    password = _admin_password_from_request()
+    wants_json = _wants_json_response()
+
+    if str(password) != str(BALANCE_ADMIN_PASSWORD):
+        if wants_json and password:
+            return jsonify({"success": False, "error": "Invalid password."}), 403
+        if wants_json and not password:
+            return jsonify({"success": False, "error": "Password required."}), 401
+        return _balance_admin_html(
+            error="Invalid password." if password else ""
+        ), (403 if password else 401)
+
+    payload = request.get_json(silent=True) or {}
+    name = (
+        request.args.get("name")
+        or request.form.get("name")
+        or payload.get("name")
+        or payload.get("displayName")
+        or payload.get("display_name")
+        or ""
+    )
+    user_id = (
+        request.args.get("userId")
+        or request.args.get("guestId")
+        or request.form.get("userId")
+        or request.form.get("guestId")
+        or payload.get("userId")
+        or payload.get("guestId")
+        or payload.get("telegram_id")
+        or ""
+    )
+    wallet = (
+        request.args.get("wallet")
+        or request.form.get("wallet")
+        or payload.get("wallet")
+        or payload.get("walletAddress")
+        or ""
+    )
+
+    # GET / lookup-only for JSON clients.
+    if request.method == "GET" and wants_json:
+        with get_db() as conn:
+            row = _find_user_for_balance_edit(
+                conn, name=str(name), user_id=str(user_id), wallet=str(wallet)
+            )
+        if row is None:
+            return jsonify({"success": False, "error": "Player not found."}), 404
+        return jsonify(
+            {
+                "success": True,
+                "guestId": row["telegram_id"],
+                "display_name": row["display_name"],
+                "balance": int(row["balance"] or 0),
+                "linked_wallet": (
+                    str(row["linked_wallet"] or "").strip()
+                    if "linked_wallet" in row.keys()
+                    else ""
+                ),
+            }
+        )
+
+    if request.method == "GET":
+        return _balance_admin_html()
+
+    mode = str(
+        request.args.get("mode")
+        or request.form.get("mode")
+        or payload.get("mode")
+        or "add"
+    ).strip().lower()
+    raw_amount = (
+        request.args.get("amount")
+        or request.form.get("amount")
+        or payload.get("amount")
+        or payload.get("balance")
+    )
+    try:
+        amount = int(raw_amount)
+    except (TypeError, ValueError):
+        msg = "Amount must be an integer."
+        if wants_json:
+            return jsonify({"success": False, "error": msg}), 400
+        return _balance_admin_html(error=msg), 400
+
+    if mode not in ("set", "add"):
+        msg = "Mode must be set or add."
+        if wants_json:
+            return jsonify({"success": False, "error": msg}), 400
+        return _balance_admin_html(error=msg), 400
+
+    if not str(name).strip() and not str(user_id).strip() and not str(wallet).strip():
+        msg = "Provide name, userId/guestId, or wallet."
+        if wants_json:
+            return jsonify({"success": False, "error": msg}), 400
+        return _balance_admin_html(error=msg), 400
+
+    now = int(time.time())
+    with get_db() as conn:
+        row = _find_user_for_balance_edit(
+            conn, name=str(name), user_id=str(user_id), wallet=str(wallet)
+        )
+        if row is None:
+            msg = "Player not found."
+            if wants_json:
+                return jsonify({"success": False, "error": msg}), 404
+            return _balance_admin_html(error=msg), 404
+
+        before = int(row["balance"] or 0)
+        if mode == "set":
+            if amount < 0:
+                msg = "Set amount cannot be negative."
+                if wants_json:
+                    return jsonify({"success": False, "error": msg}), 400
+                return _balance_admin_html(error=msg), 400
+            after = amount
+        else:
+            after = before + amount
+            if after < 0:
+                msg = "Resulting balance cannot be negative."
+                if wants_json:
+                    return jsonify({"success": False, "error": msg}), 400
+                return _balance_admin_html(error=msg), 400
+
+        conn.execute(
+            """
+            UPDATE users
+            SET balance = ?, updated_at = ?
+            WHERE telegram_id = ?
+            """,
+            (after, now, row["telegram_id"]),
+        )
+        linked = (
+            str(row["linked_wallet"] or "").strip()
+            if "linked_wallet" in row.keys()
+            else ""
+        )
+        result = {
+            "success": True,
+            "mode": mode,
+            "guestId": row["telegram_id"],
+            "display_name": row["display_name"],
+            "linked_wallet": linked,
+            "balance_before": before,
+            "amount": amount,
+            "balance": after,
+        }
+
+    if wants_json:
+        return jsonify(result)
+    return _balance_admin_html(result=result)
 
 
 @app.route("/clear", methods=["GET", "POST"])
@@ -1506,22 +1781,8 @@ def clear_saved_data():
     )
     from db.clear_service import clear_all_saved_data
 
-    payload = request.get_json(silent=True) or {}
-    password = (
-        request.args.get("password")
-        or request.form.get("password")
-        or payload.get("password")
-        or ""
-    )
-    wants_json = (
-        request.args.get("format") == "json"
-        or request.is_json
-        or (
-            request.accept_mimetypes.best_match(["application/json", "text/html"])
-            == "application/json"
-            and "text/html" not in (request.headers.get("Accept") or "")
-        )
-    )
+    password = _admin_password_from_request()
+    wants_json = _wants_json_response()
 
     if str(password) != str(CLEAR_DB_PASSWORD):
         if wants_json and password:
